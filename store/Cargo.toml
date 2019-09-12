@@ -1,0 +1,32 @@
+[package]
+name = "gotts_store"
+version = "0.0.2"
+authors = ["Gotts Developers <gotts.tech@lists.launchpad.net>"]
+description = "Simple, private and scalable cryptocurrency implementation based on the MimbleWimble chain format."
+license = "Apache-2.0"
+repository = "https://github.com/gottstech/gotts"
+keywords = [ "crypto", "gotts", "mimblewimble" ]
+workspace = ".."
+edition = "2018"
+
+[dependencies]
+byteorder = "1"
+croaring = "0.3.9"
+env_logger = "0.5"
+libc = "0.2"
+failure = "0.1"
+failure_derive = "0.1"
+lmdb-zero = "0.4.4"
+memmap = "0.7"
+tempfile = "3.0.5"
+serde = "1"
+serde_derive = "1"
+log = "0.4"
+
+gotts_core = { path = "../core", version = "0.0.2" }
+gotts_util = { path = "../util", version = "0.0.2" }
+
+[dev-dependencies]
+chrono = "0.4.4"
+rand = "0.6"
+filetime = "0.2"

@@ -1,0 +1,50 @@
+[package]
+name = "gotts_gen_gen"
+version = "0.0.1"
+edition = "2018"
+authors = ["Gotts Developers <gotts.tech@lists.launchpad.net>"]
+description = "Utility to automate the generation of Gotts's genesis block"
+license = "Apache-2.0"
+repository = "https://github.com/gottstech/gotts"
+keywords = [ "crypto", "gotts", "mimblewimble" ]
+readme = "README.md"
+
+[[bin]]
+name = "gen_gen"
+path = "src/bin/gen_gen.rs"
+
+[dependencies]
+chrono = "0.4.4"
+curl = "0.4.19"
+gotts_core = { path = "../../core" }
+gotts_chain = { path = "../../chain" }
+gotts_keychain = { path = "../../keychain" }
+gotts_store = { path = "../../store" }
+gotts_util = { path = "../../util" }
+rpassword = "2.0.0"
+serde_json = "1"
+
+cuckoo_miner = { path = "../../../grin-miner/cuckoo-miner", version = "1.0.2", features = ["build-cuda-plugins"]}
+grin_miner_plugin = { path = "../../../grin-miner/plugin", version = "1.0.2" }
+
+gotts_wallet_api = { path = "../../../gotts-wallet/api" }
+gotts_wallet_config = { path = "../../../gotts-wallet/config" }
+gotts_wallet_controller = { path = "../../../gotts-wallet/controller" }
+gotts_wallet_impls = { path = "../../../gotts-wallet/impls" }
+gotts_wallet_libwallet = { path = "../../../gotts-wallet/libwallet" }
+gotts_wallet_util = { path = "../../../gotts-wallet/util" }
+
+
+#[patch.crates-io]
+#gotts_api = { path = "../../api" }
+#gotts_core = { path = "../../core" }
+#gotts_chain = { path = "../../chain" }
+#gotts_keychain = { path = "../../keychain" }
+#gotts_util = { path = "../../util" }
+#
+#grin_wallet_api = { path = "../../../gotts-wallet/api" }
+#grin_wallet_config = { path = "../../../gotts-wallet/config" }
+#grin_wallet_controller = { path = "../../../gotts-wallet/controller" }
+#grin_wallet_impls = { path = "../../../gotts-wallet/impls" }
+#grin_wallet_libwallet = { path = "../../../gotts-wallet/libwallet" }
+#grin_wallet_util = { path = "../../../gotts-wallet/util" }

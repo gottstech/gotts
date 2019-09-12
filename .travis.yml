@@ -1,0 +1,94 @@
+# Copyright 2019 The Grin Developers
+# Modifications Copyright 2019 The Gotts Developers
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+dist: trusty
+sudo: required
+
+language: rust
+
+rust:
+  - stable
+
+git:
+  depth: false
+
+addons:
+  apt:
+    sources:
+      - ubuntu-toolchain-r-test
+    packages:
+      - g++-5
+      - cmake
+      - libcurl4-openssl-dev
+      - libelf-dev
+      - libdw-dev
+      - cmake
+      - gcc
+      - binutils-dev
+
+cache:
+  cargo: true
+  timeout: 240
+  directories:
+    - $HOME/.cargo
+    - $TRAVIS_BUILD_DIR/target
+
+env:
+  global:
+    - RUST_BACKTRACE="1"
+    - RUSTFLAGS="-C debug-assertions"
+
+matrix:
+  include:
+    - os: linux
+      env: CI_JOB="test"        CI_JOB_ARGS="servers"
+    - os: linux
+      env: CI_JOB="test"        CI_JOB_ARGS="chain core"
+    - os: linux
+      env: CI_JOB="test"        CI_JOB_ARGS="pool p2p src"
+    - os: linux
+      env: CI_JOB="test"        CI_JOB_ARGS="keychain"
+    - os: linux
+      env: CI_JOB="test"        CI_JOB_ARGS="api util store"
+    - os: osx
+      env: CI_JOB="test"        CI_JOB_ARGS="servers"
+    - os: osx
+      env: CI_JOB="test"        CI_JOB_ARGS="chain core"
+    - os: osx
+      env: CI_JOB="test"        CI_JOB_ARGS="pool p2p src"
+    - os: osx
+      env: CI_JOB="test"        CI_JOB_ARGS="keychain"
+    - os: osx
+      env: CI_JOB="test"        CI_JOB_ARGS="api util store"
+    - os: windows
+      env: CI_JOB="test"        CI_JOB_ARGS="servers"
+    - os: windows
+      env: CI_JOB="test"        CI_JOB_ARGS="chain core"
+    - os: windows
+      env: CI_JOB="test"        CI_JOB_ARGS="pool p2p src"
+    - os: windows
+      env: CI_JOB="test"        CI_JOB_ARGS="keychain"
+    - os: windows
+      env: CI_JOB="test"        CI_JOB_ARGS="api util store"
+
+script:
+    - if [ "$TRAVIS_OS_NAME" = "windows" ]; then git checkout Cargo.toml; git apply windows.patch; fi
+    - .ci/general-jobs
+
+before_cache:
+  - rm -rf $TRAVIS_BUILD_DIR/target/tmp
+  - rm -rf $TRAVIS_BUILD_DIR/util/target/tmp
+  - rm -rf $TRAVIS_BUILD_DIR/store/test_output
+

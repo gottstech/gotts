@@ -1,0 +1,31 @@
+[package]
+name = "gotts_p2p"
+version = "0.0.2"
+authors = ["Gotts Developers <gotts.tech@lists.launchpad.net>"]
+description = "Chain implementation for gotts, a simple, private and scalable cryptocurrency implementation based on the MimbleWimble chain format."
+license = "Apache-2.0"
+repository = "https://github.com/gottstech/gotts"
+keywords = [ "crypto", "gotts", "mimblewimble" ]
+workspace = ".."
+edition = "2018"
+
+[dependencies]
+bitflags = "1"
+bytes = "0.4"
+enum_primitive = "0.1"
+net2 = "0.2"
+num = "0.1"
+rand = "0.6"
+serde = "1"
+serde_derive = "1"
+tempfile = "3.0.5"
+log = "0.4"
+chrono = { version = "0.4.4", features = ["serde"] }
+
+gotts_core = { path = "../core", version = "0.0.2" }
+gotts_store = { path = "../store", version = "0.0.2" }
+gotts_util = { path = "../util", version = "0.0.2" }
+gotts_chain = { path = "../chain", version = "0.0.2" }
+
+[dev-dependencies]
+gotts_pool = { path = "../pool", version = "0.0.2" }
