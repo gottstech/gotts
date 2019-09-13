@@ -23,7 +23,7 @@ To learn more, read the [Introduction to MimbleWimble, Grin & Gotts](docs/intro.
 
 ## Status
 
-Gotts is still under development. Much is left to be done and [contributions](CONTRIBUTING.md) are welcome (see below), the [TODO](TODO.md) may help. Check the [website](https://gotts.tech/) for the latest status.
+Gotts is still under development. Much is left to be done and [contributions](CONTRIBUTING.md) are welcome (see below), the [TODO](docs/TODO.md) may help. Check the [website](https://gotts.tech/) for the latest status.
 
 ## Contributing
 
