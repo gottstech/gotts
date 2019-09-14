@@ -21,7 +21,7 @@ use hyper::{Body, Request, Response, StatusCode};
 use ring::constant_time::verify_slices_are_equal;
 
 lazy_static! {
-	pub static ref GRIN_BASIC_REALM: HeaderValue =
+	pub static ref GOTTS_BASIC_REALM: HeaderValue =
 		HeaderValue::from_str("Basic realm=GottsAPI").unwrap();
 }
 

@@ -45,7 +45,7 @@ fn start_server_tui(config: servers::ServerConfig) {
 	// Run the UI controller.. here for now for simplicity to access
 	// everything it might need
 	if config.run_tui.unwrap_or(false) {
-		warn!("Starting GRIN in UI mode...");
+		warn!("Starting GOTTS in UI mode...");
 		servers::Server::start(config, |serv: servers::Server| {
 			let mut controller = ui::Controller::new().unwrap_or_else(|e| {
 				panic!("Error loading UI controller: {}", e);
@@ -54,7 +54,7 @@ fn start_server_tui(config: servers::ServerConfig) {
 		})
 		.unwrap();
 	} else {
-		warn!("Starting GRIN w/o UI...");
+		warn!("Starting GOTTS w/o UI...");
 		servers::Server::start(config, |serv: servers::Server| {
 			let running = Arc::new(AtomicBool::new(true));
 			let r = running.clone();
