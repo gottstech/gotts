@@ -37,8 +37,8 @@ use crate::util::LoggingConfig;
 /// the node config file location
 pub const SERVER_CONFIG_FILE_NAME: &'static str = "gotts-server.toml";
 const SERVER_LOG_FILE_NAME: &'static str = "gotts-server.log";
-const GRIN_HOME: &'static str = ".gotts";
-const GRIN_CHAIN_DIR: &'static str = "chain_data";
+const GOTTS_HOME: &'static str = ".gotts";
+const GOTTS_CHAIN_DIR: &'static str = "chain_data";
 /// Node API secret
 pub const API_SECRET_FILE_NAME: &'static str = ".api_secret";
 
@@ -48,7 +48,7 @@ fn get_gotts_path(chain_type: &global::ChainTypes) -> Result<PathBuf, ConfigErro
 		Some(p) => p,
 		None => PathBuf::new(),
 	};
-	gotts_path.push(GRIN_HOME);
+	gotts_path.push(GOTTS_HOME);
 	gotts_path.push(chain_type.shortname());
 	// Create if the default path doesn't exist
 	if !gotts_path.exists() {
@@ -248,7 +248,7 @@ impl GlobalConfig {
 	pub fn update_paths(&mut self, gotts_home: &PathBuf) {
 		// need to update server chain path
 		let mut chain_path = gotts_home.clone();
-		chain_path.push(GRIN_CHAIN_DIR);
+		chain_path.push(GOTTS_CHAIN_DIR);
 		self.members.as_mut().unwrap().server.db_root = chain_path.to_str().unwrap().to_owned();
 		let mut secret_path = gotts_home.clone();
 		secret_path.push(API_SECRET_FILE_NAME);

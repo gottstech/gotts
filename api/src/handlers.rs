@@ -40,7 +40,7 @@ use self::server_api::KernelDownloadHandler;
 use self::server_api::StatusHandler;
 use self::transactions_api::TxHashSetHandler;
 use self::version_api::VersionHandler;
-use crate::auth::{BasicAuthMiddleware, GRIN_BASIC_REALM};
+use crate::auth::{BasicAuthMiddleware, GOTTS_BASIC_REALM};
 use crate::chain;
 use crate::p2p;
 use crate::pool;
@@ -75,7 +75,7 @@ pub fn start_rest_apis(
 			util::to_base64(&format!("gotts:{}", api_secret))
 		);
 		let basic_auth_middleware =
-			Arc::new(BasicAuthMiddleware::new(api_basic_auth, &GRIN_BASIC_REALM));
+			Arc::new(BasicAuthMiddleware::new(api_basic_auth, &GOTTS_BASIC_REALM));
 		router.add_middleware(basic_auth_middleware);
 	}
 

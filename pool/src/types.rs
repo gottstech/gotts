@@ -136,7 +136,7 @@ impl Default for PoolConfig {
 }
 
 fn default_accept_fee_base() -> u64 {
-	consensus::MILLI_GRIN
+	consensus::MILLI_GOTTS
 }
 fn default_max_pool_size() -> usize {
 	50_000
