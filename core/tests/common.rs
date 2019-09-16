@@ -15,7 +15,6 @@
 
 //! Common test functions
 
-use gotts_keychain::{Identifier, Keychain};
 use gotts_core::core::{
 	block::{Block, BlockHeader},
 	Transaction,
@@ -27,6 +26,7 @@ use gotts_core::libtx::{
 };
 use gotts_core::pow::Difficulty;
 use gotts_keychain as keychain;
+use gotts_keychain::{Identifier, Keychain};
 
 // utility producing a transaction with 2 inputs and a single outputs
 pub fn tx2i1o() -> Transaction {

@@ -167,7 +167,9 @@ fn remove_coinbase_output_flag() {
 	let mut b = new_block(vec![], &keychain, &builder, &prev, &key_id);
 
 	assert!(b.outputs()[0].is_coinbase());
-	b.outputs_mut()[0].features = OutputFeaturesEx::Plain { spath: b.outputs()[0].features.get_spath().unwrap().clone()};
+	b.outputs_mut()[0].features = OutputFeaturesEx::Plain {
+		spath: b.outputs()[0].features.get_spath().unwrap().clone(),
+	};
 
 	assert_eq!(b.verify_coinbase(), Err(Error::CoinbaseSumMismatch));
 	assert!(b
