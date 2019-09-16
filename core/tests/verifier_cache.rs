@@ -15,19 +15,19 @@
 
 pub mod common;
 
-use self::core::core::verifier_cache::{LruVerifierCache, VerifierCache};
-use self::core::core::{Output, OutputFeatures};
-use self::core::libtx::proof;
-use self::keychain::{ExtKeychain, Keychain};
-use self::util::RwLock;
-use gotts_core as core;
-use gotts_keychain as keychain;
-use gotts_util as util;
-use std::sync::Arc;
+//use self::core::core::verifier_cache::{LruVerifierCache, VerifierCache};
+//use self::core::libtx::proof;
+//use self::core::core::{Output, OutputFeatures};
+//use self::keychain::{ExtKeychain, Keychain};
+//use self::util::RwLock;
+//use gotts_core as core;
+//use gotts_keychain as keychain;
+//use gotts_util as util;
+//use std::sync::Arc;
 
-fn verifier_cache() -> Arc<RwLock<dyn VerifierCache>> {
-	Arc::new(RwLock::new(LruVerifierCache::new()))
-}
+//fn verifier_cache() -> Arc<RwLock<dyn VerifierCache>> {
+//	Arc::new(RwLock::new(LruVerifierCache::new()))
+//}
 
 //todo: change this as test_verifier_cache_kernels().
 //#[test]

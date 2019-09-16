@@ -2158,12 +2158,12 @@ mod test {
 		let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 
 		let commit = keychain
-			.commit(1003, &key_id, &SwitchCommitmentType::Regular)
+			.commit(1003, &key_id)
 			.unwrap();
 		let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 
 		let commit_2 = keychain
-			.commit(1003, &key_id, &SwitchCommitmentType::Regular)
+			.commit(1003, &key_id)
 			.unwrap();
 
 		assert!(commit == commit_2);
@@ -2174,7 +2174,7 @@ mod test {
 		let keychain = ExtKeychain::from_seed(&[0; 32], false).unwrap();
 		let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 		let commit = keychain
-			.commit(5, &key_id, &SwitchCommitmentType::Regular)
+			.commit(5, &key_id)
 			.unwrap();
 
 		let input = Input {

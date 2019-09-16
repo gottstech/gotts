@@ -115,8 +115,7 @@ where
 				secured_w,
 				&key_id,
 				commit,
-			)
-			.unwrap();
+			);
 
 			(
 				tx.with_output(Output {

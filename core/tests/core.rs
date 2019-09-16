@@ -21,14 +21,13 @@ use self::core::core::block::BlockHeader;
 use self::core::core::block::Error::KernelLockHeight;
 use self::core::core::hash::{Hashed, ZERO_HASH};
 use self::core::core::verifier_cache::{LruVerifierCache, VerifierCache};
-use self::core::core::{aggregate, deaggregate, KernelFeatures, Output, Transaction, Weighting};
+use self::core::core::{aggregate, deaggregate, KernelFeatures, Transaction, Weighting};
 use self::core::libtx::build::{
 	self, initial_tx, input, output, with_excess, with_fee, with_lock_height,
 };
 use self::core::libtx::ProofBuilder;
 use self::core::ser;
 use self::keychain::{BlindingFactor, ExtKeychain, Keychain};
-use self::util::static_secp_instance;
 use self::util::RwLock;
 use crate::common::{new_block, tx1i1o, tx1i2o, tx2i1o};
 use gotts_core as core;
@@ -373,26 +372,12 @@ fn hash_output() {
 	assert!(h != h2);
 }
 
-#[ignore]
 #[test]
 fn blind_tx() {
 	let btx = tx2i1o();
 	assert!(btx
 		.validate(Weighting::AsTransaction, verifier_cache())
 		.is_ok());
-
-	// Ignored for bullet proofs, because calling range_proof_info
-	// with a bullet proof causes painful errors
-
-	// checks that the range proof on our blind output is sufficiently hiding
-	let Output { proof, .. } = btx.outputs()[0];
-
-	let secp = static_secp_instance();
-	let secp = secp.lock();
-	let info = secp.range_proof_info(proof);
-
-	assert!(info.min == 0);
-	assert!(info.max == u64::max_value());
 }
 
 #[test]

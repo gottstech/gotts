@@ -28,9 +28,6 @@ extern crate lazy_static;
 
 extern crate sha2;
 
-#[macro_use]
-extern crate enum_primitive;
-
 mod base58;
 pub mod extkey_bip32;
 pub mod mnemonic;
@@ -40,6 +37,6 @@ pub mod keychain;
 pub use crate::extkey_bip32::ChildNumber;
 pub use crate::keychain::ExtKeychain;
 pub use crate::types::{
-	BlindSum, BlindingFactor, Error, ExtKeychainPath, Identifier, Keychain, SwitchCommitmentType,
+	BlindSum, BlindingFactor, Error, ExtKeychainPath, Identifier, Keychain,
 	IDENTIFIER_SIZE,
 };

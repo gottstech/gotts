@@ -176,13 +176,11 @@ mod test {
 	use crate::types::{BlindSum, BlindingFactor, ExtKeychainPath, Keychain};
 	use crate::util::secp;
 	use crate::util::secp::key::SecretKey;
-	use crate::SwitchCommitmentType;
 
 	#[test]
 	fn test_key_derivation() {
 		let keychain = ExtKeychain::from_random_seed(false).unwrap();
 		let secp = keychain.secp();
-		let switch = &SwitchCommitmentType::None;
 
 		let path = ExtKeychainPath::new(1, 1, 0, 0, 0);
 		let key_id = path.to_identifier();

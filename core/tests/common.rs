@@ -15,7 +15,7 @@
 
 //! Common test functions
 
-use crate::keychain::{Identifier, Keychain};
+use gotts_keychain::{Identifier, Keychain};
 use gotts_core::core::{
 	block::{Block, BlockHeader},
 	Transaction,

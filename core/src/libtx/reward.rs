@@ -43,7 +43,7 @@ where
 
 	trace!("Block reward - Pedersen Commit is: {:?}", commit,);
 
-	let spath = proof::create_secured_path(keychain, builder, secured_w, &key_id, commit)?;
+	let spath = proof::create_secured_path(keychain, builder, secured_w, &key_id, commit);
 
 	let output = Output {
 		features: OutputFeaturesEx::Coinbase { spath },

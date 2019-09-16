@@ -233,7 +233,7 @@ pub fn create_secured_path<K, B>(
 	w: u64,
 	key_id: &Identifier,
 	commit: Commitment,
-) -> Result<SecuredPath, Error>
+) -> SecuredPath
 where
 	K: Keychain,
 	B: ProofBuild,
@@ -241,7 +241,7 @@ where
 	let secp = k.secp();
 	let rewind_nonce = b.rewind_nonce(secp, &commit);
 	let message = b.proof_message(secp, w, key_id);
-	Ok(SecuredPath::from_path(&message, &rewind_nonce))
+	SecuredPath::from_path(&message, &rewind_nonce)
 }
 
 /// Rewind a SecuredPath to retrieve the PathMessage

@@ -135,7 +135,6 @@ impl Identifier {
 		ValueExtKeychainPath {
 			value,
 			ext_keychain_path: self.to_path(),
-			switch: SwitchCommitmentType::Regular,
 		}
 	}
 
@@ -453,7 +452,6 @@ impl ExtKeychainPath {
 pub struct ValueExtKeychainPath {
 	pub value: u64,
 	pub ext_keychain_path: ExtKeychainPath,
-	pub switch: SwitchCommitmentType,
 }
 
 pub trait Keychain: Sync + Send + Clone {
@@ -484,18 +482,6 @@ pub trait Keychain: Sync + Send + Clone {
 	fn sign(&self, msg: &Message, amount: u64, id: &Identifier) -> Result<Signature, Error>;
 	fn sign_with_blinding(&self, _: &Message, _: &BlindingFactor) -> Result<Signature, Error>;
 	fn secp(&self) -> &Secp256k1;
-}
-
-enum_from_primitive! {
-	#[derive(PartialEq, Eq, Clone, Copy, Debug, Serialize, Deserialize)]
-	#[repr(u8)]
-	/// Enum of switch commitment type.
-	pub enum SwitchCommitmentType {
-		/// Without switch commitment.
-		None = 0,
-		/// The standard switch commitment: `C = (r*G+v*H) + Hash(rG+vH || rJ)*G`.
-		Regular = 1,
-	}
 }
 
 #[cfg(test)]
