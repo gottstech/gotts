@@ -209,7 +209,7 @@ impl TxHashsetWriteStatus for SyncState {
 #[derive(Debug, PartialEq)]
 pub struct TxHashSetRoots {
 	/// Output root
-	pub output_root: Hash,
+	pub output_i_root: Hash,
 	/// Range Proof root
 	pub rproof_root: Hash,
 	/// Kernel root

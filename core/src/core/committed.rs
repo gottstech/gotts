@@ -89,7 +89,7 @@ pub trait Committed {
 	fn sum_commitments(&self, overage: i64) -> Result<Commitment, Error> {
 		// gather the commitments
 		let mut input_commits = self.inputs_committed();
-		let mut output_commits = self.outputs_committed();
+		let mut output_commits = self.outputs_i_committed();
 
 		// add the overage as output commitment if positive,
 		// or as an input commitment if negative
@@ -114,7 +114,7 @@ pub trait Committed {
 	fn inputs_committed(&self) -> Vec<Commitment>;
 
 	/// Vector of output commitments to verify.
-	fn outputs_committed(&self) -> Vec<Commitment>;
+	fn outputs_i_committed(&self) -> Vec<Commitment>;
 
 	/// Vector of kernel excesses to verify.
 	fn kernels_committed(&self) -> Vec<Commitment>;

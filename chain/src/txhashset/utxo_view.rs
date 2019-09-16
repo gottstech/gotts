@@ -17,7 +17,7 @@
 
 use crate::core::core::hash::{Hash, Hashed};
 use crate::core::core::pmmr::{self, ReadonlyPMMR};
-use crate::core::core::{Block, BlockHeader, Input, Output, Transaction};
+use crate::core::core::{Block, BlockHeader, Input, Output, OutputI, Transaction};
 use crate::core::global;
 use crate::core::ser::PMMRIndexHashable;
 use crate::error::{Error, ErrorKind};
@@ -26,7 +26,7 @@ use gotts_store::pmmr::PMMRBackend;
 
 /// Readonly view of the UTXO set (based on output MMR).
 pub struct UTXOView<'a> {
-	output_pmmr: ReadonlyPMMR<'a, Output, PMMRBackend<Output>>,
+	output_i_pmmr: ReadonlyPMMR<'a, OutputI, PMMRBackend<OutputI>>,
 	header_pmmr: ReadonlyPMMR<'a, BlockHeader, PMMRBackend<BlockHeader>>,
 	batch: &'a Batch<'a>,
 }
@@ -34,12 +34,12 @@ pub struct UTXOView<'a> {
 impl<'a> UTXOView<'a> {
 	/// Build a new UTXO view.
 	pub fn new(
-		output_pmmr: ReadonlyPMMR<'a, Output, PMMRBackend<Output>>,
+		output_i_pmmr: ReadonlyPMMR<'a, OutputI, PMMRBackend<OutputI>>,
 		header_pmmr: ReadonlyPMMR<'a, BlockHeader, PMMRBackend<BlockHeader>>,
 		batch: &'a Batch<'_>,
 	) -> UTXOView<'a> {
 		UTXOView {
-			output_pmmr,
+			output_i_pmmr,
 			header_pmmr,
 			batch,
 		}
@@ -78,7 +78,7 @@ impl<'a> UTXOView<'a> {
 	// Compare the hash in the output MMR at the expected pos.
 	fn validate_input(&self, input: &Input) -> Result<(), Error> {
 		if let Ok(pos) = self.batch.get_output_pos(&input.commitment()) {
-			if let Some(hash) = self.output_pmmr.get_hash(pos) {
+			if let Some(hash) = self.output_i_pmmr.get_hash(pos) {
 				if hash == input.hash_with_index(pos - 1) {
 					return Ok(());
 				}
@@ -90,8 +90,8 @@ impl<'a> UTXOView<'a> {
 	// Output is valid if it would not result in a duplicate commitment in the output MMR.
 	fn validate_output(&self, output: &Output) -> Result<(), Error> {
 		if let Ok(pos) = self.batch.get_output_pos(&output.commitment()) {
-			if let Some(out_mmr) = self.output_pmmr.get_data(pos) {
-				if out_mmr.commitment() == output.commitment() {
+			if let Some(out_mmr) = self.output_i_pmmr.get_data(pos) {
+				if out_mmr.id.commitment() == output.commitment() {
 					return Err(ErrorKind::DuplicateCommitment(output.commitment()).into());
 				}
 			}

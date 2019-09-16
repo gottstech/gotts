@@ -457,8 +457,8 @@ impl Committed for Block {
 		self.body.inputs_committed()
 	}
 
-	fn outputs_committed(&self) -> Vec<Commitment> {
-		self.body.outputs_committed()
+	fn outputs_i_committed(&self) -> Vec<Commitment> {
+		self.body.outputs_i_committed()
 	}
 
 	fn kernels_committed(&self) -> Vec<Commitment> {

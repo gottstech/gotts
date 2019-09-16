@@ -18,13 +18,25 @@
 use crate::keychain::BlindingFactor;
 use crate::serde::{Deserialize, Deserializer, Serializer};
 use crate::util::to_hex;
+use super::proof::SecuredPath;
 
-pub use crate::util::secp::{hex_to_key, option_sig_serde, pubkey_serde, sig_serde};
+pub use crate::util::secp::{hex_to_key, option_sig_serde, pubkey_serde, sig_serde, u8_to_hex};
+
+/// Creates a SecuredPath from a hex string
+pub fn securedpath_from_hex<'de, D>(deserializer: D) -> Result<SecuredPath, D::Error>
+where
+	D: Deserializer<'de>,
+{
+	use serde::de::Error;
+	String::deserialize(deserializer).and_then(|string| {
+		SecuredPath::from_hex(&string).map_err(|err| Error::custom(err.to_string()))
+	})
+}
 
 /// Creates a BlindingFactor from a hex string
 pub fn blind_from_hex<'de, D>(deserializer: D) -> Result<BlindingFactor, D::Error>
-where
-	D: Deserializer<'de>,
+	where
+		D: Deserializer<'de>,
 {
 	use serde::de::Error;
 	String::deserialize(deserializer).and_then(|string| {

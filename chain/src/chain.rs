@@ -20,7 +20,7 @@ use crate::core::core::hash::{Hash, Hashed, ZERO_HASH};
 use crate::core::core::merkle_proof::MerkleProof;
 use crate::core::core::verifier_cache::VerifierCache;
 use crate::core::core::{
-	Block, BlockHeader, BlockSums, Committed, Output, OutputIdentifier, Transaction, TxKernel,
+	Block, BlockHeader, BlockSums, Committed, Output, OutputI, OutputIdentifier, Transaction, TxKernel,
 	TxKernelApiEntry, TxKernelEntry,
 };
 use crate::core::global;
@@ -596,7 +596,7 @@ impl Chain {
 		b.header.prev_root = prev_root;
 
 		// Set the output, rangeproof and kernel MMR roots.
-		b.header.output_root = roots.output_root;
+		b.header.output_root = roots.output_i_root;
 		b.header.range_proof_root = roots.rproof_root;
 		b.header.kernel_root = roots.kernel_root;
 
@@ -631,9 +631,9 @@ impl Chain {
 
 	/// Return a merkle proof valid for the current output pmmr state at the
 	/// given output commitment
-	pub fn get_merkle_proof_for_output(&self, commit: Commitment) -> Result<MerkleProof, Error> {
+	pub fn get_merkle_proof_for_output(&self, output: &OutputIdentifier) -> Result<MerkleProof, Error> {
 		let mut txhashset = self.txhashset.write();
-		txhashset.merkle_proof(commit)
+		txhashset.merkle_proof(output)
 	}
 
 	/// Returns current txhashset roots.
@@ -1135,8 +1135,8 @@ impl Chain {
 	}
 
 	/// returns the last n nodes inserted into the output sum tree
-	pub fn get_last_n_output(&self, distance: u64) -> Vec<(Hash, OutputIdentifier)> {
-		self.txhashset.read().last_n_output(distance)
+	pub fn get_last_n_output_i(&self, distance: u64) -> Vec<(Hash, OutputI)> {
+		self.txhashset.read().last_n_output_i(distance)
 	}
 
 	/// as above, for rangeproofs
@@ -1161,22 +1161,11 @@ impl Chain {
 		max: u64,
 	) -> Result<(u64, u64, Vec<Output>), Error> {
 		let txhashset = self.txhashset.read();
-		let max_index = txhashset.highest_output_insertion_index();
-		let outputs = txhashset.outputs_by_insertion_index(start_index, max);
-		let rangeproofs = txhashset.rangeproofs_by_insertion_index(start_index, max);
-		if outputs.0 != rangeproofs.0 || outputs.1.len() != rangeproofs.1.len() {
-			return Err(ErrorKind::TxHashSetErr(String::from(
-				"Output and rangeproof sets don't match",
-			))
-			.into());
-		}
+		let max_index = txhashset.highest_output_i_insertion_index();
+		let outputs = txhashset.outputs_i_by_insertion_index(start_index, max);
 		let mut output_vec: Vec<Output> = vec![];
-		for (ref x, &y) in outputs.1.iter().zip(rangeproofs.1.iter()) {
-			output_vec.push(Output {
-				commit: x.commit,
-				features: x.features,
-				proof: y,
-			});
+		for x in outputs.1 {
+			output_vec.push(x.into_output());
 		}
 		Ok((outputs.0, max_index, output_vec))
 	}

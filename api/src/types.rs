@@ -98,7 +98,7 @@ impl TxHashSet {
 	pub fn from_head(head: Arc<chain::Chain>) -> TxHashSet {
 		let roots = head.get_txhashset_roots();
 		TxHashSet {
-			output_root_hash: roots.output_root.to_hex(),
+			output_root_hash: roots.output_i_root.to_hex(),
 			range_proof_root_hash: roots.rproof_root.to_hex(),
 			kernel_root_hash: roots.kernel_root.to_hex(),
 		}
@@ -116,7 +116,7 @@ pub struct TxHashSetNode {
 impl TxHashSetNode {
 	pub fn get_last_n_output(chain: Arc<chain::Chain>, distance: u64) -> Vec<TxHashSetNode> {
 		let mut return_vec = Vec::new();
-		let last_n = chain.get_last_n_output(distance);
+		let last_n = chain.get_last_n_output_i(distance);
 		for x in last_n {
 			return_vec.push(TxHashSetNode {
 				hash: util::to_hex(x.0.to_vec()),
@@ -239,10 +239,6 @@ pub struct OutputPrintable {
 	pub commit: pedersen::Commitment,
 	/// Whether the output has been spent
 	pub spent: bool,
-	/// Rangeproof (as hex string)
-	pub proof: Option<String>,
-	/// Rangeproof hash (as hex string)
-	pub proof_hash: String,
 	/// Block height at which the output is found
 	pub block_height: Option<u64>,
 	/// Merkle Proof
@@ -256,7 +252,6 @@ impl OutputPrintable {
 		output: &core::Output,
 		chain: Arc<chain::Chain>,
 		block_header: Option<&core::BlockHeader>,
-		include_proof: bool,
 		include_merkle_proof: bool,
 	) -> Result<OutputPrintable, chain::Error> {
 		let output_type = if output.is_coinbase() {
@@ -271,12 +266,6 @@ impl OutputPrintable {
 			(false, Some(output_pos.height))
 		} else {
 			(true, None)
-		};
-
-		let proof = if include_proof {
-			Some(util::to_hex(output.proof.proof.to_vec()))
-		} else {
-			None
 		};
 
 		// Get the Merkle proof for all unspent coinbase outputs (to verify maturity on
@@ -298,8 +287,6 @@ impl OutputPrintable {
 			output_type,
 			commit: output.commit,
 			spent,
-			proof,
-			proof_hash: util::to_hex(output.proof.hash().to_vec()),
 			block_height,
 			merkle_proof,
 			mmr_index: output_pos_height.0,
@@ -308,24 +295,6 @@ impl OutputPrintable {
 
 	pub fn commit(&self) -> Result<pedersen::Commitment, ser::Error> {
 		Ok(self.commit.clone())
-	}
-
-	pub fn range_proof(&self) -> Result<pedersen::RangeProof, ser::Error> {
-		let proof_str = match self.proof.clone() {
-			Some(p) => p,
-			None => return Err(ser::Error::HexError(format!("output range_proof missing"))),
-		};
-
-		let p_vec = util::from_hex(proof_str)
-			.map_err(|_| ser::Error::HexError(format!("invalud output range_proof")))?;
-		let mut p_bytes = [0; util::secp::constants::MAX_PROOF_SIZE];
-		for i in 0..p_bytes.len() {
-			p_bytes[i] = p_vec[i];
-		}
-		Ok(pedersen::RangeProof {
-			proof: p_bytes,
-			plen: p_bytes.len(),
-		})
 	}
 }
 
@@ -451,7 +420,6 @@ impl BlockPrintable {
 	pub fn from_block(
 		block: &core::Block,
 		chain: Arc<chain::Chain>,
-		include_proof: bool,
 		include_merkle_proof: bool,
 	) -> Result<BlockPrintable, chain::Error> {
 		let inputs = block
@@ -467,7 +435,6 @@ impl BlockPrintable {
 					output,
 					chain.clone(),
 					Some(&block.header),
-					include_proof,
 					include_merkle_proof,
 				)
 			})
@@ -511,7 +478,7 @@ impl CompactBlockPrintable {
 			.out_full()
 			.iter()
 			.map(|x| {
-				OutputPrintable::from_output(x, chain.clone(), Some(&block.header), false, true)
+				OutputPrintable::from_output(x, chain.clone(), Some(&block.header), false)
 			})
 			.collect::<Result<Vec<_>, _>>()?;
 		let kern_full = cb

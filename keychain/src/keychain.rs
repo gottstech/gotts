@@ -21,9 +21,7 @@ use rand::{thread_rng, Rng};
 use crate::blake2::blake2b::blake2b;
 
 use crate::extkey_bip32::{BIP32GottsHasher, ExtendedPrivKey, ExtendedPubKey};
-use crate::types::{
-	BlindSum, BlindingFactor, Error, ExtKeychainPath, Identifier, Keychain, SwitchCommitmentType,
-};
+use crate::types::{BlindSum, BlindingFactor, Error, ExtKeychainPath, Identifier, Keychain};
 use crate::util::secp::key::{PublicKey, SecretKey};
 use crate::util::secp::pedersen::Commitment;
 use crate::util::secp::{self, Message, Secp256k1, Signature};
@@ -31,18 +29,8 @@ use crate::util::secp::{self, Message, Secp256k1, Signature};
 #[derive(Clone, Debug)]
 pub struct ExtKeychain {
 	secp: Secp256k1,
-	pub master: ExtendedPrivKey,
+	master: ExtendedPrivKey,
 	hasher: BIP32GottsHasher,
-}
-
-impl ExtKeychain {
-	pub fn pub_root_key(&mut self) -> ExtendedPubKey {
-		ExtendedPubKey::from_private(&self.secp, &self.master, &mut self.hasher)
-	}
-
-	pub fn hasher(&self) -> BIP32GottsHasher {
-		self.hasher.clone()
-	}
 }
 
 impl Keychain for ExtKeychain {
@@ -70,13 +58,6 @@ impl Keychain for ExtKeychain {
 		Ok(keychain)
 	}
 
-	fn mask_master_key(&mut self, mask: &SecretKey) -> Result<(), Error> {
-		for i in 0..secp::constants::SECRET_KEY_SIZE {
-			self.master.secret_key.0[i] ^= mask.0[i];
-		}
-		Ok(())
-	}
-
 	/// For testing - probably not a good idea to use outside of tests.
 	fn from_random_seed(is_floo: bool) -> Result<ExtKeychain, Error> {
 		let seed: String = thread_rng().sample_iter(&Alphanumeric).take(16).collect();
@@ -97,12 +78,7 @@ impl Keychain for ExtKeychain {
 		ExtendedPubKey::from_private(&self.secp, &self.master, &mut hasher).public_key
 	}
 
-	fn derive_key(
-		&self,
-		amount: u64,
-		id: &Identifier,
-		switch: &SwitchCommitmentType,
-	) -> Result<SecretKey, Error> {
+	fn derive_key(&self, amount: u64, id: &Identifier) -> Result<SecretKey, Error> {
 		let mut h = self.hasher.clone();
 		let p = id.to_path();
 		let mut ext_key = self.master.clone();
@@ -110,21 +86,11 @@ impl Keychain for ExtKeychain {
 			ext_key = ext_key.ckd_priv(&self.secp, &mut h, p.path[i as usize])?;
 		}
 
-		match *switch {
-			SwitchCommitmentType::Regular => {
-				Ok(self.secp.blind_switch(amount, ext_key.secret_key)?)
-			}
-			SwitchCommitmentType::None => Ok(ext_key.secret_key),
-		}
+		Ok(self.secp.blind_switch(amount, ext_key.secret_key)?)
 	}
 
-	fn commit(
-		&self,
-		amount: u64,
-		id: &Identifier,
-		switch: &SwitchCommitmentType,
-	) -> Result<Commitment, Error> {
-		let key = self.derive_key(amount, id, switch)?;
+	fn commit(&self, amount: u64, id: &Identifier) -> Result<Commitment, Error> {
+		let key = self.derive_key(amount, id)?;
 		let commit = self.secp.commit(amount, key)?;
 		Ok(commit)
 	}
@@ -134,11 +100,7 @@ impl Keychain for ExtKeychain {
 			.positive_key_ids
 			.iter()
 			.filter_map(|k| {
-				let res = self.derive_key(
-					k.value,
-					&Identifier::from_path(&k.ext_keychain_path),
-					&k.switch,
-				);
+				let res = self.derive_key(k.value, &Identifier::from_path(&k.ext_keychain_path));
 				if let Ok(s) = res {
 					Some(s)
 				} else {
@@ -151,11 +113,7 @@ impl Keychain for ExtKeychain {
 			.negative_key_ids
 			.iter()
 			.filter_map(|k| {
-				let res = self.derive_key(
-					k.value,
-					&Identifier::from_path(&k.ext_keychain_path),
-					&k.switch,
-				);
+				let res = self.derive_key(k.value, &Identifier::from_path(&k.ext_keychain_path));
 				if let Ok(s) = res {
 					Some(s)
 				} else {
@@ -182,14 +140,17 @@ impl Keychain for ExtKeychain {
 		Ok(BlindingFactor::from_secret_key(sum))
 	}
 
-	fn sign(
-		&self,
-		msg: &Message,
-		amount: u64,
-		id: &Identifier,
-		switch: &SwitchCommitmentType,
-	) -> Result<Signature, Error> {
-		let skey = self.derive_key(amount, id, switch)?;
+	fn rewind_nonce(&self, commit: &Commitment) -> Result<SecretKey, Error> {
+		// hash(commit|wallet root secret key (m)) as nonce
+		let root_key = self.derive_key(0, &Self::root_key_id())?;
+		let res = blake2b(32, &commit.0, &root_key.0[..]);
+		let res = res.as_bytes();
+		SecretKey::from_slice(&self.secp, &res)
+			.map_err(|e| Error::RangeProof(format!("Unable to create nonce: {:?}", e).to_string()))
+	}
+
+	fn sign(&self, msg: &Message, amount: u64, id: &Identifier) -> Result<Signature, Error> {
+		let skey = self.derive_key(amount, id)?;
 		let sig = self.secp.sign(msg, &skey)?;
 		Ok(sig)
 	}
@@ -231,10 +192,10 @@ mod test {
 
 		// now create a zero commitment using the key on the keychain associated with
 		// the key_id
-		let commit = keychain.commit(0, &key_id, switch).unwrap();
+		let commit = keychain.commit(0, &key_id).unwrap();
 
 		// now check we can use our key to verify a signature from this zero commitment
-		let sig = keychain.sign(&msg, 0, &key_id, switch).unwrap();
+		let sig = keychain.sign(&msg, 0, &key_id).unwrap();
 		secp.verify_from_commit(&msg, &sig, &commit).unwrap();
 	}
 

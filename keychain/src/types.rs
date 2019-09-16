@@ -15,7 +15,6 @@
 
 use rand::thread_rng;
 use std::cmp::min;
-use std::convert::TryFrom;
 use std::io::Cursor;
 use std::ops::Add;
 /// Keychain trait and its main supporting types. The Identifier is a
@@ -449,7 +448,7 @@ impl ExtKeychainPath {
 	}
 }
 
-/// Wrapper for amount + switch + path
+/// Wrapper for amount + path
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Deserialize)]
 pub struct ValueExtKeychainPath {
 	pub value: u64,
@@ -468,9 +467,6 @@ pub trait Keychain: Sync + Send + Clone {
 	/// Generates a keychain from a randomly generated seed. Mostly used for tests.
 	fn from_random_seed(is_floo: bool) -> Result<Self, Error>;
 
-	/// XOR masks the keychain's master key against another key
-	fn mask_master_key(&mut self, mask: &SecretKey) -> Result<(), Error>;
-
 	/// Root identifier for that keychain
 	fn root_key_id() -> Identifier;
 
@@ -481,54 +477,24 @@ pub trait Keychain: Sync + Send + Clone {
 	/// The public root key
 	fn public_root_key(&self) -> PublicKey;
 
-	fn derive_key(
-		&self,
-		amount: u64,
-		id: &Identifier,
-		switch: &SwitchCommitmentType,
-	) -> Result<SecretKey, Error>;
-	fn commit(
-		&self,
-		amount: u64,
-		id: &Identifier,
-		switch: &SwitchCommitmentType,
-	) -> Result<Commitment, Error>;
+	fn derive_key(&self, amount: u64, id: &Identifier) -> Result<SecretKey, Error>;
+	fn commit(&self, amount: u64, id: &Identifier) -> Result<Commitment, Error>;
 	fn blind_sum(&self, blind_sum: &BlindSum) -> Result<BlindingFactor, Error>;
-	fn sign(
-		&self,
-		msg: &Message,
-		amount: u64,
-		id: &Identifier,
-		switch: &SwitchCommitmentType,
-	) -> Result<Signature, Error>;
+	fn rewind_nonce(&self, commit: &Commitment) -> Result<SecretKey, Error>;
+	fn sign(&self, msg: &Message, amount: u64, id: &Identifier) -> Result<Signature, Error>;
 	fn sign_with_blinding(&self, _: &Message, _: &BlindingFactor) -> Result<Signature, Error>;
 	fn secp(&self) -> &Secp256k1;
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Serialize, Deserialize)]
-pub enum SwitchCommitmentType {
-	None,
-	Regular,
-}
-
-impl TryFrom<u8> for SwitchCommitmentType {
-	type Error = ();
-
-	fn try_from(value: u8) -> Result<Self, Self::Error> {
-		match value {
-			0 => Ok(SwitchCommitmentType::None),
-			1 => Ok(SwitchCommitmentType::Regular),
-			_ => Err(()),
-		}
-	}
-}
-
-impl From<&SwitchCommitmentType> for u8 {
-	fn from(switch: &SwitchCommitmentType) -> Self {
-		match *switch {
-			SwitchCommitmentType::None => 0,
-			SwitchCommitmentType::Regular => 1,
-		}
+enum_from_primitive! {
+	#[derive(PartialEq, Eq, Clone, Copy, Debug, Serialize, Deserialize)]
+	#[repr(u8)]
+	/// Enum of switch commitment type.
+	pub enum SwitchCommitmentType {
+		/// Without switch commitment.
+		None = 0,
+		/// The standard switch commitment: `C = (r*G+v*H) + Hash(rG+vH || rJ)*G`.
+		Regular = 1,
 	}
 }
 

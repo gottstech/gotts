@@ -168,7 +168,6 @@ impl OutputHandler {
 		&self,
 		block_height: u64,
 		commitments: Vec<Commitment>,
-		include_proof: bool,
 	) -> Result<BlockOutputs, Error> {
 		let header = w(&self.chain)?
 			.get_header_by_height(block_height)
@@ -189,7 +188,6 @@ impl OutputHandler {
 					output,
 					chain.clone(),
 					Some(&header),
-					include_proof,
 					true,
 				)
 			})
@@ -216,16 +214,15 @@ impl OutputHandler {
 		});
 		let start_height = parse_param!(params, "start_height", 1);
 		let end_height = parse_param!(params, "end_height", 1);
-		let include_rp = params.get("include_rp").is_some();
 
 		debug!(
-			"outputs_block_batch: {}-{}, {:?}, {:?}",
-			start_height, end_height, commitments, include_rp,
+			"outputs_block_batch: {}-{}, {:?}",
+			start_height, end_height, commitments,
 		);
 
 		let mut return_vec = vec![];
 		for i in (start_height..=end_height).rev() {
-			if let Ok(res) = self.outputs_at_height(i, commitments.clone(), include_rp) {
+			if let Ok(res) = self.outputs_at_height(i, commitments.clone()) {
 				if res.outputs.len() > 0 {
 					return_vec.push(res);
 				}

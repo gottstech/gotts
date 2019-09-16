@@ -16,15 +16,14 @@
 //! Builds the blinded output and related signature proof for the block
 //! reward.
 use crate::consensus::reward;
-use crate::core::{KernelFeatures, Output, OutputFeatures, TxKernel};
+use crate::core::{KernelFeatures, Output, OutputFeaturesEx, TxKernel};
 use crate::keychain::{Identifier, Keychain};
 use crate::libtx::error::Error;
-use crate::libtx::{
-	aggsig,
-	proof::{self, ProofBuild},
-};
+use crate::libtx::aggsig;
+use crate::libtx::proof::{self, ProofBuild};
 use crate::util::{secp, static_secp_instance};
-use gotts_keychain::SwitchCommitmentType;
+
+use rand::{thread_rng, Rng};
 
 /// output a reward output
 pub fn output<K, B>(
@@ -39,18 +38,17 @@ where
 	B: ProofBuild,
 {
 	let value = reward(fees);
-	// TODO: proper support for different switch commitment schemes
-	let switch = &SwitchCommitmentType::Regular;
-	let commit = keychain.commit(value, key_id, switch)?;
+	let secured_w: u64 = thread_rng().gen();
+	let commit = keychain.commit(secured_w, key_id)?;
 
 	trace!("Block reward - Pedersen Commit is: {:?}", commit,);
 
-	let rproof = proof::create(keychain, builder, value, key_id, switch, commit, None)?;
+	let spath = proof::create_secured_path(keychain, builder, secured_w, &key_id, commit)?;
 
 	let output = Output {
-		features: OutputFeatures::Coinbase,
+		features: OutputFeaturesEx::Coinbase { spath },
 		commit,
-		proof: rproof,
+		value,
 	};
 
 	let secp = static_secp_instance();

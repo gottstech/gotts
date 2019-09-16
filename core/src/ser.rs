@@ -31,6 +31,7 @@ use crate::util::secp::key::PublicKey;
 use crate::util::secp::pedersen::{Commitment, RangeProof};
 use crate::util::secp::Signature;
 use crate::util::secp::{ContextFlag, Secp256k1};
+use crate::libtx::proof::{SecuredPath, SECURED_PATH_SIZE};
 use byteorder::{BigEndian, ByteOrder, ReadBytesExt};
 use std::fmt::{self, Debug};
 use std::io::{self, Read, Write};
@@ -612,6 +613,23 @@ impl PMMRable for RangeProof {
 	}
 }
 
+impl Writeable for SecuredPath {
+	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), Error> {
+		writer.write_fixed_bytes(self)
+	}
+}
+
+impl Readable for SecuredPath {
+	fn read(reader: &mut dyn Reader) -> Result<SecuredPath, Error> {
+		let p = reader.read_fixed_bytes(SECURED_PATH_SIZE)?;
+		Ok(SecuredPath::from_slice(&p))
+	}
+}
+
+impl FixedLength for SecuredPath {
+	const LEN: usize = SECURED_PATH_SIZE;
+}
+
 impl Readable for Signature {
 	fn read(reader: &mut dyn Reader) -> Result<Signature, Error> {
 		let a = reader.read_fixed_bytes(Signature::LEN)?;
@@ -940,6 +958,11 @@ impl AsFixedBytes for BlindingFactor {
 impl AsFixedBytes for crate::keychain::Identifier {
 	fn len(&self) -> usize {
 		IDENTIFIER_SIZE
+	}
+}
+impl AsFixedBytes for SecuredPath {
+	fn len(&self) -> usize {
+		SECURED_PATH_SIZE
 	}
 }
 

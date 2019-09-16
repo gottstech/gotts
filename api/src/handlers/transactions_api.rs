@@ -21,9 +21,11 @@ use crate::types::*;
 use crate::util;
 use crate::util::secp::pedersen::Commitment;
 use crate::web::*;
+use enum_primitive::FromPrimitive;
 use failure::ResultExt;
 use hyper::{Body, Request, StatusCode};
 use std::sync::Weak;
+use gotts_core::core::{OutputFeatures, OutputIdentifier};
 
 // Sum tree handler. Retrieve the roots:
 // GET /v1/txhashset/roots
@@ -84,7 +86,7 @@ impl TxHashSetHandler {
 			outputs: outputs
 				.2
 				.iter()
-				.map(|x| OutputPrintable::from_output(x, chain.clone(), None, true, true))
+				.map(|x| OutputPrintable::from_output(x, chain.clone(), None, true))
 				.collect::<Result<Vec<_>, _>>()
 				.context(ErrorKind::Internal("cain error".to_owned()))?,
 		};
@@ -93,7 +95,7 @@ impl TxHashSetHandler {
 
 	// return a dummy output with merkle proof for position filled out
 	// (to avoid having to create a new type to pass around)
-	fn get_merkle_proof_for_output(&self, id: &str) -> Result<OutputPrintable, Error> {
+	fn get_merkle_proof_for_output(&self, id: &str, features: OutputFeatures) -> Result<OutputPrintable, Error> {
 		let c = util::from_hex(String::from(id)).context(ErrorKind::Argument(format!(
 			"Not a valid commitment: {}",
 			id
@@ -103,14 +105,13 @@ impl TxHashSetHandler {
 		let output_pos_height = chain
 			.get_output_pos_height(&commit)
 			.context(ErrorKind::NotFound)?;
-		let merkle_proof = chain::Chain::get_merkle_proof_for_output(&chain, commit)
+		let id = OutputIdentifier::new(features, &commit);
+		let merkle_proof = chain::Chain::get_merkle_proof_for_output(&chain, &id)
 			.map_err(|_| ErrorKind::NotFound)?;
 		Ok(OutputPrintable {
 			output_type: OutputType::Coinbase,
 			commit,
 			spent: false,
-			proof: None,
-			proof_hash: "".to_string(),
 			block_height: Some(output_pos_height.1),
 			merkle_proof: Some(merkle_proof),
 			mmr_index: output_pos_height.0,
@@ -126,6 +127,9 @@ impl Handler for TxHashSetHandler {
 		let start_index = parse_param_no_err!(params, "start_index", 1);
 		let max = parse_param_no_err!(params, "max", 100);
 		let id = parse_param_no_err!(params, "id", "".to_owned());
+		let output_type = parse_param_no_err!(params, "type", 0u8);
+		let features =
+			OutputFeatures::from_u8(output_type).unwrap_or(OutputFeatures::Plain);
 
 		match right_path_element!(req) {
 			"roots" => result_to_response(self.get_roots()),
@@ -133,7 +137,7 @@ impl Handler for TxHashSetHandler {
 			"lastrangeproofs" => result_to_response(self.get_last_n_rangeproof(last_n)),
 			"lastkernels" => result_to_response(self.get_last_n_kernel(last_n)),
 			"outputs" => result_to_response(self.outputs(start_index, max)),
-			"merkleproof" => result_to_response(self.get_merkle_proof_for_output(&id)),
+			"merkleproof" => result_to_response(self.get_merkle_proof_for_output(&id, features)),
 			_ => response(StatusCode::BAD_REQUEST, ""),
 		}
 	}
