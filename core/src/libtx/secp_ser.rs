@@ -15,10 +15,10 @@
 
 //! Sane serialization & deserialization of cryptographic structs into hex
 
+use super::proof::SecuredPath;
 use crate::keychain::BlindingFactor;
 use crate::serde::{Deserialize, Deserializer, Serializer};
 use crate::util::to_hex;
-use super::proof::SecuredPath;
 
 pub use crate::util::secp::{hex_to_key, option_sig_serde, pubkey_serde, sig_serde, u8_to_hex};
 
@@ -35,8 +35,8 @@ where
 
 /// Creates a BlindingFactor from a hex string
 pub fn blind_from_hex<'de, D>(deserializer: D) -> Result<BlindingFactor, D::Error>
-	where
-		D: Deserializer<'de>,
+where
+	D: Deserializer<'de>,
 {
 	use serde::de::Error;
 	String::deserialize(deserializer).and_then(|string| {

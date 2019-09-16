@@ -21,7 +21,8 @@ use crate::core::core::hash::{Hash, Hashed};
 use crate::core::core::merkle_proof::MerkleProof;
 use crate::core::core::pmmr::{self, Backend, ReadonlyPMMR, RewindablePMMR, PMMR};
 use crate::core::core::{
-	Block, BlockHeader, Input, Output, OutputFeatures, OutputI, OutputIdentifier, TxKernel, TxKernelEntry,
+	Block, BlockHeader, Input, Output, OutputFeatures, OutputI, OutputIdentifier, TxKernel,
+	TxKernelEntry,
 };
 use crate::core::ser::{PMMRIndexHashable, PMMRable};
 use crate::error::{Error, ErrorKind};
@@ -158,14 +159,18 @@ impl TxHashSet {
 			Ok((pos, block_height)) => {
 				let hash = match output_id.features {
 					OutputFeatures::Plain | OutputFeatures::Coinbase => {
-						let output_pmmr: ReadonlyPMMR<'_, OutputI, _> =
-						ReadonlyPMMR::at(&self.output_i_pmmr_h.backend, self.output_i_pmmr_h.last_pos);
+						let output_pmmr: ReadonlyPMMR<'_, OutputI, _> = ReadonlyPMMR::at(
+							&self.output_i_pmmr_h.backend,
+							self.output_i_pmmr_h.last_pos,
+						);
 						output_pmmr.get_hash(pos)
 					}
 					OutputFeatures::SigLocked => {
 						//todo: OutputII & output_ii_pmmr_h
-						let output_pmmr: ReadonlyPMMR<'_, OutputI, _> =
-							ReadonlyPMMR::at(&self.output_i_pmmr_h.backend, self.output_i_pmmr_h.last_pos);
+						let output_pmmr: ReadonlyPMMR<'_, OutputI, _> = ReadonlyPMMR::at(
+							&self.output_i_pmmr_h.backend,
+							self.output_i_pmmr_h.last_pos,
+						);
 						output_pmmr.get_hash(pos)
 					}
 				};
@@ -301,16 +306,20 @@ impl TxHashSet {
 	pub fn merkle_proof(&mut self, output_id: &OutputIdentifier) -> Result<MerkleProof, Error> {
 		let pos = self.commit_index.get_output_pos(&output_id.commit)?;
 		match output_id.features {
-			OutputFeatures::Plain | OutputFeatures::Coinbase => {
-				PMMR::at(&mut self.output_i_pmmr_h.backend, self.output_i_pmmr_h.last_pos)
-					.merkle_proof(pos)
-					.map_err(|_| ErrorKind::MerkleProof.into())
-			}
+			OutputFeatures::Plain | OutputFeatures::Coinbase => PMMR::at(
+				&mut self.output_i_pmmr_h.backend,
+				self.output_i_pmmr_h.last_pos,
+			)
+			.merkle_proof(pos)
+			.map_err(|_| ErrorKind::MerkleProof.into()),
 			OutputFeatures::SigLocked => {
 				//todo: replace with output_ii_pmmr_h
-				PMMR::at(&mut self.output_i_pmmr_h.backend, self.output_i_pmmr_h.last_pos)
-					.merkle_proof(pos)
-					.map_err(|_| ErrorKind::MerkleProof.into())
+				PMMR::at(
+					&mut self.output_i_pmmr_h.backend,
+					self.output_i_pmmr_h.last_pos,
+				)
+				.merkle_proof(pos)
+				.map_err(|_| ErrorKind::MerkleProof.into())
 			}
 		}
 	}
@@ -459,8 +468,10 @@ where
 {
 	let res: Result<T, Error>;
 	{
-		let output_i_pmmr =
-			ReadonlyPMMR::at(&trees.output_i_pmmr_h.backend, trees.output_i_pmmr_h.last_pos);
+		let output_i_pmmr = ReadonlyPMMR::at(
+			&trees.output_i_pmmr_h.backend,
+			trees.output_i_pmmr_h.last_pos,
+		);
 		let header_pmmr = ReadonlyPMMR::at(&handle.backend, handle.last_pos);
 
 		// Create a new batch here to pass into the utxo_view.

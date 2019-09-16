@@ -113,10 +113,10 @@ pub fn genesis_floo() -> core::Block {
 		features: core::OutputFeaturesEx::Coinbase {
 			spath: libtx::proof::SecuredPath::from_vec(
 				util::from_hex(
-				"0000000023d0443abdc72c6ba9fa96e4e3023ecb48e9879ce709a499492411f2".to_string(),
+					"0000000023d0443abdc72c6ba9fa96e4e3023ecb48e9879ce709a499492411f2".to_string(),
 				)
 				.unwrap(),
-			)
+			),
 		},
 		commit: Commitment::from_vec(
 			util::from_hex(

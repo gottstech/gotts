@@ -15,22 +15,22 @@
 
 //! Rangeproof library functions
 
+use super::secp_ser::pubkey_serde;
 use crate::blake2::blake2b::blake2b;
 use crate::core::hash::{Hash, Hashed};
 use crate::keychain::{Identifier, Keychain};
 use crate::libtx::error::{Error, ErrorKind};
+use crate::ser::{self, Readable, Reader, Writeable, Writer};
+use crate::util;
 use crate::util::secp::key::{PublicKey, SecretKey};
 use crate::util::secp::pedersen::Commitment;
 use crate::util::secp::{self, Secp256k1};
-use crate::util;
-use super::secp_ser::pubkey_serde;
-use crate::ser::{self, Readable, Reader, Writeable, Writer};
 use crate::zeroize::Zeroize;
 
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use rand::thread_rng;
 use std::cmp::min;
 use std::io::Cursor;
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 /// size of the reserved zero prefix in SecuredPath
 pub const SECURED_PATH_PREFIX_SIZE: usize = 3;
@@ -70,7 +70,7 @@ impl Readable for OutputLocker {
 		let pub_nonce = PublicKey::read(reader)?;
 		let secured_w = reader.read_u64()?;
 		let relative_lock_height = reader.read_u32()?;
-		Ok(OutputLocker{
+		Ok(OutputLocker {
 			p2pkh,
 			pub_nonce,
 			secured_w,
@@ -86,9 +86,9 @@ pub fn create_output_locker<K>(
 	secured_w: u64,
 	relative_lock_height: u32,
 	key_id: &Identifier,
-) -> Result<(Commitment,OutputLocker), Error>
-	where
-		K: Keychain,
+) -> Result<(Commitment, OutputLocker), Error>
+where
+	K: Keychain,
 {
 	let secp = k.secp();
 	let private_nonce = SecretKey::new(&secp, &mut thread_rng());
@@ -108,13 +108,14 @@ pub fn create_output_locker<K>(
 	// The Pedersen commitment: `C = q*G + w*H`.
 	let commit = k.commit(w, key_id)?;
 
-	Ok((commit,
+	Ok((
+		commit,
 		OutputLocker {
 			p2pkh: recipient_pubkey.serialize_vec(&secp, true).hash(),
 			pub_nonce,
 			secured_w,
 			relative_lock_height,
-		}
+		},
 	))
 }
 
@@ -155,7 +156,8 @@ impl SecuredPath {
 
 	/// Get the hex string from a SecuredPath
 	pub fn from_hex(hex: &str) -> Result<SecuredPath, Error> {
-		let bytes = util::from_hex(hex.to_string()).map_err(|e| ErrorKind::PathMessage(e.to_string()))?;
+		let bytes =
+			util::from_hex(hex.to_string()).map_err(|e| ErrorKind::PathMessage(e.to_string()))?;
 		Ok(SecuredPath::from_slice(&bytes))
 	}
 
@@ -165,15 +167,24 @@ impl SecuredPath {
 		bin[0..SECURED_PATH_PREFIX_SIZE].copy_from_slice(&path_msg.reserved);
 		let mut wtr = vec![];
 		wtr.write_u64::<LittleEndian>(path_msg.w).unwrap();
-		bin[SECURED_PATH_PREFIX_SIZE..SECURED_PATH_PREFIX_SIZE+8].copy_from_slice(&wtr);
-		bin[SECURED_PATH_PREFIX_SIZE+8..].copy_from_slice(path_msg.key_id.as_ref());
-		let encoded: Vec<u8> = bin.iter().zip(none.to_vec().iter()).map(|(a,b)| *a ^ *b).collect();
+		bin[SECURED_PATH_PREFIX_SIZE..SECURED_PATH_PREFIX_SIZE + 8].copy_from_slice(&wtr);
+		bin[SECURED_PATH_PREFIX_SIZE + 8..].copy_from_slice(path_msg.key_id.as_ref());
+		let encoded: Vec<u8> = bin
+			.iter()
+			.zip(none.to_vec().iter())
+			.map(|(a, b)| *a ^ *b)
+			.collect();
 		SecuredPath::from_slice(&encoded)
 	}
 
 	/// Get the hidden PathMessage from a SecuredPath
 	pub fn get_path(&self, none: &Hash) -> Result<PathMessage, Error> {
-		let decoded: Vec<u8> = self.0.iter().zip(none.to_vec().iter()).map(|(a,b)| *a ^ *b).collect();
+		let decoded: Vec<u8> = self
+			.0
+			.iter()
+			.zip(none.to_vec().iter())
+			.map(|(a, b)| *a ^ *b)
+			.collect();
 		PathMessage::from_slice(&decoded)
 	}
 }
@@ -202,11 +213,16 @@ impl PathMessage {
 			return Err(ErrorKind::PathMessage("wrong path message".to_owned()).into());
 		}
 
-		let mut rdr = Cursor::new((&data[SECURED_PATH_PREFIX_SIZE..SECURED_PATH_PREFIX_SIZE+8]).clone());
+		let mut rdr =
+			Cursor::new((&data[SECURED_PATH_PREFIX_SIZE..SECURED_PATH_PREFIX_SIZE + 8]).clone());
 		let w = rdr.read_u64::<LittleEndian>().unwrap();;
-		let key_id: Identifier = Identifier::from_bytes(&data[SECURED_PATH_PREFIX_SIZE+8..]);
+		let key_id: Identifier = Identifier::from_bytes(&data[SECURED_PATH_PREFIX_SIZE + 8..]);
 
-		Ok(PathMessage{reserved, w, key_id})
+		Ok(PathMessage {
+			reserved,
+			w,
+			key_id,
+		})
 	}
 }
 
@@ -218,9 +234,9 @@ pub fn create_secured_path<K, B>(
 	key_id: &Identifier,
 	commit: Commitment,
 ) -> Result<SecuredPath, Error>
-	where
-		K: Keychain,
-		B: ProofBuild,
+where
+	K: Keychain,
+	B: ProofBuild,
 {
 	let secp = k.secp();
 	let rewind_nonce = b.rewind_nonce(secp, &commit);
@@ -235,11 +251,10 @@ pub fn rewind<B>(
 	commit: Commitment,
 	spath: SecuredPath,
 ) -> Result<PathMessage, Error>
-	where
-		B: ProofBuild,
+where
+	B: ProofBuild,
 {
-	let nonce = b
-		.rewind_nonce(secp, &commit);
+	let nonce = b.rewind_nonce(secp, &commit);
 	let info = spath.get_path(&nonce)?;
 
 	let _key_id = b
@@ -255,12 +270,7 @@ pub trait ProofBuild: Sync + Send + Clone {
 	fn rewind_nonce(&self, secp: &Secp256k1, commit: &Commitment) -> Hash;
 
 	/// Create a PathMessage
-	fn proof_message(
-		&self,
-		secp: &Secp256k1,
-		w: u64,
-		id: &Identifier,
-	) -> PathMessage;
+	fn proof_message(&self, secp: &Secp256k1, w: u64, id: &Identifier) -> PathMessage;
 
 	/// Check if the output belongs to this keychain
 	fn check_output(
@@ -274,8 +284,8 @@ pub trait ProofBuild: Sync + Send + Clone {
 /// The proof builder
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ProofBuilder<'a, K>
-	where
-		K: Keychain,
+where
+	K: Keychain,
 {
 	/// Keychain
 	keychain: &'a K,
@@ -284,8 +294,8 @@ pub struct ProofBuilder<'a, K>
 }
 
 impl<'a, K> ProofBuilder<'a, K>
-	where
-		K: Keychain,
+where
+	K: Keychain,
 {
 	/// Creates a new instance of this proof builder
 	pub fn new(keychain: &'a K) -> Self {
@@ -306,20 +316,15 @@ impl<'a, K> ProofBuilder<'a, K>
 }
 
 impl<'a, K> ProofBuild for ProofBuilder<'a, K>
-	where
-		K: Keychain,
+where
+	K: Keychain,
 {
 	fn rewind_nonce(&self, _secp: &Secp256k1, commit: &Commitment) -> Hash {
 		self.nonce(commit)
 	}
 
-	fn proof_message(
-		&self,
-		_secp: &Secp256k1,
-		w: u64,
-		id: &Identifier,
-	) -> PathMessage {
-		PathMessage{
+	fn proof_message(&self, _secp: &Secp256k1, w: u64, id: &Identifier) -> PathMessage {
+		PathMessage {
 			reserved: [0u8; SECURED_PATH_PREFIX_SIZE],
 			w,
 			key_id: id.clone(),
@@ -341,8 +346,8 @@ impl<'a, K> ProofBuild for ProofBuilder<'a, K>
 }
 
 impl<'a, K> Zeroize for ProofBuilder<'a, K>
-	where
-		K: Keychain,
+where
+	K: Keychain,
 {
 	fn zeroize(&mut self) {
 		self.rewind_hash.zeroize();
@@ -350,8 +355,8 @@ impl<'a, K> Zeroize for ProofBuilder<'a, K>
 }
 
 impl<'a, K> Drop for ProofBuilder<'a, K>
-	where
-		K: Keychain,
+where
+	K: Keychain,
 {
 	fn drop(&mut self) {
 		self.zeroize();

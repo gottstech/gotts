@@ -192,8 +192,7 @@ impl Default for Hash {
 	}
 }
 
-impl Zeroize for Hash
-{
+impl Zeroize for Hash {
 	fn zeroize(&mut self) {
 		self.0.copy_from_slice(ZERO_HASH.as_ref());
 	}

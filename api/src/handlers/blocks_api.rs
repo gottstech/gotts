@@ -88,11 +88,7 @@ pub struct BlockHandler {
 }
 
 impl BlockHandler {
-	fn get_block(
-		&self,
-		h: &Hash,
-		include_merkle_proof: bool,
-	) -> Result<BlockPrintable, Error> {
+	fn get_block(&self, h: &Hash, include_merkle_proof: bool) -> Result<BlockPrintable, Error> {
 		let chain = w(&self.chain)?;
 		let block = chain.get_block(h).context(ErrorKind::NotFound)?;
 		BlockPrintable::from_block(&block, chain, include_merkle_proof)
@@ -167,9 +163,6 @@ impl Handler for BlockHandler {
 				return result_with_cuckoo_solution_to_response(self.get_compact_block(&h));
 			}
 		}
-		result_with_cuckoo_solution_to_response(self.get_block(
-			&h,
-			include_merkle_proof,
-		))
+		result_with_cuckoo_solution_to_response(self.get_block(&h, include_merkle_proof))
 	}
 }

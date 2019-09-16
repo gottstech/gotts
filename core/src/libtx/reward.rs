@@ -18,8 +18,8 @@
 use crate::consensus::reward;
 use crate::core::{KernelFeatures, Output, OutputFeaturesEx, TxKernel};
 use crate::keychain::{Identifier, Keychain};
-use crate::libtx::error::Error;
 use crate::libtx::aggsig;
+use crate::libtx::error::Error;
 use crate::libtx::proof::{self, ProofBuild};
 use crate::util::{secp, static_secp_instance};
 

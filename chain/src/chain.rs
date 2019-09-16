@@ -20,8 +20,8 @@ use crate::core::core::hash::{Hash, Hashed, ZERO_HASH};
 use crate::core::core::merkle_proof::MerkleProof;
 use crate::core::core::verifier_cache::VerifierCache;
 use crate::core::core::{
-	Block, BlockHeader, BlockSums, Committed, Output, OutputI, OutputIdentifier, Transaction, TxKernel,
-	TxKernelApiEntry, TxKernelEntry,
+	Block, BlockHeader, BlockSums, Committed, Output, OutputI, OutputIdentifier, Transaction,
+	TxKernel, TxKernelApiEntry, TxKernelEntry,
 };
 use crate::core::global;
 use crate::core::pow;
@@ -631,7 +631,10 @@ impl Chain {
 
 	/// Return a merkle proof valid for the current output pmmr state at the
 	/// given output commitment
-	pub fn get_merkle_proof_for_output(&self, output: &OutputIdentifier) -> Result<MerkleProof, Error> {
+	pub fn get_merkle_proof_for_output(
+		&self,
+		output: &OutputIdentifier,
+	) -> Result<MerkleProof, Error> {
 		let mut txhashset = self.txhashset.write();
 		txhashset.merkle_proof(output)
 	}

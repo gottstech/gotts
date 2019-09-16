@@ -477,9 +477,7 @@ impl CompactBlockPrintable {
 		let out_full = cb
 			.out_full()
 			.iter()
-			.map(|x| {
-				OutputPrintable::from_output(x, chain.clone(), Some(&block.header), false)
-			})
+			.map(|x| OutputPrintable::from_output(x, chain.clone(), Some(&block.header), false))
 			.collect::<Result<Vec<_>, _>>()?;
 		let kern_full = cb
 			.kern_full()

@@ -20,8 +20,10 @@ use crate::core::hash::{DefaultHashable, Hash, Hashed};
 use crate::core::verifier_cache::VerifierCache;
 use crate::core::{committed, Committed};
 use crate::keychain::{self, BlindingFactor};
+use crate::libtx::proof::{
+	OutputLocker, PathMessage, SecuredPath, OUTPUT_LOCKER_SIZE, SECURED_PATH_SIZE,
+};
 use crate::libtx::secp_ser;
-use crate::libtx::proof::{OutputLocker, PathMessage, SecuredPath, SECURED_PATH_SIZE, OUTPUT_LOCKER_SIZE};
 use crate::ser::{
 	self, read_multi, FixedLength, PMMRable, Readable, Reader, VerifySortedAndUnique, Writeable,
 	Writer,
@@ -38,8 +40,8 @@ use chrono::prelude::{DateTime, NaiveDateTime, Utc};
 use enum_primitive::FromPrimitive;
 use std::cmp::Ordering;
 use std::cmp::{max, min};
-use std::u32;
 use std::sync::Arc;
+use std::u32;
 use std::{error, fmt};
 
 /// Single output message size. (features || commit || value)
@@ -915,7 +917,7 @@ impl TransactionBody {
 		{
 			let mut verifier = verifier.write();
 			//todo:
-//			verifier.add_inputunlocker_verified(outputs);
+			//			verifier.add_inputunlocker_verified(outputs);
 			verifier.add_kernel_sig_verified(kernels);
 		}
 		Ok(())
@@ -1425,7 +1427,7 @@ impl Readable for InputUnlocker {
 
 		let sig = secp::Signature::read(reader)?;
 		let pub_key = secp::key::PublicKey::read(reader)?;
-		Ok(InputUnlocker{
+		Ok(InputUnlocker {
 			timestamp: DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(timestamp, 0), Utc),
 			sig,
 			pub_key,
@@ -1493,7 +1495,10 @@ impl InputsUnlocking {
 	/// identify the output. Specifically the block hash (to correctly
 	/// calculate lock_height for coinbase outputs).
 	pub fn commitments(&self) -> Vec<Commitment> {
-		self.inputs.iter().map(|input| input.commit.clone()).collect()
+		self.inputs
+			.iter()
+			.map(|input| input.commit.clone())
+			.collect()
 	}
 
 	/// Verify the transaction proof validity. Entails checking the signature verifies with
@@ -1503,10 +1508,11 @@ impl InputsUnlocking {
 	/// max height of the 'outputs_to_spent', the block timestamp at that height.
 	/// 2. 'check_sig_only' must be true on production. 'false' only for test.
 	///
-	pub fn verify(&self,
-			  outputs_to_spent: &Vec<OutputEx>,
-			  max_timestamp: DateTime<Utc>,
-			  check_sig_only: bool
+	pub fn verify(
+		&self,
+		outputs_to_spent: &Vec<OutputEx>,
+		max_timestamp: DateTime<Utc>,
+		check_sig_only: bool,
 	) -> Result<(), Error> {
 		if !check_sig_only && outputs_to_spent.is_empty() {
 			return Err(Error::InputNotExist);
@@ -1648,8 +1654,7 @@ impl OutputFeaturesEx {
 	/// Is this a plain output?
 	pub fn is_plain(&self) -> bool {
 		let features = self.as_flag();
-		features == OutputFeatures::Plain ||
-			features == OutputFeatures::SigLocked
+		features == OutputFeatures::Plain || features == OutputFeatures::SigLocked
 	}
 
 	/// Is this a SigLocked output?
@@ -1662,14 +1667,18 @@ impl OutputFeaturesEx {
 		match self {
 			OutputFeaturesEx::Plain { spath } => Ok(spath),
 			OutputFeaturesEx::Coinbase { spath } => Ok(spath),
-			OutputFeaturesEx::SigLocked { .. } => Err(Error::SecuredPath("type not match".to_owned())),
+			OutputFeaturesEx::SigLocked { .. } => {
+				Err(Error::SecuredPath("type not match".to_owned()))
+			}
 		}
 	}
 
 	/// Get the SecuredPath if this is not a SigLocked output
 	pub fn get_locker(&self) -> Result<&OutputLocker, Error> {
 		match self {
-			OutputFeaturesEx::Plain { .. } | OutputFeaturesEx::Coinbase { .. } => Err(Error::SecuredPath("type not match".to_owned())),
+			OutputFeaturesEx::Plain { .. } | OutputFeaturesEx::Coinbase { .. } => {
+				Err(Error::SecuredPath("type not match".to_owned()))
+			}
 			OutputFeaturesEx::SigLocked { locker } => Ok(locker),
 		}
 	}
@@ -1695,11 +1704,18 @@ impl Writeable for OutputFeaturesEx {
 
 impl Readable for OutputFeaturesEx {
 	fn read(reader: &mut dyn Reader) -> Result<OutputFeaturesEx, ser::Error> {
-		let features = OutputFeatures::from_u8(reader.read_u8()?).ok_or(ser::Error::CorruptedData)?;
+		let features =
+			OutputFeatures::from_u8(reader.read_u8()?).ok_or(ser::Error::CorruptedData)?;
 		let features = match features {
-			OutputFeatures::Plain => OutputFeaturesEx::Plain {spath: SecuredPath::read(reader)?},
-			OutputFeatures::Coinbase => OutputFeaturesEx::Coinbase {spath: SecuredPath::read(reader)?},
-			OutputFeatures::SigLocked => OutputFeaturesEx::SigLocked {locker: OutputLocker::read(reader)?},
+			OutputFeatures::Plain => OutputFeaturesEx::Plain {
+				spath: SecuredPath::read(reader)?,
+			},
+			OutputFeatures::Coinbase => OutputFeaturesEx::Coinbase {
+				spath: SecuredPath::read(reader)?,
+			},
+			OutputFeatures::SigLocked => OutputFeaturesEx::SigLocked {
+				locker: OutputLocker::read(reader)?,
+			},
 		};
 		Ok(features)
 	}
@@ -1793,18 +1809,27 @@ impl Output {
 	/// PublicKeyHash which this output has been locked on
 	pub fn pkh_locked(&self) -> Result<Hash, Error> {
 		match self.features {
-			OutputFeaturesEx::Plain { .. } | OutputFeaturesEx::Coinbase { .. } => Err(Error::OutputLocker("output w/o locker".to_owned())),
+			OutputFeaturesEx::Plain { .. } | OutputFeaturesEx::Coinbase { .. } => {
+				Err(Error::OutputLocker("output w/o locker".to_owned()))
+			}
 			OutputFeaturesEx::SigLocked { locker } => Ok(locker.p2pkh),
 		}
 	}
 
 	/// PathMessage for the output
 	pub fn path_message(&self, rewind_hash: &Hash) -> Result<PathMessage, Error> {
-		let rewind_nonce = Hash::from_vec(blake2b(32, &self.commit.0, rewind_hash.as_bytes()).as_bytes());
+		let rewind_nonce =
+			Hash::from_vec(blake2b(32, &self.commit.0, rewind_hash.as_bytes()).as_bytes());
 		match self.features {
-			OutputFeaturesEx::Plain { spath } => spath.get_path(&rewind_nonce).map_err(|e| Error::SecuredPath(e.to_string())),
-			OutputFeaturesEx::Coinbase { spath } => spath.get_path(&rewind_nonce).map_err(|e| Error::SecuredPath(e.to_string())),
-			OutputFeaturesEx::SigLocked { .. } => Err(Error::SecuredPath("output w/o SecuredPath".to_owned())),
+			OutputFeaturesEx::Plain { spath } => spath
+				.get_path(&rewind_nonce)
+				.map_err(|e| Error::SecuredPath(e.to_string())),
+			OutputFeaturesEx::Coinbase { spath } => spath
+				.get_path(&rewind_nonce)
+				.map_err(|e| Error::SecuredPath(e.to_string())),
+			OutputFeaturesEx::SigLocked { .. } => {
+				Err(Error::SecuredPath("output w/o SecuredPath".to_owned()))
+			}
 		}
 	}
 
@@ -1869,11 +1894,7 @@ impl Readable for OutputI {
 		let value = reader.read_u64()?;
 		let id = OutputIdentifier::read(reader)?;
 		let spath = SecuredPath::read(reader)?;
-		Ok(OutputI {
-			value,
-			id,
-			spath,
-		})
+		Ok(OutputI { value, id, spath })
 	}
 }
 
@@ -1902,8 +1923,8 @@ impl OutputI {
 	/// Converts OutputI to an Output
 	pub fn into_output(self) -> Output {
 		let features = match self.id.features {
-			OutputFeatures::Plain => OutputFeaturesEx::Plain {spath: self.spath},
-			OutputFeatures::Coinbase => OutputFeaturesEx::Coinbase {spath: self.spath},
+			OutputFeatures::Plain => OutputFeaturesEx::Plain { spath: self.spath },
+			OutputFeatures::Coinbase => OutputFeaturesEx::Coinbase { spath: self.spath },
 			OutputFeatures::SigLocked => panic!("impossible match"),
 		};
 		Output {
@@ -1957,11 +1978,7 @@ impl Readable for OutputII {
 		let value = reader.read_u64()?;
 		let id = OutputIdentifier::read(reader)?;
 		let locker = OutputLocker::read(reader)?;
-		Ok(OutputII {
-			value,
-			id,
-			locker,
-		})
+		Ok(OutputII { value, id, locker })
 	}
 }
 
@@ -1991,7 +2008,9 @@ impl OutputII {
 	pub fn into_output(self) -> Output {
 		let features = match self.id.features {
 			OutputFeatures::Plain | OutputFeatures::Coinbase => panic!("impossible match"),
-			OutputFeatures::SigLocked => OutputFeaturesEx::SigLocked {locker: self.locker},
+			OutputFeatures::SigLocked => OutputFeaturesEx::SigLocked {
+				locker: self.locker,
+			},
 		};
 		Output {
 			features,
@@ -2031,7 +2050,7 @@ impl OutputIdentifier {
 	}
 
 	/// Build an output_identifier from an existing output.
-	pub fn from_output(output: &Output) ->OutputIdentifier {
+	pub fn from_output(output: &Output) -> OutputIdentifier {
 		OutputIdentifier {
 			features: output.features.as_flag(),
 			commit: output.commit,

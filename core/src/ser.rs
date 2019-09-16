@@ -23,6 +23,7 @@
 use crate::core::hash::{DefaultHashable, Hash, Hashed};
 use crate::global::PROTOCOL_VERSION;
 use crate::keychain::{BlindingFactor, Identifier, IDENTIFIER_SIZE};
+use crate::libtx::proof::{SecuredPath, SECURED_PATH_SIZE};
 use crate::util::secp::constants::{
 	AGG_SIGNATURE_SIZE, COMPRESSED_PUBLIC_KEY_SIZE, MAX_PROOF_SIZE, PEDERSEN_COMMITMENT_SIZE,
 	SECRET_KEY_SIZE,
@@ -31,7 +32,6 @@ use crate::util::secp::key::PublicKey;
 use crate::util::secp::pedersen::{Commitment, RangeProof};
 use crate::util::secp::Signature;
 use crate::util::secp::{ContextFlag, Secp256k1};
-use crate::libtx::proof::{SecuredPath, SECURED_PATH_SIZE};
 use byteorder::{BigEndian, ByteOrder, ReadBytesExt};
 use std::fmt::{self, Debug};
 use std::io::{self, Read, Write};

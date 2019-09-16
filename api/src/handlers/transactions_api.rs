@@ -23,9 +23,9 @@ use crate::util::secp::pedersen::Commitment;
 use crate::web::*;
 use enum_primitive::FromPrimitive;
 use failure::ResultExt;
+use gotts_core::core::{OutputFeatures, OutputIdentifier};
 use hyper::{Body, Request, StatusCode};
 use std::sync::Weak;
-use gotts_core::core::{OutputFeatures, OutputIdentifier};
 
 // Sum tree handler. Retrieve the roots:
 // GET /v1/txhashset/roots
@@ -95,7 +95,11 @@ impl TxHashSetHandler {
 
 	// return a dummy output with merkle proof for position filled out
 	// (to avoid having to create a new type to pass around)
-	fn get_merkle_proof_for_output(&self, id: &str, features: OutputFeatures) -> Result<OutputPrintable, Error> {
+	fn get_merkle_proof_for_output(
+		&self,
+		id: &str,
+		features: OutputFeatures,
+	) -> Result<OutputPrintable, Error> {
 		let c = util::from_hex(String::from(id)).context(ErrorKind::Argument(format!(
 			"Not a valid commitment: {}",
 			id
@@ -128,8 +132,7 @@ impl Handler for TxHashSetHandler {
 		let max = parse_param_no_err!(params, "max", 100);
 		let id = parse_param_no_err!(params, "id", "".to_owned());
 		let output_type = parse_param_no_err!(params, "type", 0u8);
-		let features =
-			OutputFeatures::from_u8(output_type).unwrap_or(OutputFeatures::Plain);
+		let features = OutputFeatures::from_u8(output_type).unwrap_or(OutputFeatures::Plain);
 
 		match right_path_element!(req) {
 			"roots" => result_to_response(self.get_roots()),
