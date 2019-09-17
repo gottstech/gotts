@@ -130,8 +130,6 @@ impl Identifier {
 	}
 
 	pub fn to_value_path(&self, value: u64) -> ValueExtKeychainPath {
-		// TODO: proper support for different switch commitment schemes
-		// For now it is assumed all outputs are using the regular switch commitment scheme
 		ValueExtKeychainPath {
 			value,
 			ext_keychain_path: self.to_path(),

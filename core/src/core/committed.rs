@@ -88,24 +88,8 @@ pub trait Committed {
 	/// Gathers commitments and sum them.
 	fn sum_commitments(&self, overage: i64) -> Result<Commitment, Error> {
 		// gather the commitments
-		let mut input_commits = self.inputs_committed();
-		let mut output_commits = self.outputs_i_committed();
-
-		// add the overage as output commitment if positive,
-		// or as an input commitment if negative
-		if overage != 0 {
-			let over_commit = {
-				let secp = static_secp_instance();
-				let secp = secp.lock();
-				let overage_abs = overage.checked_abs().ok_or_else(|| Error::InvalidValue)? as u64;
-				secp.commit_value(overage_abs).unwrap()
-			};
-			if overage < 0 {
-				input_commits.push(over_commit);
-			} else {
-				output_commits.push(over_commit);
-			}
-		}
+		let input_commits = self.inputs_committed();
+		let output_commits = self.outputs_i_committed();
 
 		sum_commits(output_commits, input_commits)
 	}

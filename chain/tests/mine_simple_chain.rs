@@ -665,6 +665,8 @@ fn spend_in_fork_and_compact() {
 /// Test ability to retrieve block headers for a given output
 #[test]
 fn output_header_mappings() {
+	// Cleanup chain directory
+	clean_output_dir(".gotts_header_for_output");
 	global::set_mining_mode(ChainTypes::AutomatedTesting);
 	{
 		let chain = init_chain(

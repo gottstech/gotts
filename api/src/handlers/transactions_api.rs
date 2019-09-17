@@ -57,14 +57,6 @@ impl TxHashSetHandler {
 		Ok(TxHashSetNode::get_last_n_output(w(&self.chain)?, distance))
 	}
 
-	// gets last n rangeproofs inserted in to the tree
-	fn get_last_n_rangeproof(&self, distance: u64) -> Result<Vec<TxHashSetNode>, Error> {
-		Ok(TxHashSetNode::get_last_n_rangeproof(
-			w(&self.chain)?,
-			distance,
-		))
-	}
-
 	// gets last n kernels inserted in to the tree
 	fn get_last_n_kernel(&self, distance: u64) -> Result<Vec<TxHashSetNode>, Error> {
 		Ok(TxHashSetNode::get_last_n_kernel(w(&self.chain)?, distance))
@@ -137,7 +129,6 @@ impl Handler for TxHashSetHandler {
 		match right_path_element!(req) {
 			"roots" => result_to_response(self.get_roots()),
 			"lastoutputs" => result_to_response(self.get_last_n_output(last_n)),
-			"lastrangeproofs" => result_to_response(self.get_last_n_rangeproof(last_n)),
 			"lastkernels" => result_to_response(self.get_last_n_kernel(last_n)),
 			"outputs" => result_to_response(self.outputs(start_index, max)),
 			"merkleproof" => result_to_response(self.get_merkle_proof_for_output(&id, features)),

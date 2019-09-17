@@ -23,8 +23,6 @@ use crate::libtx::error::Error;
 use crate::libtx::proof::{self, ProofBuild};
 use crate::util::{secp, static_secp_instance};
 
-use rand::{thread_rng, Rng};
-
 /// output a reward output
 pub fn output<K, B>(
 	keychain: &K,
@@ -38,12 +36,12 @@ where
 	B: ProofBuild,
 {
 	let value = reward(fees);
-	let secured_w: u64 = thread_rng().gen();
-	let commit = keychain.commit(secured_w, key_id)?;
+	let w = 0u64;
+	let commit = keychain.commit(w, key_id)?;
 
 	trace!("Block reward - Pedersen Commit is: {:?}", commit,);
 
-	let spath = proof::create_secured_path(keychain, builder, secured_w, &key_id, commit);
+	let spath = proof::create_secured_path(keychain, builder, w, &key_id, commit);
 
 	let output = Output {
 		features: OutputFeaturesEx::Coinbase { spath },
@@ -53,9 +51,8 @@ where
 
 	let secp = static_secp_instance();
 	let secp = secp.lock();
-	let over_commit = secp.commit_value(reward(fees))?;
 	let out_commit = output.commitment();
-	let excess = secp.commit_sum(vec![out_commit], vec![over_commit])?;
+	let excess = out_commit;
 	let pubkey = excess.to_pubkey(&secp)?;
 
 	let features = KernelFeatures::Coinbase;

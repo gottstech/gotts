@@ -210,8 +210,6 @@ impl TxHashsetWriteStatus for SyncState {
 pub struct TxHashSetRoots {
 	/// Output root
 	pub output_i_root: Hash,
-	/// Range Proof root
-	pub rproof_root: Hash,
 	/// Kernel root
 	pub kernel_root: Hash,
 }

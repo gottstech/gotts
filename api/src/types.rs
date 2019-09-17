@@ -88,8 +88,6 @@ impl Status {
 pub struct TxHashSet {
 	/// Output Root Hash
 	pub output_root_hash: String,
-	// Rangeproof root hash
-	pub range_proof_root_hash: String,
 	// Kernel set root hash
 	pub kernel_root_hash: String,
 }
@@ -99,7 +97,6 @@ impl TxHashSet {
 		let roots = head.get_txhashset_roots();
 		TxHashSet {
 			output_root_hash: roots.output_i_root.to_hex(),
-			range_proof_root_hash: roots.rproof_root.to_hex(),
 			kernel_root_hash: roots.kernel_root.to_hex(),
 		}
 	}
@@ -120,17 +117,6 @@ impl TxHashSetNode {
 		for x in last_n {
 			return_vec.push(TxHashSetNode {
 				hash: util::to_hex(x.0.to_vec()),
-			});
-		}
-		return_vec
-	}
-
-	pub fn get_last_n_rangeproof(head: Arc<chain::Chain>, distance: u64) -> Vec<TxHashSetNode> {
-		let mut return_vec = Vec::new();
-		let last_n = head.get_last_n_rangeproof(distance);
-		for elem in last_n {
-			return_vec.push(TxHashSetNode {
-				hash: util::to_hex(elem.0.to_vec()),
 			});
 		}
 		return_vec

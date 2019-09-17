@@ -86,7 +86,7 @@ impl Keychain for ExtKeychain {
 			ext_key = ext_key.ckd_priv(&self.secp, &mut h, p.path[i as usize])?;
 		}
 
-		Ok(self.secp.blind_switch(amount, ext_key.secret_key)?)
+		Ok(ext_key.secret_key)
 	}
 
 	fn commit(&self, amount: u64, id: &Identifier) -> Result<Commitment, Error> {

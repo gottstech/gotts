@@ -108,11 +108,11 @@ where
 
 			debug!("Building output: {}, {:?}", value, commit);
 
-			let secured_w: u64 = thread_rng().gen();
+			let w: u64 = thread_rng().gen();
 			let spath = proof::create_secured_path(
 				build.keychain,
 				build.builder,
-				secured_w,
+				w,
 				&key_id,
 				commit,
 			);

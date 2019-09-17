@@ -35,7 +35,7 @@ use crate::types::{
 	BlockStatus, ChainAdapter, NoStatus, Options, OutputMMRPosition, Tip, TxHashSetRoots,
 	TxHashsetWriteStatus,
 };
-use crate::util::secp::pedersen::{Commitment, RangeProof};
+use crate::util::secp::pedersen::Commitment;
 use crate::util::RwLock;
 use gotts_store::Error::NotFoundErr;
 use std::collections::HashMap;
@@ -597,13 +597,13 @@ impl Chain {
 
 		// Set the output, rangeproof and kernel MMR roots.
 		b.header.output_root = roots.output_i_root;
-		b.header.range_proof_root = roots.rproof_root;
+		b.header.range_proof_root = ZERO_HASH;
 		b.header.kernel_root = roots.kernel_root;
 
 		// Set the output and kernel MMR sizes.
 		{
 			// Carefully destructure these correctly...
-			let (output_mmr_size, _, kernel_mmr_size) = sizes;
+			let (output_mmr_size, kernel_mmr_size) = sizes;
 			b.header.output_mmr_size = output_mmr_size;
 			b.header.kernel_mmr_size = kernel_mmr_size;
 		}
@@ -1140,11 +1140,6 @@ impl Chain {
 	/// returns the last n nodes inserted into the output sum tree
 	pub fn get_last_n_output_i(&self, distance: u64) -> Vec<(Hash, OutputI)> {
 		self.txhashset.read().last_n_output_i(distance)
-	}
-
-	/// as above, for rangeproofs
-	pub fn get_last_n_rangeproof(&self, distance: u64) -> Vec<(Hash, RangeProof)> {
-		self.txhashset.read().last_n_rangeproof(distance)
 	}
 
 	/// as above, for kernels
