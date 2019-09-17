@@ -172,7 +172,9 @@ impl TxHashSet {
 					}
 				};
 				if let Some(hash) = hash {
-					if hash == output.hash_with_index(pos - 1) && output_id.commit == output.id.commit {
+					if hash == output.hash_with_index(pos - 1)
+						&& output_id.commit == output.id.commit
+					{
 						Ok(OutputMMRPosition {
 							output_mmr_hash: hash,
 							position: pos,
@@ -852,21 +854,30 @@ impl<'a> Extension<'a> {
 			if let Some(hash) = self.output_i_pmmr.get_hash(pos) {
 				if let Some(output) = self.output_i_pmmr.get_data(pos) {
 					if hash != output.hash_with_index(pos - 1) || input.commit != output.id.commit {
-						return Err(
-							ErrorKind::TxHashSetErr(format!("output pmmr hash mismatch at pos {}", pos)).into(),
-						);
+						return Err(ErrorKind::TxHashSetErr(format!(
+							"output pmmr hash mismatch at pos {}",
+							pos
+						))
+						.into());
 					}
 				} else {
-					error!("apply_input: corrupted storage? pmmr hash and data mismatch at pos {}", pos);
-					return Err(
-						ErrorKind::TxHashSetErr(format!("output pmmr hash and data mismatch at pos {}", pos)).into(),
+					error!(
+						"apply_input: corrupted storage? pmmr hash and data mismatch at pos {}",
+						pos
 					);
+					return Err(ErrorKind::TxHashSetErr(format!(
+						"output pmmr hash and data mismatch at pos {}",
+						pos
+					))
+					.into());
 				}
 			} else {
 				error!("apply_input: corrupted storage? get_output_pos saw a position {} but pmmr get_hash got none", pos);
-				return Err(
-					ErrorKind::TxHashSetErr(format!("output pmmr hash not found at pos {}", pos)).into(),
-				);
+				return Err(ErrorKind::TxHashSetErr(format!(
+					"output pmmr hash not found at pos {}",
+					pos
+				))
+				.into());
 			}
 
 			// Now prune the output_pmmr and their storage.
@@ -1029,11 +1040,7 @@ impl<'a> Extension<'a> {
 			return Ok(());
 		}
 		let head_header = self.batch.get_block_header(&self.head.last_block_h)?;
-		if (
-			head_header.output_mmr_size,
-			head_header.kernel_mmr_size,
-		) != self.sizes()
-		{
+		if (head_header.output_mmr_size, head_header.kernel_mmr_size) != self.sizes() {
 			Err(ErrorKind::InvalidMMRSize.into())
 		} else {
 			Ok(())
