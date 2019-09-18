@@ -359,7 +359,11 @@ mod test {
 		let vc = verifier_cache();
 
 		let tx = transaction(
-			vec![input(6, 0u64, key_id1), output(2, Some(0u64), key_id2), with_fee(4)],
+			vec![
+				input(6, 0u64, key_id1),
+				output(2, Some(0u64), key_id2),
+				with_fee(4),
+			],
 			&keychain,
 			&builder,
 		)

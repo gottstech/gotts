@@ -57,7 +57,11 @@ pub fn tx1i1o() -> Transaction {
 	let key_id2 = keychain::ExtKeychain::derive_key_id(1, 2, 0, 0, 0);
 
 	build::transaction(
-		vec![input(5, 0u64, key_id1), output(3, Some(0u64), key_id2), with_fee(2)],
+		vec![
+			input(5, 0u64, key_id1),
+			output(3, Some(0u64), key_id2),
+			with_fee(2),
+		],
 		&keychain,
 		&builder,
 	)
@@ -125,7 +129,11 @@ where
 	B: ProofBuild,
 {
 	build::transaction(
-		vec![input(v, 0u64, key_id1), output(3, Some(0u64), key_id2), with_fee(2)],
+		vec![
+			input(v, 0u64, key_id1),
+			output(3, Some(0u64), key_id2),
+			with_fee(2),
+		],
 		keychain,
 		builder,
 	)

@@ -1175,7 +1175,10 @@ pub fn cut_through(inputs: &mut Vec<Input>, outputs: &mut Vec<Output>) -> Result
 	let mut outputs_idx = 0;
 	let mut ncut = 0;
 	while inputs_idx < inputs.len() && outputs_idx < outputs.len() {
-		match inputs[inputs_idx].hash().cmp(&outputs[outputs_idx].id().hash()) {
+		match inputs[inputs_idx]
+			.hash()
+			.cmp(&outputs[outputs_idx].id().hash())
+		{
 			Ordering::Less => {
 				inputs[inputs_idx - ncut] = inputs[inputs_idx];
 				inputs_idx += 1;

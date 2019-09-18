@@ -58,7 +58,10 @@ fn too_large_block() {
 		parts.push(output(5, Some(0u64), pks.pop().unwrap()));
 	}
 
-	parts.append(&mut vec![input(500000, 0u64, pks.pop().unwrap()), with_fee(2)]);
+	parts.append(&mut vec![
+		input(500000, 0u64, pks.pop().unwrap()),
+		with_fee(2),
+	]);
 	let tx = build::transaction(parts, &keychain, &builder).unwrap();
 
 	let prev = BlockHeader::default();
@@ -75,10 +78,7 @@ fn too_large_block() {
 fn very_empty_block() {
 	let b = Block::with_header(BlockHeader::default());
 
-	assert_eq!(
-		b.verify_coinbase(),
-		Err(Error::CoinbaseSumMismatch)
-	);
+	assert_eq!(b.verify_coinbase(), Err(Error::CoinbaseSumMismatch));
 }
 
 #[test]
@@ -92,7 +92,11 @@ fn block_with_cut_through() {
 
 	let mut btx1 = tx2i1o();
 	let mut btx2 = build::transaction(
-		vec![input(7, 0u64, key_id1), output(5, Some(0u64), key_id2.clone()), with_fee(2)],
+		vec![
+			input(7, 0u64, key_id1),
+			output(5, Some(0u64), key_id2.clone()),
+			with_fee(2),
+		],
 		&keychain,
 		&builder,
 	)
@@ -194,10 +198,7 @@ fn remove_coinbase_kernel_flag() {
 	b.kernels_mut()[0].features = KernelFeatures::Plain { fee: 0 };
 
 	// Flipping the coinbase flag results in kernels not summing correctly.
-	assert_eq!(
-		b.verify_coinbase(),
-		Err(Error::CoinbaseSumMismatch)
-	);
+	assert_eq!(b.verify_coinbase(), Err(Error::CoinbaseSumMismatch));
 
 	// Also results in the block no longer validating correctly
 	// because the message being signed on each tx kernel includes the kernel features.
