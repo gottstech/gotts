@@ -79,8 +79,12 @@ impl<'a> UTXOView<'a> {
 	fn validate_input(&self, input: &Input) -> Result<(), Error> {
 		if let Ok(pos) = self.batch.get_output_pos(&input.commitment()) {
 			if let Some(hash) = self.output_i_pmmr.get_hash(pos) {
-				if hash == input.hash_with_index(pos - 1) {
-					return Ok(());
+				if let Some(output) = self.output_i_pmmr.get_data(pos) {
+					if hash == output.hash_with_index(pos - 1) && output.id.commit == input.commit {
+						return Ok(());
+					}
+				} else {
+					error!("validate_input: corrupted storage? pmmr hash and data mismatch at pos: {}", pos);
 				}
 			}
 		}

@@ -53,19 +53,19 @@ pub type Append<K, B> = dyn for<'a> Fn(
 
 /// Adds an input with the provided value and blinding key to the transaction
 /// being built.
-fn build_input<K, B>(value: u64, features: OutputFeatures, key_id: Identifier) -> Box<Append<K, B>>
+fn build_input<K, B>(value: u64, w: u64, features: OutputFeatures, key_id: Identifier) -> Box<Append<K, B>>
 where
 	K: Keychain,
 	B: ProofBuild,
 {
 	Box::new(
 		move |build, (tx, kern, sum)| -> (Transaction, TxKernel, BlindSum) {
-			let commit = build.keychain.commit(value, &key_id).unwrap();
+			let commit = build.keychain.commit(w, &key_id).unwrap();
 			let input = Input::new(features, commit);
 			(
 				tx.with_input(input),
 				kern,
-				sum.sub_key_id(key_id.to_value_path(value)),
+				sum.sub_key_id(key_id.to_value_path(value, w)),
 			)
 		},
 	)
@@ -73,7 +73,7 @@ where
 
 /// Adds an input with the provided value and blinding key to the transaction
 /// being built.
-pub fn input<K, B>(value: u64, key_id: Identifier) -> Box<Append<K, B>>
+pub fn input<K, B>(value: u64, w: u64, key_id: Identifier) -> Box<Append<K, B>>
 where
 	K: Keychain,
 	B: ProofBuild,
@@ -82,7 +82,7 @@ where
 		"Building input (spending regular output): {}, {}",
 		value, key_id
 	);
-	build_input(value, OutputFeatures::Plain, key_id)
+	build_input(value, w, OutputFeatures::Plain, key_id)
 }
 
 /// Adds a coinbase input spending a coinbase output.
@@ -92,23 +92,27 @@ where
 	B: ProofBuild,
 {
 	debug!("Building input (spending coinbase): {}, {}", value, key_id);
-	build_input(value, OutputFeatures::Coinbase, key_id)
+	build_input(value, 0u64, OutputFeatures::Coinbase, key_id)
 }
 
 /// Adds an output with the provided value and key identifier from the
 /// keychain.
-pub fn output<K, B>(value: u64, key_id: Identifier) -> Box<Append<K, B>>
+pub fn output<K, B>(value: u64, w: Option<u64>, key_id: Identifier) -> Box<Append<K, B>>
 where
 	K: Keychain,
 	B: ProofBuild,
 {
 	Box::new(
 		move |build, (tx, kern, sum)| -> (Transaction, TxKernel, BlindSum) {
-			let commit = build.keychain.commit(value, &key_id).unwrap();
+			let w: u64 = if let Some(w) = w {
+				w
+			} else {
+				thread_rng().gen()
+			};
+			let commit = build.keychain.commit(w, &key_id).unwrap();
 
 			debug!("Building output: {}, {:?}", value, commit);
 
-			let w: u64 = thread_rng().gen();
 			let spath =
 				proof::create_secured_path(build.keychain, build.builder, w, &key_id, commit);
 
@@ -119,7 +123,7 @@ where
 					value,
 				}),
 				kern,
-				sum.add_key_id(key_id.to_value_path(value)),
+				sum.add_key_id(key_id.to_value_path(value, w)),
 			)
 		},
 	)

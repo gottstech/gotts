@@ -19,7 +19,7 @@ use self::core::core::hash::Hashed;
 use self::core::core::verifier_cache::LruVerifierCache;
 use self::core::core::{Block, BlockHeader, OutputIdentifier, Transaction};
 use self::core::global::ChainTypes;
-use self::core::libtx::{self, build, ProofBuilder};
+use self::core::libtx::{self, build, proof, ProofBuilder};
 use self::core::pow::Difficulty;
 use self::core::{consensus, global, pow};
 use self::keychain::{ExtKeychain, ExtKeychainPath, Keychain};
@@ -566,7 +566,7 @@ fn spend_in_fork_and_compact() {
 		let tx1 = build::transaction(
 			vec![
 				build::coinbase_input(consensus::REWARD, key_id2.clone()),
-				build::output(consensus::REWARD - 20000, key_id30.clone()),
+				build::output(consensus::REWARD - 20000, Some(0u64), key_id30.clone()),
 				build::with_fee(20000),
 			],
 			&kc,
@@ -581,10 +581,12 @@ fn spend_in_fork_and_compact() {
 			.unwrap();
 		chain.validate(false).unwrap();
 
+		let out1 = tx1.outputs().last().unwrap();
+		let out1_path_msg = proof::rewind(kc.secp(), &pb, &out1.commit, &out1.features.get_spath().unwrap()).unwrap();
 		let tx2 = build::transaction(
 			vec![
-				build::input(consensus::REWARD - 20000, key_id30.clone()),
-				build::output(consensus::REWARD - 40000, key_id31.clone()),
+				build::input(consensus::REWARD - 20000, out1_path_msg.w, key_id30.clone()),
+				build::output(consensus::REWARD - 40000, Some(out1_path_msg.w), key_id31.clone()),
 				build::with_fee(20000),
 			],
 			&kc,

@@ -270,7 +270,7 @@ pub fn sign_from_key_id<K>(
 where
 	K: Keychain,
 {
-	let skey = k.derive_key(value, key_id)?;
+	let skey = k.derive_key(key_id)?;
 	let sig = aggsig::sign_single(secp, &msg, &skey, s_nonce, None, None, blind_sum, None)?;
 	Ok(sig)
 }

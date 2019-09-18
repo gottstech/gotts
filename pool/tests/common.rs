@@ -192,7 +192,8 @@ where
 
 	for output_value in output_values {
 		let key_id = ExtKeychain::derive_key_id(1, output_value as u32, 0, 0, 0);
-		tx_elements.push(libtx::build::output(output_value, key_id));
+		//todo: change the 0u64 here when secp library support i64 value.
+		tx_elements.push(libtx::build::output(output_value, Some(0u64), key_id));
 	}
 
 	tx_elements.push(libtx::build::with_fee(fees as u64));
@@ -218,12 +219,14 @@ where
 
 	for input_value in input_values {
 		let key_id = ExtKeychain::derive_key_id(1, input_value as u32, 0, 0, 0);
-		tx_elements.push(libtx::build::input(input_value, key_id));
+		//todo: change the 0u64 here when secp library support i64 value.
+		tx_elements.push(libtx::build::input(input_value, 0u64, key_id));
 	}
 
 	for output_value in output_values {
 		let key_id = ExtKeychain::derive_key_id(1, output_value as u32, 0, 0, 0);
-		tx_elements.push(libtx::build::output(output_value, key_id));
+		//todo: change the 0u64 here when secp library support i64 value.
+		tx_elements.push(libtx::build::output(output_value, Some(0u64), key_id));
 	}
 	tx_elements.push(libtx::build::with_fee(fees as u64));
 

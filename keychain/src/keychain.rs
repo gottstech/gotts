@@ -78,7 +78,7 @@ impl Keychain for ExtKeychain {
 		ExtendedPubKey::from_private(&self.secp, &self.master, &mut hasher).public_key
 	}
 
-	fn derive_key(&self, amount: u64, id: &Identifier) -> Result<SecretKey, Error> {
+	fn derive_key(&self, id: &Identifier) -> Result<SecretKey, Error> {
 		let mut h = self.hasher.clone();
 		let p = id.to_path();
 		let mut ext_key = self.master.clone();
@@ -90,7 +90,7 @@ impl Keychain for ExtKeychain {
 	}
 
 	fn commit(&self, amount: u64, id: &Identifier) -> Result<Commitment, Error> {
-		let key = self.derive_key(amount, id)?;
+		let key = self.derive_key(id)?;
 		let commit = self.secp.commit(amount, key)?;
 		Ok(commit)
 	}
@@ -100,7 +100,7 @@ impl Keychain for ExtKeychain {
 			.positive_key_ids
 			.iter()
 			.filter_map(|k| {
-				let res = self.derive_key(k.value, &Identifier::from_path(&k.ext_keychain_path));
+				let res = self.derive_key(&Identifier::from_path(&k.ext_keychain_path));
 				if let Ok(s) = res {
 					Some(s)
 				} else {
@@ -113,7 +113,7 @@ impl Keychain for ExtKeychain {
 			.negative_key_ids
 			.iter()
 			.filter_map(|k| {
-				let res = self.derive_key(k.value, &Identifier::from_path(&k.ext_keychain_path));
+				let res = self.derive_key(&Identifier::from_path(&k.ext_keychain_path));
 				if let Ok(s) = res {
 					Some(s)
 				} else {
@@ -142,7 +142,7 @@ impl Keychain for ExtKeychain {
 
 	fn rewind_nonce(&self, commit: &Commitment) -> Result<SecretKey, Error> {
 		// hash(commit|wallet root secret key (m)) as nonce
-		let root_key = self.derive_key(0, &Self::root_key_id())?;
+		let root_key = self.derive_key(&Self::root_key_id())?;
 		let res = blake2b(32, &commit.0, &root_key.0[..]);
 		let res = res.as_bytes();
 		SecretKey::from_slice(&self.secp, &res)
@@ -150,7 +150,7 @@ impl Keychain for ExtKeychain {
 	}
 
 	fn sign(&self, msg: &Message, amount: u64, id: &Identifier) -> Result<Signature, Error> {
-		let skey = self.derive_key(amount, id)?;
+		let skey = self.derive_key(id)?;
 		let sig = self.secp.sign(msg, &skey)?;
 		Ok(sig)
 	}

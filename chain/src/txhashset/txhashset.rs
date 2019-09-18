@@ -862,7 +862,7 @@ impl<'a> Extension<'a> {
 					}
 				} else {
 					error!(
-						"apply_input: corrupted storage? pmmr hash and data mismatch at pos {}",
+						"apply_input: corrupted storage? pmmr hash and data mismatch at pos: {}",
 						pos
 					);
 					return Err(ErrorKind::TxHashSetErr(format!(
@@ -872,7 +872,7 @@ impl<'a> Extension<'a> {
 					.into());
 				}
 			} else {
-				error!("apply_input: corrupted storage? get_output_pos saw a position {} but pmmr get_hash got none", pos);
+				error!("apply_input: corrupted storage? pmmr hash and data mismatch at pos: {}", pos);
 				return Err(ErrorKind::TxHashSetErr(format!(
 					"output pmmr hash not found at pos {}",
 					pos

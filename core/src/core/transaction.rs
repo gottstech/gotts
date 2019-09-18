@@ -2105,12 +2105,14 @@ mod test {
 	use crate::core::id::{ShortId, ShortIdentifiable};
 	use crate::keychain::{ExtKeychain, Keychain};
 	use crate::util::secp;
+	use rand::{thread_rng, Rng};
 
 	#[test]
 	fn test_kernel_ser_deser() {
 		let keychain = ExtKeychain::from_random_seed(false).unwrap();
 		let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
-		let commit = keychain.commit(5, &key_id).unwrap();
+		let w: u64 = thread_rng().gen();
+		let commit = keychain.commit(w, &key_id).unwrap();
 
 		// just some bytes for testing ser/deser
 		let sig = secp::Signature::from_raw_data(&[0; 64]).unwrap();
@@ -2157,10 +2159,11 @@ mod test {
 		let keychain = ExtKeychain::from_seed(&[0; 32], false).unwrap();
 		let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 
-		let commit = keychain.commit(1003, &key_id).unwrap();
+		let w: u64 = thread_rng().gen();
+		let commit = keychain.commit(w, &key_id).unwrap();
 		let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 
-		let commit_2 = keychain.commit(1003, &key_id).unwrap();
+		let commit_2 = keychain.commit(w, &key_id).unwrap();
 
 		assert!(commit == commit_2);
 	}
@@ -2169,7 +2172,8 @@ mod test {
 	fn input_short_id() {
 		let keychain = ExtKeychain::from_seed(&[0; 32], false).unwrap();
 		let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
-		let commit = keychain.commit(5, &key_id).unwrap();
+		let w: u64 = thread_rng().gen();
+		let commit = keychain.commit(w, &key_id).unwrap();
 
 		let input = Input {
 			features: OutputFeatures::Plain,

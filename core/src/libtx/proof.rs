@@ -248,17 +248,17 @@ where
 pub fn rewind<B>(
 	secp: &Secp256k1,
 	b: &B,
-	commit: Commitment,
-	spath: SecuredPath,
+	commit: &Commitment,
+	spath: &SecuredPath,
 ) -> Result<PathMessage, Error>
 where
 	B: ProofBuild,
 {
-	let nonce = b.rewind_nonce(secp, &commit);
+	let nonce = b.rewind_nonce(secp, commit);
 	let info = spath.get_path(&nonce)?;
 
 	let _key_id = b
-		.check_output(secp, &commit, &info)
+		.check_output(secp, commit, &info)
 		.map_err(|e| ErrorKind::PathMessage(e.to_string()))?;
 
 	Ok(info)
