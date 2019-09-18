@@ -1275,16 +1275,11 @@ fn file_list(header: &BlockHeader) -> Vec<PathBuf> {
 		PathBuf::from("kernel/pmmr_data.bin"),
 		PathBuf::from("kernel/pmmr_hash.bin"),
 		// output MMR
-		PathBuf::from("output/pmmr_data.bin"),
-		PathBuf::from("output/pmmr_hash.bin"),
-		PathBuf::from("output/pmmr_prun.bin"),
-		// rangeproof MMR
-		PathBuf::from("rangeproof/pmmr_data.bin"),
-		PathBuf::from("rangeproof/pmmr_hash.bin"),
-		PathBuf::from("rangeproof/pmmr_prun.bin"),
-		// Header specific "rewound" leaf files for output and rangeproof MMR.
-		PathBuf::from(format!("output/pmmr_leaf.bin.{}", header.hash())),
-		PathBuf::from(format!("rangeproof/pmmr_leaf.bin.{}", header.hash())),
+		PathBuf::from("outputI/pmmr_data.bin"),
+		PathBuf::from("outputI/pmmr_hash.bin"),
+		PathBuf::from("outputI/pmmr_prun.bin"),
+		// Header specific "rewound" leaf files for output MMR.
+		PathBuf::from(format!("outputI/pmmr_leaf.bin.{}", header.hash())),
 	]
 }
 
