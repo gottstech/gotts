@@ -53,7 +53,12 @@ pub type Append<K, B> = dyn for<'a> Fn(
 
 /// Adds an input with the provided value and blinding key to the transaction
 /// being built.
-fn build_input<K, B>(value: u64, w: u64, features: OutputFeatures, key_id: Identifier) -> Box<Append<K, B>>
+fn build_input<K, B>(
+	value: u64,
+	w: u64,
+	features: OutputFeatures,
+	key_id: Identifier,
+) -> Box<Append<K, B>>
 where
 	K: Keychain,
 	B: ProofBuild,

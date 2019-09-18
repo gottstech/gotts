@@ -582,11 +582,21 @@ fn spend_in_fork_and_compact() {
 		chain.validate(false).unwrap();
 
 		let out1 = tx1.outputs().last().unwrap();
-		let out1_path_msg = proof::rewind(kc.secp(), &pb, &out1.commit, &out1.features.get_spath().unwrap()).unwrap();
+		let out1_path_msg = proof::rewind(
+			kc.secp(),
+			&pb,
+			&out1.commit,
+			&out1.features.get_spath().unwrap(),
+		)
+		.unwrap();
 		let tx2 = build::transaction(
 			vec![
 				build::input(consensus::REWARD - 20000, out1_path_msg.w, key_id30.clone()),
-				build::output(consensus::REWARD - 40000, Some(out1_path_msg.w), key_id31.clone()),
+				build::output(
+					consensus::REWARD - 40000,
+					Some(out1_path_msg.w),
+					key_id31.clone(),
+				),
 				build::with_fee(20000),
 			],
 			&kc,

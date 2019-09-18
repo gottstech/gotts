@@ -84,7 +84,10 @@ impl<'a> UTXOView<'a> {
 						return Ok(());
 					}
 				} else {
-					error!("validate_input: corrupted storage? pmmr hash and data mismatch at pos: {}", pos);
+					error!(
+						"validate_input: corrupted storage? pmmr hash and data mismatch at pos: {}",
+						pos
+					);
 				}
 			}
 		}
