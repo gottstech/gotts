@@ -1175,7 +1175,7 @@ pub fn cut_through(inputs: &mut Vec<Input>, outputs: &mut Vec<Output>) -> Result
 	let mut outputs_idx = 0;
 	let mut ncut = 0;
 	while inputs_idx < inputs.len() && outputs_idx < outputs.len() {
-		match inputs[inputs_idx].hash().cmp(&outputs[outputs_idx].hash()) {
+		match inputs[inputs_idx].hash().cmp(&outputs[outputs_idx].id().hash()) {
 			Ordering::Less => {
 				inputs[inputs_idx - ncut] = inputs[inputs_idx];
 				inputs_idx += 1;
@@ -2172,7 +2172,7 @@ mod test {
 	fn input_short_id() {
 		let keychain = ExtKeychain::from_seed(&[0; 32], false).unwrap();
 		let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
-		let w: u64 = thread_rng().gen();
+		let w = 9999u64;
 		let commit = keychain.commit(w, &key_id).unwrap();
 
 		let input = Input {
@@ -2187,7 +2187,7 @@ mod test {
 		let nonce = 0;
 
 		let short_id = input.short_id(&block_hash, nonce);
-		assert_eq!(short_id, ShortId::from_hex("c4b05f2ba649").unwrap());
+		assert_eq!(short_id, ShortId::from_hex("cf2483f90e64").unwrap());
 
 		// now generate the short_id for a *very* similar output (single feature flag
 		// different) and check it generates a different short_id
@@ -2197,7 +2197,7 @@ mod test {
 		};
 
 		let short_id = input.short_id(&block_hash, nonce);
-		assert_eq!(short_id, ShortId::from_hex("3f0377c624e9").unwrap());
+		assert_eq!(short_id, ShortId::from_hex("933d5a52f535").unwrap());
 	}
 
 	#[test]

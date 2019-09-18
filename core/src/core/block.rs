@@ -744,9 +744,9 @@ impl Block {
 			let secp = secp.lock();
 			let over_commit = reward(self.total_fees());
 
-			let out_adjust_sum = secp.commit_sum(map_vec!(cb_outs, |x| x.commitment()), vec![])?;
+			let out_adjust_sum = secp.commit_sum(map_vec!(cb_outs, |x| x.commitment()), vec![]).map_err(|_| Error::CoinbaseSumMismatch)?;
 
-			let kerns_sum = secp.commit_sum(cb_kerns.iter().map(|x| x.excess).collect(), vec![])?;
+			let kerns_sum = secp.commit_sum(cb_kerns.iter().map(|x| x.excess).collect(), vec![]).map_err(|_| Error::CoinbaseSumMismatch)?;
 
 			// Verify the kernel sum equals the output sum accounting for block fees.
 			// todo: verify the public value sum

@@ -59,7 +59,7 @@ fn test_unexpected_zip() {
 		File::create(
 			&Path::new(&db_root)
 				.join("txhashset")
-				.join("output")
+				.join("outputI")
 				.join("badfile"),
 		)
 		.expect("problem creating a file");

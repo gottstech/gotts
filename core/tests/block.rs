@@ -29,7 +29,6 @@ use crate::core::libtx::build::{self, input, output, with_fee};
 use crate::core::libtx::ProofBuilder;
 use crate::core::{global, ser};
 use crate::keychain::{BlindingFactor, ExtKeychain, Keychain};
-use crate::util::secp;
 use crate::util::RwLock;
 use chrono::Duration;
 use gotts_core as core;
@@ -56,10 +55,10 @@ fn too_large_block() {
 
 	let mut parts = vec![];
 	for _ in 0..max_out {
-		parts.push(output(5, pks.pop().unwrap()));
+		parts.push(output(5, Some(0u64), pks.pop().unwrap()));
 	}
 
-	parts.append(&mut vec![input(500000, pks.pop().unwrap()), with_fee(2)]);
+	parts.append(&mut vec![input(500000, 0u64, pks.pop().unwrap()), with_fee(2)]);
 	let tx = build::transaction(parts, &keychain, &builder).unwrap();
 
 	let prev = BlockHeader::default();
@@ -78,7 +77,7 @@ fn very_empty_block() {
 
 	assert_eq!(
 		b.verify_coinbase(),
-		Err(Error::Secp(secp::Error::IncorrectCommitSum))
+		Err(Error::CoinbaseSumMismatch)
 	);
 }
 
@@ -93,7 +92,7 @@ fn block_with_cut_through() {
 
 	let mut btx1 = tx2i1o();
 	let mut btx2 = build::transaction(
-		vec![input(7, key_id1), output(5, key_id2.clone()), with_fee(2)],
+		vec![input(7, 0u64, key_id1), output(5, Some(0u64), key_id2.clone()), with_fee(2)],
 		&keychain,
 		&builder,
 	)
@@ -197,7 +196,7 @@ fn remove_coinbase_kernel_flag() {
 	// Flipping the coinbase flag results in kernels not summing correctly.
 	assert_eq!(
 		b.verify_coinbase(),
-		Err(Error::Secp(secp::Error::IncorrectCommitSum))
+		Err(Error::CoinbaseSumMismatch)
 	);
 
 	// Also results in the block no longer validating correctly
@@ -272,7 +271,7 @@ fn empty_block_serialized_size() {
 	let b = new_block(vec![], &keychain, &builder, &prev, &key_id);
 	let mut vec = Vec::new();
 	ser::serialize_default(&mut vec, &b).expect("serialization failed");
-	let target_len = 1_112;
+	let target_len = 465;
 	assert_eq!(vec.len(), target_len);
 }
 
@@ -287,7 +286,7 @@ fn block_single_tx_serialized_size() {
 	let b = new_block(vec![&tx1], &keychain, &builder, &prev, &key_id);
 	let mut vec = Vec::new();
 	ser::serialize_default(&mut vec, &b).expect("serialization failed");
-	let target_len = 2_694;
+	let target_len = 753;
 	assert_eq!(vec.len(), target_len);
 }
 
@@ -302,7 +301,7 @@ fn empty_compact_block_serialized_size() {
 	let cb: CompactBlock = b.into();
 	let mut vec = Vec::new();
 	ser::serialize_default(&mut vec, &cb).expect("serialization failed");
-	let target_len = 1_120;
+	let target_len = 473;
 	assert_eq!(vec.len(), target_len);
 }
 
@@ -318,7 +317,7 @@ fn compact_block_single_tx_serialized_size() {
 	let cb: CompactBlock = b.into();
 	let mut vec = Vec::new();
 	ser::serialize_default(&mut vec, &cb).expect("serialization failed");
-	let target_len = 1_126;
+	let target_len = 479;
 	assert_eq!(vec.len(), target_len);
 }
 
@@ -338,7 +337,7 @@ fn block_10_tx_serialized_size() {
 	let b = new_block(txs.iter().collect(), &keychain, &builder, &prev, &key_id);
 	let mut vec = Vec::new();
 	ser::serialize_default(&mut vec, &b).expect("serialization failed");
-	let target_len = 16_932;
+	let target_len = 3_345;
 	assert_eq!(vec.len(), target_len,);
 }
 
@@ -359,7 +358,7 @@ fn compact_block_10_tx_serialized_size() {
 	let cb: CompactBlock = b.into();
 	let mut vec = Vec::new();
 	ser::serialize_default(&mut vec, &cb).expect("serialization failed");
-	let target_len = 1_180;
+	let target_len = 533;
 	assert_eq!(vec.len(), target_len,);
 }
 

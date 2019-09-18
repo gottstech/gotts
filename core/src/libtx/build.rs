@@ -311,9 +311,9 @@ mod test {
 
 		let tx = transaction(
 			vec![
-				input(10, key_id1),
-				input(12, key_id2),
-				output(20, key_id3),
+				input(10, 0u64, key_id1),
+				input(12, 0u64, key_id2),
+				output(20, Some(0u64), key_id3),
 				with_fee(2),
 			],
 			&keychain,
@@ -336,9 +336,9 @@ mod test {
 
 		let tx = transaction(
 			vec![
-				input(10, key_id1),
-				input(12, key_id2),
-				output(20, key_id3),
+				input(10, 0u64, key_id1),
+				input(12, 0u64, key_id2),
+				output(20, Some(0u64), key_id3),
 				with_fee(2),
 			],
 			&keychain,
@@ -359,7 +359,7 @@ mod test {
 		let vc = verifier_cache();
 
 		let tx = transaction(
-			vec![input(6, key_id1), output(2, key_id2), with_fee(4)],
+			vec![input(6, 0u64, key_id1), output(2, Some(0u64), key_id2), with_fee(4)],
 			&keychain,
 			&builder,
 		)
