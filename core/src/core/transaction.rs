@@ -838,7 +838,7 @@ impl TransactionBody {
 	// Assumes inputs and outputs are sorted
 	fn verify_cut_through(&self) -> Result<(), Error> {
 		let mut inputs = self.inputs.iter().map(|x| x.hash()).peekable();
-		let mut outputs = self.outputs.iter().map(|x| x.hash()).peekable();
+		let mut outputs = self.outputs.iter().map(|x| x.id().hash()).peekable();
 		while let (Some(ih), Some(oh)) = (inputs.peek(), outputs.peek()) {
 			match ih.cmp(oh) {
 				Ordering::Less => {
@@ -1371,6 +1371,14 @@ impl Input {
 		Input { features, commit }
 	}
 
+	/// Identifier for the output
+	pub fn id(&self) -> OutputIdentifier {
+		OutputIdentifier {
+			features: self.features,
+			commit: self.commit,
+		}
+	}
+
 	/// The input commitment which _partially_ identifies the output being
 	/// spent. In the presence of a fork we need additional info to uniquely
 	/// identify the output. Specifically the block hash (to correctly
@@ -1561,7 +1569,7 @@ impl InputsUnlocking {
 // Enum of various supported output "features".
 enum_from_primitive! {
 	/// Enum of various flavors of output, in a single byte flag.
-	#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+	#[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize)]
 	#[repr(u8)]
 	pub enum OutputFeatures {
 		/// Plain output of Interactive Transaction.
@@ -1606,11 +1614,19 @@ pub enum OutputFeaturesEx {
 	/// Plain output of Interactive Transaction.
 	Plain {
 		/// A secured path message which hide the key derivation path and the random w of commitment.
+		#[serde(
+			serialize_with = "secp_ser::as_hex",
+			deserialize_with = "secp_ser::securedpath_from_hex"
+		)]
 		spath: SecuredPath,
 	},
 	/// Coinbase output.
 	Coinbase {
 		/// A secured path message, same as Plain.
+		#[serde(
+			serialize_with = "secp_ser::as_hex",
+			deserialize_with = "secp_ser::securedpath_from_hex"
+		)]
 		spath: SecuredPath,
 	},
 	/// Plain output of Non-Interactive Transaction.
@@ -1749,7 +1765,26 @@ pub struct Output {
 }
 
 impl DefaultHashable for Output {}
-hashable_ord!(Output);
+
+impl Ord for Output {
+	fn cmp(&self, other: &Output) -> Ordering {
+		self.id().cmp(&other.id())
+	}
+}
+impl PartialOrd for Output {
+	fn partial_cmp(&self, other: &Output) -> Option<Ordering> {
+		Some(self.cmp(other))
+	}
+}
+
+/// Use id() instead of the hash() for Eq, for the convenience of Input/Output compare.
+/// For the exact content comparing, please use hash() instead.
+impl PartialEq for Output {
+	fn eq(&self, other: &Output) -> bool {
+		self.id() == other.id()
+	}
+}
+impl Eq for Output {}
 
 impl ::std::hash::Hash for Output {
 	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
@@ -1763,9 +1798,15 @@ impl ::std::hash::Hash for Output {
 /// an Output as binary.
 impl Writeable for Output {
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
-		self.features.write(writer)?;
-		self.commit.write(writer)?;
-		writer.write_u64(self.value)?;
+		if writer.serialization_mode() == ser::SerializationMode::Hash {
+			// The hash of an output ONLY include its id(), i.e. the features flag and the commit.
+			writer.write_u8(self.features.as_u8())?;
+			self.commit.write(writer)?;
+		} else {
+			self.features.write(writer)?;
+			self.commit.write(writer)?;
+			writer.write_u64(self.value)?;
+		}
 		Ok(())
 	}
 }
@@ -1869,7 +1910,26 @@ pub struct OutputI {
 }
 
 impl DefaultHashable for OutputI {}
-hashable_ord!(OutputI);
+
+impl Ord for OutputI {
+	fn cmp(&self, other: &OutputI) -> Ordering {
+		self.id.cmp(&other.id)
+	}
+}
+impl PartialOrd for OutputI {
+	fn partial_cmp(&self, other: &OutputI) -> Option<Ordering> {
+		Some(self.cmp(other))
+	}
+}
+
+/// Use id instead of the hash() for Eq, for the convenience of Input/Output compare.
+/// For the exact content comparing, please use hash() instead.
+impl PartialEq for OutputI {
+	fn eq(&self, other: &OutputI) -> bool {
+		self.id == other.id
+	}
+}
+impl Eq for OutputI {}
 
 impl ::std::hash::Hash for OutputI {
 	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
@@ -1883,9 +1943,14 @@ impl ::std::hash::Hash for OutputI {
 /// an Output as binary.
 impl Writeable for OutputI {
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
-		writer.write_u64(self.value)?;
-		self.id.write(writer)?;
-		self.spath.write(writer)?;
+		if writer.serialization_mode() == ser::SerializationMode::Hash {
+			// The hash of an output ONLY include its id, i.e. the features flag and the commit.
+			self.id.write(writer)?;
+		} else {
+			writer.write_u64(self.value)?;
+			self.id.write(writer)?;
+			self.spath.write(writer)?;
+		}
 		Ok(())
 	}
 }
@@ -1953,7 +2018,26 @@ pub struct OutputII {
 }
 
 impl DefaultHashable for OutputII {}
-hashable_ord!(OutputII);
+
+impl Ord for OutputII {
+	fn cmp(&self, other: &OutputII) -> Ordering {
+		self.id.cmp(&other.id)
+	}
+}
+impl PartialOrd for OutputII {
+	fn partial_cmp(&self, other: &OutputII) -> Option<Ordering> {
+		Some(self.cmp(other))
+	}
+}
+
+/// Use id instead of the hash() for Eq, for the convenience of Input/Output compare.
+/// For the exact content comparing, please use hash() instead.
+impl PartialEq for OutputII {
+	fn eq(&self, other: &OutputII) -> bool {
+		self.id == other.id
+	}
+}
+impl Eq for OutputII {}
 
 impl ::std::hash::Hash for OutputII {
 	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
@@ -1967,9 +2051,14 @@ impl ::std::hash::Hash for OutputII {
 /// an Output as binary.
 impl Writeable for OutputII {
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
-		writer.write_u64(self.value)?;
-		self.id.write(writer)?;
-		self.locker.write(writer)?;
+		if writer.serialization_mode() == ser::SerializationMode::Hash {
+			// The hash of an output ONLY include its id, i.e. the features flag and the commit.
+			self.id.write(writer)?;
+		} else {
+			writer.write_u64(self.value)?;
+			self.id.write(writer)?;
+			self.locker.write(writer)?;
+		}
 		Ok(())
 	}
 }
@@ -2026,7 +2115,7 @@ impl OutputII {
 /// An output_identifier can be build from either an input _or_ an output and
 /// contains everything we need to uniquely identify an output being spent.
 /// Needed because it is not sufficient to pass a commitment around.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct OutputIdentifier {
 	/// Output features (coinbase vs. regular transaction output)
 	/// We need to include this when hashing to ensure coinbase maturity can be
@@ -2037,6 +2126,7 @@ pub struct OutputIdentifier {
 }
 
 impl DefaultHashable for OutputIdentifier {}
+hashable_ord!(OutputIdentifier);
 
 impl OutputIdentifier {
 	/// Build a new output_identifier.

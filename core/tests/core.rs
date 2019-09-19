@@ -33,14 +33,16 @@ use crate::common::{new_block, tx1i1o, tx1i2o, tx2i1o};
 use gotts_core as core;
 use gotts_keychain as keychain;
 use gotts_util as util;
+use serde_json;
 use std::sync::Arc;
 
 #[test]
 fn simple_tx_ser() {
 	let tx = tx2i1o();
+	println!("tx = {}", serde_json::to_string_pretty(&tx).unwrap());
 	let mut vec = Vec::new();
 	ser::serialize_default(&mut vec, &tx).expect("serialization failed");
-	let target_len = 955;
+	let target_len = 308;
 	assert_eq!(vec.len(), target_len,);
 }
 
