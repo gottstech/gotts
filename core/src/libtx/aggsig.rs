@@ -231,29 +231,31 @@ pub fn verify_partial_sig(
 /// use util::secp::{ContextFlag, Secp256k1};
 /// use core::libtx::{aggsig, proof};
 /// use core::core::transaction::KernelFeatures;
-/// use core::core::{Output, OutputFeatures};
-/// use keychain::{Keychain, ExtKeychain, SwitchCommitmentType};
+/// use core::core::{Output, OutputFeaturesEx};
+/// use keychain::{Keychain, ExtKeychain};
+/// use rand::{thread_rng, Rng};
 ///
 /// let secp = Secp256k1::with_caps(ContextFlag::Commit);
 /// let keychain = ExtKeychain::from_random_seed(false).unwrap();
 /// let fees = 10_000;
 /// let value = reward(fees);
 /// let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
-/// let switch = &SwitchCommitmentType::Regular;
-/// let commit = keychain.commit(value, &key_id, switch).unwrap();
+/// let w: i64 = thread_rng().gen();
+/// let commit = keychain.commit(w, &key_id).unwrap();
 /// let builder = proof::ProofBuilder::new(&keychain);
-/// let rproof = proof::create(&keychain, &builder, value, &key_id, switch, commit, None).unwrap();
+/// let spath = proof::create_secured_path(&keychain, &builder, w, &key_id, commit);
 /// let output = Output {
-///		features: OutputFeatures::Coinbase,
-///		commit: commit,
-///		proof: rproof,
+///		features: OutputFeaturesEx::Plain { spath },
+///		commit,
+///		value,
 /// };
 /// let height = 20;
-/// let over_commit = secp.commit_value(reward(fees)).unwrap();
+/// let over_commit = reward(fees);
 /// let out_commit = output.commitment();
 /// let features = KernelFeatures::HeightLocked{fee: 0, lock_height: height};
 /// let msg = features.kernel_sig_msg().unwrap();
-/// let excess = secp.commit_sum(vec![out_commit], vec![over_commit]).unwrap();
+/// //todo: correct this! excess must remove value component.
+/// let excess = secp.commit_sum(vec![out_commit], vec![]).unwrap();
 /// let pubkey = excess.to_pubkey(&secp).unwrap();
 /// let sig = aggsig::sign_from_key_id(&secp, &keychain, &msg, value, &key_id, None, Some(&pubkey)).unwrap();
 /// ```
@@ -299,8 +301,9 @@ where
 /// use util::secp::key::{PublicKey, SecretKey};
 /// use util::secp::{ContextFlag, Secp256k1};
 /// use core::core::transaction::KernelFeatures;
-/// use core::core::{Output, OutputFeatures};
-/// use keychain::{Keychain, ExtKeychain, SwitchCommitmentType};
+/// use core::core::{Output, OutputFeaturesEx};
+/// use keychain::{Keychain, ExtKeychain};
+/// use rand::{thread_rng, Rng};
 ///
 /// // Create signature
 /// let secp = Secp256k1::with_caps(ContextFlag::Commit);
@@ -308,21 +311,21 @@ where
 /// let fees = 10_000;
 /// let value = reward(fees);
 /// let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
-/// let switch = &SwitchCommitmentType::Regular;
-/// let commit = keychain.commit(value, &key_id, switch).unwrap();
+/// let w = 0i64;
+/// let commit = keychain.commit(w, &key_id).unwrap();
 /// let builder = proof::ProofBuilder::new(&keychain);
-/// let rproof = proof::create(&keychain, &builder, value, &key_id, switch, commit, None).unwrap();
+/// let spath = proof::create_secured_path(&keychain, &builder, w, &key_id, commit);
 /// let output = Output {
-///		features: OutputFeatures::Coinbase,
-///		commit: commit,
-///		proof: rproof,
+///		features: OutputFeaturesEx::Coinbase { spath },
+///		commit,
+///		value,
 /// };
 /// let height = 20;
-/// let over_commit = secp.commit_value(reward(fees)).unwrap();
+/// let over_commit = reward(fees);
 /// let out_commit = output.commitment();
 /// let features = KernelFeatures::HeightLocked{fee: 0, lock_height: height};
 /// let msg = features.kernel_sig_msg().unwrap();
-/// let excess = secp.commit_sum(vec![out_commit], vec![over_commit]).unwrap();
+/// let excess = secp.commit_sum(vec![out_commit], vec![]).unwrap();
 /// let pubkey = excess.to_pubkey(&secp).unwrap();
 /// let sig = aggsig::sign_from_key_id(&secp, &keychain, &msg, value, &key_id, None, Some(&pubkey)).unwrap();
 ///
