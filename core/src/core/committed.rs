@@ -76,7 +76,7 @@ pub trait Committed {
 			let mut commits = vec![kernel_sum];
 			if *offset != BlindingFactor::zero() {
 				let key = offset.secret_key(&secp)?;
-				let offset_commit = secp.commit(0, key)?;
+				let offset_commit = secp.commit_i(0i64, key)?;
 				commits.push(offset_commit);
 			}
 			secp.commit_sum(commits, vec![])?

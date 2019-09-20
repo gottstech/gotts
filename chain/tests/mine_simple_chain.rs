@@ -566,7 +566,7 @@ fn spend_in_fork_and_compact() {
 		let tx1 = build::transaction(
 			vec![
 				build::coinbase_input(consensus::REWARD, key_id2.clone()),
-				build::output(consensus::REWARD - 20000, Some(0u64), key_id30.clone()),
+				build::output(consensus::REWARD - 20000, Some(0i64), key_id30.clone()),
 				build::with_fee(20000),
 			],
 			&kc,

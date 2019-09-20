@@ -29,7 +29,7 @@ use rand::{thread_rng, Rng};
 fn test_output_ser_deser() {
 	let keychain = ExtKeychain::from_random_seed(false).unwrap();
 	let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
-	let w: u64 = thread_rng().gen();
+	let w: i64 = thread_rng().gen();
 	let commit = keychain.commit(w, &key_id).unwrap();
 	let builder = proof::ProofBuilder::new(&keychain);
 	let spath = proof::create_secured_path(&keychain, &builder, w, &key_id, commit);

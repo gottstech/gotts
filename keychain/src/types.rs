@@ -129,7 +129,7 @@ impl Identifier {
 		ExtKeychainPath::from_identifier(&self)
 	}
 
-	pub fn to_value_path(&self, value: u64, w: u64) -> ValueExtKeychainPath {
+	pub fn to_value_path(&self, value: u64, w: i64) -> ValueExtKeychainPath {
 		ValueExtKeychainPath {
 			value,
 			w,
@@ -450,7 +450,7 @@ impl ExtKeychainPath {
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Deserialize)]
 pub struct ValueExtKeychainPath {
 	pub value: u64,
-	pub w: u64,
+	pub w: i64,
 	pub ext_keychain_path: ExtKeychainPath,
 }
 
@@ -476,7 +476,7 @@ pub trait Keychain: Sync + Send + Clone {
 	fn public_root_key(&self) -> PublicKey;
 
 	fn derive_key(&self, id: &Identifier) -> Result<SecretKey, Error>;
-	fn commit(&self, amount: u64, id: &Identifier) -> Result<Commitment, Error>;
+	fn commit(&self, amount: i64, id: &Identifier) -> Result<Commitment, Error>;
 	fn blind_sum(&self, blind_sum: &BlindSum) -> Result<BlindingFactor, Error>;
 	fn rewind_nonce(&self, commit: &Commitment) -> Result<SecretKey, Error>;
 	fn sign(&self, msg: &Message, amount: u64, id: &Identifier) -> Result<Signature, Error>;

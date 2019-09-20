@@ -55,7 +55,7 @@ pub type Append<K, B> = dyn for<'a> Fn(
 /// being built.
 fn build_input<K, B>(
 	value: u64,
-	w: u64,
+	w: i64,
 	features: OutputFeatures,
 	key_id: Identifier,
 ) -> Box<Append<K, B>>
@@ -78,7 +78,7 @@ where
 
 /// Adds an input with the provided value and blinding key to the transaction
 /// being built.
-pub fn input<K, B>(value: u64, w: u64, key_id: Identifier) -> Box<Append<K, B>>
+pub fn input<K, B>(value: u64, w: i64, key_id: Identifier) -> Box<Append<K, B>>
 where
 	K: Keychain,
 	B: ProofBuild,
@@ -97,19 +97,19 @@ where
 	B: ProofBuild,
 {
 	debug!("Building input (spending coinbase): {}, {}", value, key_id);
-	build_input(value, 0u64, OutputFeatures::Coinbase, key_id)
+	build_input(value, 0i64, OutputFeatures::Coinbase, key_id)
 }
 
 /// Adds an output with the provided value and key identifier from the
 /// keychain.
-pub fn output<K, B>(value: u64, w: Option<u64>, key_id: Identifier) -> Box<Append<K, B>>
+pub fn output<K, B>(value: u64, w: Option<i64>, key_id: Identifier) -> Box<Append<K, B>>
 where
 	K: Keychain,
 	B: ProofBuild,
 {
 	Box::new(
 		move |build, (tx, kern, sum)| -> (Transaction, TxKernel, BlindSum) {
-			let w: u64 = if let Some(w) = w {
+			let w: i64 = if let Some(w) = w {
 				w
 			} else {
 				thread_rng().gen()
@@ -266,7 +266,7 @@ where
 
 	// Generate kernel excess and excess_sig using the split key k1.
 	let skey = k1.secret_key(&keychain.secp())?;
-	kern.excess = ctx.keychain.secp().commit(0, skey)?;
+	kern.excess = ctx.keychain.secp().commit_i(0i64, skey)?;
 	let pubkey = &kern.excess.to_pubkey(&keychain.secp())?;
 	kern.excess_sig =
 		aggsig::sign_with_blinding(&keychain.secp(), &msg, &k1, Some(&pubkey)).unwrap();
@@ -311,9 +311,9 @@ mod test {
 
 		let tx = transaction(
 			vec![
-				input(10, 0u64, key_id1),
-				input(12, 0u64, key_id2),
-				output(20, Some(0u64), key_id3),
+				input(10, 0i64, key_id1),
+				input(12, 0i64, key_id2),
+				output(20, Some(0i64), key_id3),
 				with_fee(2),
 			],
 			&keychain,
@@ -336,9 +336,9 @@ mod test {
 
 		let tx = transaction(
 			vec![
-				input(10, 0u64, key_id1),
-				input(12, 0u64, key_id2),
-				output(20, Some(0u64), key_id3),
+				input(10, 0i64, key_id1),
+				input(12, 0i64, key_id2),
+				output(20, Some(0i64), key_id3),
 				with_fee(2),
 			],
 			&keychain,
@@ -360,8 +360,8 @@ mod test {
 
 		let tx = transaction(
 			vec![
-				input(6, 0u64, key_id1),
-				output(2, Some(0u64), key_id2),
+				input(6, 0i64, key_id1),
+				output(2, Some(0i64), key_id2),
 				with_fee(4),
 			],
 			&keychain,

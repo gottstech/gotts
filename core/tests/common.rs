@@ -38,9 +38,9 @@ pub fn tx2i1o() -> Transaction {
 
 	build::transaction(
 		vec![
-			input(10, 0u64, key_id1),
-			input(11, 0u64, key_id2),
-			output(19, Some(0u64), key_id3),
+			input(10, 0i64, key_id1),
+			input(11, 0i64, key_id2),
+			output(19, Some(0i64), key_id3),
 			with_fee(2),
 		],
 		&keychain,
@@ -58,8 +58,8 @@ pub fn tx1i1o() -> Transaction {
 
 	build::transaction(
 		vec![
-			input(5, 0u64, key_id1),
-			output(3, Some(0u64), key_id2),
+			input(5, 0i64, key_id1),
+			output(3, Some(0i64), key_id2),
 			with_fee(2),
 		],
 		&keychain,
@@ -80,9 +80,9 @@ pub fn tx1i2o() -> Transaction {
 
 	build::transaction(
 		vec![
-			input(6, 0u64, key_id1),
-			output(3, Some(0u64), key_id2),
-			output(1, Some(0u64), key_id3),
+			input(6, 0i64, key_id1),
+			output(3, Some(0i64), key_id2),
+			output(1, Some(0i64), key_id3),
 			with_fee(2),
 		],
 		&keychain,
@@ -130,8 +130,8 @@ where
 {
 	build::transaction(
 		vec![
-			input(v, 0u64, key_id1),
-			output(3, Some(0u64), key_id2),
+			input(v, 0i64, key_id1),
+			output(3, Some(0i64), key_id2),
 			with_fee(2),
 		],
 		keychain,

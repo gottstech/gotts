@@ -36,7 +36,7 @@ where
 	B: ProofBuild,
 {
 	let value = reward(fees);
-	let w = 0u64;
+	let w = 0i64;
 	let commit = keychain.commit(w, key_id)?;
 
 	trace!("Block reward - Pedersen Commit is: {:?}", commit,);

@@ -55,11 +55,11 @@ fn too_large_block() {
 
 	let mut parts = vec![];
 	for _ in 0..max_out {
-		parts.push(output(5, Some(0u64), pks.pop().unwrap()));
+		parts.push(output(5, Some(0i64), pks.pop().unwrap()));
 	}
 
 	parts.append(&mut vec![
-		input(500000, 0u64, pks.pop().unwrap()),
+		input(500000, 0i64, pks.pop().unwrap()),
 		with_fee(2),
 	]);
 	let tx = build::transaction(parts, &keychain, &builder).unwrap();
@@ -93,8 +93,8 @@ fn block_with_cut_through() {
 	let mut btx1 = tx2i1o();
 	let mut btx2 = build::transaction(
 		vec![
-			input(7, 0u64, key_id1),
-			output(5, Some(0u64), key_id2.clone()),
+			input(7, 0i64, key_id1),
+			output(5, Some(0i64), key_id2.clone()),
 			with_fee(2),
 		],
 		&keychain,

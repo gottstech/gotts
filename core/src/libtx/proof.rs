@@ -49,7 +49,7 @@ pub struct OutputLocker {
 	pub pub_nonce: PublicKey,
 	/// The secured version of 'w' for the Pedersen commitment: `C = q*G + w*H`,
 	/// the real 'w' can be calculated by: `w = secured_w XOR q[0..8]`.
-	pub secured_w: u64,
+	pub secured_w: i64,
 	/// The relative lock height, after which the output can be spent.
 	pub relative_lock_height: u32,
 }
@@ -58,7 +58,7 @@ impl Writeable for OutputLocker {
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
 		self.p2pkh.write(writer)?;
 		self.pub_nonce.write(writer)?;
-		writer.write_u64(self.secured_w)?;
+		writer.write_i64(self.secured_w)?;
 		writer.write_u32(self.relative_lock_height)?;
 		Ok(())
 	}
@@ -68,7 +68,7 @@ impl Readable for OutputLocker {
 	fn read(reader: &mut dyn Reader) -> Result<OutputLocker, ser::Error> {
 		let p2pkh = Hash::read(reader)?;
 		let pub_nonce = PublicKey::read(reader)?;
-		let secured_w = reader.read_u64()?;
+		let secured_w = reader.read_i64()?;
 		let relative_lock_height = reader.read_u32()?;
 		Ok(OutputLocker {
 			p2pkh,
@@ -83,7 +83,7 @@ impl Readable for OutputLocker {
 pub fn create_output_locker<K>(
 	k: &K,
 	recipient_pubkey: &PublicKey,
-	secured_w: u64,
+	secured_w: i64,
 	relative_lock_height: u32,
 	key_id: &Identifier,
 ) -> Result<(Commitment, OutputLocker), Error>
@@ -102,7 +102,7 @@ where
 
 	// The real 'w' is calculated by: `w = secured_w XOR q[0..8]`.
 	let mut buf = &ephemeral_key_q.0[0..8];
-	let num = buf.read_u64::<LittleEndian>().unwrap();
+	let num = buf.read_i64::<LittleEndian>().unwrap();
 	let w = secured_w ^ num;
 
 	// The Pedersen commitment: `C = q*G + w*H`.
@@ -166,7 +166,7 @@ impl SecuredPath {
 		let mut bin = [0; SECURED_PATH_SIZE];
 		bin[0..SECURED_PATH_PREFIX_SIZE].copy_from_slice(&path_msg.reserved);
 		let mut wtr = vec![];
-		wtr.write_u64::<LittleEndian>(path_msg.w).unwrap();
+		wtr.write_i64::<LittleEndian>(path_msg.w).unwrap();
 		bin[SECURED_PATH_PREFIX_SIZE..SECURED_PATH_PREFIX_SIZE + 8].copy_from_slice(&wtr);
 		bin[SECURED_PATH_PREFIX_SIZE + 8..].copy_from_slice(path_msg.key_id.as_ref());
 		let encoded: Vec<u8> = bin
@@ -195,7 +195,7 @@ pub struct PathMessage {
 	/// Reserved at this moment.
 	pub reserved: [u8; SECURED_PATH_PREFIX_SIZE],
 	/// The random 'w' of Pedersen commitment `r*G + w*H`
-	pub w: u64,
+	pub w: i64,
 	/// The key identifier
 	pub key_id: Identifier,
 }
@@ -215,7 +215,7 @@ impl PathMessage {
 
 		let mut rdr =
 			Cursor::new((&data[SECURED_PATH_PREFIX_SIZE..SECURED_PATH_PREFIX_SIZE + 8]).clone());
-		let w = rdr.read_u64::<LittleEndian>().unwrap();;
+		let w = rdr.read_i64::<LittleEndian>().unwrap();;
 		let key_id: Identifier = Identifier::from_bytes(&data[SECURED_PATH_PREFIX_SIZE + 8..]);
 
 		Ok(PathMessage {
@@ -230,7 +230,7 @@ impl PathMessage {
 pub fn create_secured_path<K, B>(
 	k: &K,
 	b: &B,
-	w: u64,
+	w: i64,
 	key_id: &Identifier,
 	commit: Commitment,
 ) -> SecuredPath
@@ -270,7 +270,7 @@ pub trait ProofBuild: Sync + Send + Clone {
 	fn rewind_nonce(&self, secp: &Secp256k1, commit: &Commitment) -> Hash;
 
 	/// Create a PathMessage
-	fn proof_message(&self, secp: &Secp256k1, w: u64, id: &Identifier) -> PathMessage;
+	fn proof_message(&self, secp: &Secp256k1, w: i64, id: &Identifier) -> PathMessage;
 
 	/// Check if the output belongs to this keychain
 	fn check_output(
@@ -323,7 +323,7 @@ where
 		self.nonce(commit)
 	}
 
-	fn proof_message(&self, _secp: &Secp256k1, w: u64, id: &Identifier) -> PathMessage {
+	fn proof_message(&self, _secp: &Secp256k1, w: i64, id: &Identifier) -> PathMessage {
 		PathMessage {
 			reserved: [0u8; SECURED_PATH_PREFIX_SIZE],
 			w,

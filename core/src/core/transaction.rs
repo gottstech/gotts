@@ -2204,7 +2204,7 @@ mod test {
 	fn test_kernel_ser_deser() {
 		let keychain = ExtKeychain::from_random_seed(false).unwrap();
 		let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
-		let w: u64 = thread_rng().gen();
+		let w: i64 = thread_rng().gen();
 		let commit = keychain.commit(w, &key_id).unwrap();
 
 		// just some bytes for testing ser/deser
@@ -2252,7 +2252,7 @@ mod test {
 		let keychain = ExtKeychain::from_seed(&[0; 32], false).unwrap();
 		let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 
-		let w: u64 = thread_rng().gen();
+		let w: i64 = thread_rng().gen();
 		let commit = keychain.commit(w, &key_id).unwrap();
 		let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 
@@ -2265,7 +2265,7 @@ mod test {
 	fn input_short_id() {
 		let keychain = ExtKeychain::from_seed(&[0; 32], false).unwrap();
 		let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
-		let w = 9999u64;
+		let w = 9999i64;
 		let commit = keychain.commit(w, &key_id).unwrap();
 
 		let input = Input {
