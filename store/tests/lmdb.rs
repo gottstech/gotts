@@ -36,7 +36,7 @@ impl PhatChunkStruct {
 }
 
 impl Readable for PhatChunkStruct {
-	fn read(reader: &mut Reader) -> Result<PhatChunkStruct, ser::Error> {
+	fn read(reader: &mut dyn Reader) -> Result<PhatChunkStruct, ser::Error> {
 		let mut retval = PhatChunkStruct::new();
 		for _ in 0..TEST_ALLOC_SIZE {
 			retval.phatness = reader.read_u64()?;

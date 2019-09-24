@@ -1778,7 +1778,7 @@ impl PartialOrd for Output {
 }
 
 /// Use id() instead of the hash() for Eq, for the convenience of Input/Output compare.
-/// For the exact content comparing, please use hash() instead.
+/// todo: then, how to give the exact content comparing?
 impl PartialEq for Output {
 	fn eq(&self, other: &Output) -> bool {
 		self.id() == other.id()
@@ -1892,6 +1892,23 @@ impl Output {
 			}
 			_ => Err(Error::InvalidInputSigMsg),
 		}
+	}
+
+	/// Return the binary of output, unhashed
+	pub fn to_vec(&self) -> Vec<u8> {
+		let mut bin_buf = vec![];
+		{
+			let mut writer = ser::BinWriter::default(&mut bin_buf);
+			self.features.write(&mut writer).unwrap();
+			self.commit.write(&mut writer).unwrap();
+			writer.write_u64(self.value).unwrap();
+		}
+		bin_buf
+	}
+
+	/// Full hash with all contents
+	pub fn full_hash(&self) -> Hash {
+		self.to_vec().hash()
 	}
 }
 

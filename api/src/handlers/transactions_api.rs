@@ -102,11 +102,12 @@ impl TxHashSetHandler {
 			.get_output_pos_height(&commit)
 			.context(ErrorKind::NotFound)?;
 		let id = OutputIdentifier::new(features, &commit);
-		let merkle_proof = chain::Chain::get_merkle_proof_for_output(&chain, &id)
+		let merkle_proof = chain.get_merkle_proof_for_output(&id)
 			.map_err(|_| ErrorKind::NotFound)?;
+		let output = chain.unspent_output_by_position(output_pos_height.0).ok_or(ErrorKind::NotFound)?;
 		Ok(OutputPrintable {
+			output,
 			output_type: OutputType::Coinbase,
-			commit,
 			spent: false,
 			block_height: Some(output_pos_height.1),
 			merkle_proof: Some(merkle_proof),

@@ -149,12 +149,12 @@ impl SecuredPath {
 		SecuredPath(bin)
 	}
 
-	/// Create a SecuredPath from a hex string
+	/// Get the hex string from a SecuredPath
 	pub fn to_hex(&self) -> String {
 		util::to_hex(self.0.to_vec())
 	}
 
-	/// Get the hex string from a SecuredPath
+	/// Create a SecuredPath from a hex string
 	pub fn from_hex(hex: &str) -> Result<SecuredPath, Error> {
 		let bytes =
 			util::from_hex(hex.to_string()).map_err(|e| ErrorKind::PathMessage(e.to_string()))?;

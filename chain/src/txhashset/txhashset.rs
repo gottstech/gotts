@@ -228,6 +228,15 @@ impl TxHashSet {
 			.elements_from_insertion_index(start_index, max_count)
 	}
 
+	/// returns output from the given mmr position
+	pub fn output_i_by_position(
+		&self,
+		position: u64,
+	) -> Option<OutputI> {
+		ReadonlyPMMR::at(&self.output_i_pmmr_h.backend, self.output_i_pmmr_h.last_pos)
+			.get_data(position)
+	}
+
 	/// highest output insertion index available
 	pub fn highest_output_i_insertion_index(&self) -> u64 {
 		pmmr::n_leaves(self.output_i_pmmr_h.last_pos)

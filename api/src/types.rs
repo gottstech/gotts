@@ -23,8 +23,6 @@ use crate::core::{core, ser};
 use crate::p2p;
 use crate::util;
 use crate::util::secp::pedersen;
-use serde;
-use std::fmt;
 
 /// API Version Information
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -140,89 +138,13 @@ pub enum OutputType {
 	Transaction,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Output {
-	/// The output commitment representing the amount
-	pub commit: PrintableCommitment,
-	/// Height of the block which contains the output
-	pub height: u64,
-	/// MMR Index of output
-	pub mmr_index: u64,
-}
-
-impl Output {
-	pub fn new(commit: &pedersen::Commitment, height: u64, mmr_index: u64) -> Output {
-		Output {
-			commit: PrintableCommitment {
-				commit: commit.clone(),
-			},
-			height: height,
-			mmr_index: mmr_index,
-		}
-	}
-}
-
-#[derive(Debug, Clone)]
-pub struct PrintableCommitment {
-	pub commit: pedersen::Commitment,
-}
-
-impl PrintableCommitment {
-	pub fn commit(&self) -> pedersen::Commitment {
-		self.commit.clone()
-	}
-
-	pub fn to_vec(&self) -> Vec<u8> {
-		self.commit.0.to_vec()
-	}
-}
-
-impl serde::ser::Serialize for PrintableCommitment {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: serde::ser::Serializer,
-	{
-		serializer.serialize_str(&util::to_hex(self.to_vec()))
-	}
-}
-
-impl<'de> serde::de::Deserialize<'de> for PrintableCommitment {
-	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-	where
-		D: serde::de::Deserializer<'de>,
-	{
-		deserializer.deserialize_str(PrintableCommitmentVisitor)
-	}
-}
-
-struct PrintableCommitmentVisitor;
-
-impl<'de> serde::de::Visitor<'de> for PrintableCommitmentVisitor {
-	type Value = PrintableCommitment;
-
-	fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-		formatter.write_str("a Pedersen commitment")
-	}
-
-	fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-	where
-		E: serde::de::Error,
-	{
-		Ok(PrintableCommitment {
-			commit: pedersen::Commitment::from_vec(
-				util::from_hex(String::from(v)).map_err(serde::de::Error::custom)?,
-			),
-		})
-	}
-}
-
 // As above, except formatted a bit better for human viewing
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OutputPrintable {
+	/// The raw output
+	pub output: core::Output,
 	/// The type of output Coinbase|Transaction
 	pub output_type: OutputType,
-	/// The homomorphic commitment representing the output's amount (as hex string)
-	pub commit: pedersen::Commitment,
 	/// Whether the output has been spent
 	pub spent: bool,
 	/// Block height at which the output is found
@@ -268,10 +190,9 @@ impl OutputPrintable {
 		let output_pos_height = chain
 			.get_output_pos_height(&output.commit)
 			.unwrap_or((0, 0));
-
 		Ok(OutputPrintable {
+			output: output.clone(),
 			output_type,
-			commit: output.commit,
 			spent,
 			block_height,
 			merkle_proof,
@@ -280,7 +201,7 @@ impl OutputPrintable {
 	}
 
 	pub fn commit(&self) -> Result<pedersen::Commitment, ser::Error> {
-		Ok(self.commit.clone())
+		Ok(self.output.commit.clone())
 	}
 }
 
@@ -518,16 +439,23 @@ pub struct PoolInfo {
 mod test {
 	use super::*;
 	use serde_json;
+	use gotts_core::core::OutputEx;
 
 	#[test]
 	fn serialize_output_printable() {
 		let hex_output = r#"
 			{
+			  "output": {
+				"features": {
+				  "Plain": {
+					"spath": "3b16ae18a45cc8aa04c4320f0a06b4d0086e1c75b614d17cf5942b24"
+				  }
+				},
+				"commit": "08fab86adc13e7d03122ace86e0275796acaf58692c88307683d5ebcd6d849eb43",
+				"value": 19
+			  },
 			  "output_type": "Coinbase",
-			  "commit": "0897277036f04d54c85df2b8957e08167c37f35d2bb88248a10cf34a7043d97c30",
 			  "spent": false,
-			  "proof": null,
-			  "proof_hash": "",
 			  "block_height": 222796,
 			  "merkle_proof": {
 				"mmr_size": 600752,
@@ -559,15 +487,32 @@ mod test {
 	}
 
 	#[test]
-	fn serialize_output() {
-		let hex_commit =
-			"{\
-			 \"commit\":\"083eafae5d61a85ab07b12e1a51b3918d8e6de11fc6cde641d54af53608aa77b9f\",\
-			 \"height\":0,\
-			 \"mmr_index\":0\
-			 }";
-		let deserialized: Output = serde_json::from_str(&hex_commit).unwrap();
-		let serialized = serde_json::to_string(&deserialized).unwrap();
-		assert_eq!(serialized, hex_commit);
+	fn serialize_output_ex() {
+		let hex_output_ex = r#"
+			{
+			 "output": {
+				"features": {
+				  "Plain": {
+					"spath": "3b16ae18a45cc8aa04c4320f0a06b4d0086e1c75b614d17cf5942b24"
+				  }
+				},
+				"commit": "08fab86adc13e7d03122ace86e0275796acaf58692c88307683d5ebcd6d849eb43",
+				"value": 19
+			  },
+			 "height": 0,
+			 "mmr_index": 0
+			}
+		"#;
+		let deserialized: OutputEx = serde_json::from_str(hex_output_ex).unwrap();
+		let serialized = serde_json::to_string_pretty(&deserialized).unwrap();
+		println!("serialized OutputEx: {}", serialized);
+		let new_deser: OutputEx = serde_json::from_str(&serialized).unwrap();
+		assert_eq!(deserialized.output.full_hash(), new_deser.output.full_hash());
+		assert_eq!(deserialized.height, new_deser.height);
+		assert_eq!(deserialized.mmr_index, new_deser.mmr_index);
+
+		// an unrelated test
+		assert_ne!(deserialized.output.full_hash(), deserialized.output.hash());
+		assert_eq!(deserialized.output.id().hash(), deserialized.output.hash());
 	}
 }

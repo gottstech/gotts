@@ -1168,6 +1168,19 @@ impl Chain {
 		Ok((outputs.0, max_index, output_vec))
 	}
 
+	/// output by mmr position
+	pub fn unspent_output_by_position(
+		&self,
+		position: u64,
+	) -> Option<Output> {
+		let txhashset = self.txhashset.read();
+		if let Some(out) = txhashset.output_i_by_position(position) {
+			Some(out.into_output())
+		} else {
+			None
+		}
+	}
+
 	/// Orphans pool size
 	pub fn orphans_len(&self) -> usize {
 		self.orphans.len()
