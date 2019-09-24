@@ -229,10 +229,7 @@ impl TxHashSet {
 	}
 
 	/// returns output from the given mmr position
-	pub fn output_i_by_position(
-		&self,
-		position: u64,
-	) -> Option<OutputI> {
+	pub fn output_i_by_position(&self, position: u64) -> Option<OutputI> {
 		ReadonlyPMMR::at(&self.output_i_pmmr_h.backend, self.output_i_pmmr_h.last_pos)
 			.get_data(position)
 	}

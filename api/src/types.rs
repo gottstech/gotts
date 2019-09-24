@@ -438,8 +438,8 @@ pub struct PoolInfo {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use serde_json;
 	use gotts_core::core::OutputEx;
+	use serde_json;
 
 	#[test]
 	fn serialize_output_printable() {
@@ -507,7 +507,10 @@ mod test {
 		let serialized = serde_json::to_string_pretty(&deserialized).unwrap();
 		println!("serialized OutputEx: {}", serialized);
 		let new_deser: OutputEx = serde_json::from_str(&serialized).unwrap();
-		assert_eq!(deserialized.output.full_hash(), new_deser.output.full_hash());
+		assert_eq!(
+			deserialized.output.full_hash(),
+			new_deser.output.full_hash()
+		);
 		assert_eq!(deserialized.height, new_deser.height);
 		assert_eq!(deserialized.mmr_index, new_deser.mmr_index);
 
