@@ -149,7 +149,7 @@ impl Keychain for ExtKeychain {
 			.map_err(|e| Error::RangeProof(format!("Unable to create nonce: {:?}", e).to_string()))
 	}
 
-	fn sign(&self, msg: &Message, amount: u64, id: &Identifier) -> Result<Signature, Error> {
+	fn sign(&self, msg: &Message, id: &Identifier) -> Result<Signature, Error> {
 		let skey = self.derive_key(id)?;
 		let sig = self.secp.sign(msg, &skey)?;
 		Ok(sig)
@@ -193,7 +193,7 @@ mod test {
 		let commit = keychain.commit(0, &key_id).unwrap();
 
 		// now check we can use our key to verify a signature from this zero commitment
-		let sig = keychain.sign(&msg, 0, &key_id).unwrap();
+		let sig = keychain.sign(&msg, &key_id).unwrap();
 		secp.verify_from_commit(&msg, &sig, &commit).unwrap();
 	}
 

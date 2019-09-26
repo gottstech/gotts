@@ -714,7 +714,6 @@ impl Block {
 		// take the kernel offset for this block (block offset minus previous) and
 		// verify.body.outputs and kernel sums
 		let (_utxo_sum, kernel_sum) = self.verify_kernel_sums(
-			self.header.overage(),
 			self.block_kernel_offset(prev_kernel_offset.clone())?,
 		)?;
 
@@ -742,7 +741,6 @@ impl Block {
 		{
 			let secp = static_secp_instance();
 			let secp = secp.lock();
-			let over_commit = reward(self.total_fees());
 
 			let out_adjust_sum = secp
 				.commit_sum(map_vec!(cb_outs, |x| x.commitment()), vec![])
@@ -753,10 +751,16 @@ impl Block {
 				.map_err(|_| Error::CoinbaseSumMismatch)?;
 
 			// Verify the kernel sum equals the output sum accounting for block fees.
-			// todo: verify the public value sum
 			if kerns_sum != out_adjust_sum {
 				return Err(Error::CoinbaseSumMismatch);
 			}
+		}
+
+		// Verify the coinbase public value
+		let over_commit = reward(self.total_fees());
+		let amount: u64 = cb_outs.iter().fold(0u64, |acc, x| acc.saturating_add(x.value));
+		if over_commit != amount {
+			return Err(Error::CoinbaseSumMismatch);
 		}
 
 		Ok(())

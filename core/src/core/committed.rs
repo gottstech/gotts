@@ -86,7 +86,7 @@ pub trait Committed {
 	}
 
 	/// Gathers commitments and sum them.
-	fn sum_commitments(&self, overage: i64) -> Result<Commitment, Error> {
+	fn sum_commitments(&self) -> Result<Commitment, Error> {
 		// gather the commitments
 		let input_commits = self.inputs_committed();
 		let output_commits = self.outputs_i_committed();
@@ -104,15 +104,13 @@ pub trait Committed {
 	fn kernels_committed(&self) -> Vec<Commitment>;
 
 	/// Verify the sum of the kernel excesses equals the
-	/// sum of the outputs, taking into account both
-	/// the kernel_offset and overage.
+	/// sum of the outputs, taking into account the kernel_offset.
 	fn verify_kernel_sums(
 		&self,
-		overage: i64,
 		kernel_offset: BlindingFactor,
 	) -> Result<((Commitment, Commitment)), Error> {
 		// Sum all input|output|overage commitments.
-		let utxo_sum = self.sum_commitments(overage)?;
+		let utxo_sum = self.sum_commitments()?;
 
 		// Sum the kernel excesses accounting for the kernel offset.
 		let (kernel_sum, kernel_sum_plus_offset) = self.sum_kernel_excesses(&kernel_offset)?;

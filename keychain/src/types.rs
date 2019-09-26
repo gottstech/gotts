@@ -479,7 +479,7 @@ pub trait Keychain: Sync + Send + Clone {
 	fn commit(&self, amount: i64, id: &Identifier) -> Result<Commitment, Error>;
 	fn blind_sum(&self, blind_sum: &BlindSum) -> Result<BlindingFactor, Error>;
 	fn rewind_nonce(&self, commit: &Commitment) -> Result<SecretKey, Error>;
-	fn sign(&self, msg: &Message, amount: u64, id: &Identifier) -> Result<Signature, Error>;
+	fn sign(&self, msg: &Message, id: &Identifier) -> Result<Signature, Error>;
 	fn sign_with_blinding(&self, _: &Message, _: &BlindingFactor) -> Result<Signature, Error>;
 	fn secp(&self) -> &Secp256k1;
 }

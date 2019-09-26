@@ -63,25 +63,51 @@ impl<'a> UTXOView<'a> {
 	/// Every input must spend an output that currently exists in the UTXO set.
 	/// No duplicate outputs.
 	pub fn validate_tx(&self, tx: &Transaction) -> Result<(), Error> {
+		let mut sum = 0i64;
+
 		for output in tx.outputs() {
 			self.validate_output(output)?;
+			sum = sum.saturating_sub(output.value as i64);
 		}
 
 		for input in tx.inputs() {
-			self.validate_input(input)?;
+			let input_value = self.validate_input(input)?;
+			sum = sum.saturating_add(input_value as i64);
 		}
+
+		if sum != tx.overage() {
+			return Err(ErrorKind::TransactionSumMismatch)?;
+		}
+
 		Ok(())
+	}
+
+	/// Given a vector of Input, return the corresponding Outputs full bodies.
+	pub fn inputs_body(&self, inputs: &Vec<Input>) -> Result<Vec<Output>, Error> {
+		let mut outputs: Vec<Output> = Vec::with_capacity(inputs.len());
+		for input in inputs {
+			if let Ok(pos) = self.batch.get_output_pos(&input.commitment()) {
+				if let Some(output) = self.output_i_pmmr.get_data(pos) {
+					if output.id.commit == input.commit {
+						outputs.push(output.into_output());
+						continue;
+					}
+				}
+			}
+			return Err(ErrorKind::AlreadySpent(input.commitment()).into());
+		}
+		Ok(outputs)
 	}
 
 	// Input is valid if it is spending an (unspent) output
 	// that currently exists in the output MMR.
 	// Compare the hash in the output MMR at the expected pos.
-	fn validate_input(&self, input: &Input) -> Result<(), Error> {
+	fn validate_input(&self, input: &Input) -> Result<u64, Error> {
 		if let Ok(pos) = self.batch.get_output_pos(&input.commitment()) {
 			if let Some(hash) = self.output_i_pmmr.get_hash(pos) {
 				if let Some(output) = self.output_i_pmmr.get_data(pos) {
 					if hash == output.hash_with_index(pos - 1) && output.id.commit == input.commit {
-						return Ok(());
+						return Ok(output.value);
 					}
 				} else {
 					error!(

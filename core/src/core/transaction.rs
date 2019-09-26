@@ -378,6 +378,15 @@ impl TxKernel {
 		self.excess
 	}
 
+    /// Return the transaction fee for this tx_kernel.
+    pub fn fee(&self) -> u64 {
+        match self.features {
+            KernelFeatures::Plain {fee} => fee,
+            KernelFeatures::Coinbase => 0,
+            KernelFeatures::HeightLocked { fee, .. } => fee,
+        }
+    }
+
 	/// The msg signed as part of the tx kernel.
 	/// Based on kernel features and associated fields (fee and lock_height).
 	pub fn msg_to_sign(&self) -> Result<secp::Message, Error> {
@@ -737,13 +746,7 @@ impl TransactionBody {
 	pub fn fee(&self) -> u64 {
 		self.kernels
 			.iter()
-			.filter_map(|k| match k.features {
-				KernelFeatures::Coinbase => None,
-				KernelFeatures::Plain { fee } | KernelFeatures::HeightLocked { fee, .. } => {
-					Some(fee)
-				}
-			})
-			.fold(0, |acc, fee| acc.saturating_add(fee))
+			.fold(0, |acc, k| acc.saturating_add(k.fee()))
 	}
 
 	fn overage(&self) -> i64 {
@@ -1134,7 +1137,14 @@ impl Transaction {
 	) -> Result<(), Error> {
 		self.body.validate(weighting, verifier)?;
 		self.body.verify_features()?;
-		self.verify_kernel_sums(self.overage(), self.offset.clone())?;
+        let _overage = self.overage();
+        // todo: no way to easily validate the public value balance?
+        // let mut sum: i64 = self.body.inputs.iter().fold(0i64, |acc, x| acc.saturating_add(x.value));
+        // sum = self.body.outputs.iter().fold(sum, |acc, x| acc.saturating_sub(x.value as i64));
+        // if sum != overage {
+        //     return Err(ErrorKind::KernelSumMismatch)?;
+        // }
+		self.verify_kernel_sums(self.offset.clone())?;
 		Ok(())
 	}
 

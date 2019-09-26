@@ -1089,9 +1089,10 @@ impl<'a> Extension<'a> {
 
 		let head_header = self.batch.get_block_header(&self.head.last_block_h)?;
 		let (utxo_sum, kernel_sum) = self.verify_kernel_sums(
-			head_header.total_overage(genesis.kernel_mmr_size > 0),
 			head_header.total_kernel_offset(),
 		)?;
+		//todo: total overage validation
+		let _overage = head_header.total_overage(genesis.kernel_mmr_size > 0);
 
 		debug!(
 			"txhashset: validated total kernel sums, took {}s",

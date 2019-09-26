@@ -257,14 +257,13 @@ pub fn verify_partial_sig(
 /// //todo: correct this! excess must remove value component.
 /// let excess = secp.commit_sum(vec![out_commit], vec![]).unwrap();
 /// let pubkey = excess.to_pubkey(&secp).unwrap();
-/// let sig = aggsig::sign_from_key_id(&secp, &keychain, &msg, value, &key_id, None, Some(&pubkey)).unwrap();
+/// let sig = aggsig::sign_from_key_id(&secp, &keychain, &msg, &key_id, None, Some(&pubkey)).unwrap();
 /// ```
 
 pub fn sign_from_key_id<K>(
 	secp: &Secp256k1,
 	k: &K,
 	msg: &Message,
-	value: u64,
 	key_id: &Identifier,
 	s_nonce: Option<&SecretKey>,
 	blind_sum: Option<&PublicKey>,
@@ -327,7 +326,7 @@ where
 /// let msg = features.kernel_sig_msg().unwrap();
 /// let excess = secp.commit_sum(vec![out_commit], vec![]).unwrap();
 /// let pubkey = excess.to_pubkey(&secp).unwrap();
-/// let sig = aggsig::sign_from_key_id(&secp, &keychain, &msg, value, &key_id, None, Some(&pubkey)).unwrap();
+/// let sig = aggsig::sign_from_key_id(&secp, &keychain, &msg, &key_id, None, Some(&pubkey)).unwrap();
 ///
 /// // Verify the signature from the excess commit
 /// let sig_verifies =
