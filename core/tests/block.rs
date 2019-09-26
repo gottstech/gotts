@@ -175,9 +175,7 @@ fn remove_coinbase_output_flag() {
 	};
 
 	assert_eq!(b.verify_coinbase(), Err(Error::CoinbaseSumMismatch));
-	assert!(b
-		.verify_kernel_sums(b.header.total_kernel_offset())
-		.is_ok());
+	assert!(b.verify_kernel_sums(b.header.total_kernel_offset()).is_ok());
 	assert_eq!(
 		b.validate(&BlindingFactor::zero(), verifier_cache()),
 		Err(Error::CoinbaseSumMismatch)

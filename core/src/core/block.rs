@@ -713,9 +713,8 @@ impl Block {
 
 		// take the kernel offset for this block (block offset minus previous) and
 		// verify.body.outputs and kernel sums
-		let (_utxo_sum, kernel_sum) = self.verify_kernel_sums(
-			self.block_kernel_offset(prev_kernel_offset.clone())?,
-		)?;
+		let (_utxo_sum, kernel_sum) =
+			self.verify_kernel_sums(self.block_kernel_offset(prev_kernel_offset.clone())?)?;
 
 		Ok(kernel_sum)
 	}
@@ -758,7 +757,9 @@ impl Block {
 
 		// Verify the coinbase public value
 		let over_commit = reward(self.total_fees());
-		let amount: u64 = cb_outs.iter().fold(0u64, |acc, x| acc.saturating_add(x.value));
+		let amount: u64 = cb_outs
+			.iter()
+			.fold(0u64, |acc, x| acc.saturating_add(x.value));
 		if over_commit != amount {
 			return Err(Error::CoinbaseSumMismatch);
 		}

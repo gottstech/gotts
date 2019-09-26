@@ -69,9 +69,7 @@ where
 				Some(&pubkey),
 			)?
 		}
-		false => {
-			aggsig::sign_from_key_id(&secp, keychain, &msg, &key_id, None, Some(&pubkey))?
-		}
+		false => aggsig::sign_from_key_id(&secp, keychain, &msg, &key_id, None, Some(&pubkey))?,
 	};
 
 	let proof = TxKernel {

@@ -136,9 +136,7 @@ pub fn process_block(b: &Block, ctx: &mut BlockContext<'_>) -> Result<Option<Tip
 		// accounting for inputs/outputs/kernels in this new block.
 		// We know there are no double-spends etc. if this verifies successfully.
 		// Remember to save these to the db later on (regardless of extension rollback)
-		let previous_block_sums = {
-			ext.batch().get_block_sums(&b.header.prev_hash)?
-		};
+		let previous_block_sums = { ext.batch().get_block_sums(&b.header.prev_hash)? };
 		let block_sums = verify_block_sums(b, previous_block_sums, ext)?;
 
 		// Apply the block to the txhashset state.
@@ -442,8 +440,13 @@ fn verify_block_sums(
 	// Overage is based purely on the new block.
 	// Previous block_sums have taken all previous overage into account.
 	let overage = b.header.overage();
-	let mut sum: i64 = b.outputs().iter().fold(0i64, |acc, x| acc.saturating_add(x.value as i64));
-	sum = inputs_body.iter().fold(sum, |acc, x| acc.saturating_sub(x.value as i64));
+	let mut sum: i64 = b
+		.outputs()
+		.iter()
+		.fold(0i64, |acc, x| acc.saturating_add(x.value as i64));
+	sum = inputs_body
+		.iter()
+		.fold(sum, |acc, x| acc.saturating_sub(x.value as i64));
 	if sum + overage != 0 {
 		return Err(ErrorKind::BlockSumMismatch)?;
 	}
@@ -615,9 +618,7 @@ pub fn rewind_and_apply_fork(
 		// Validate the block against the UTXO set.
 		validate_utxo(&fb, ext)?;
 		// Re-verify block_sums to set the block_sums up on this fork correctly.
-		let previous_block_sums = {
-			ext.batch().get_block_sums(&fb.header.prev_hash)?
-		};
+		let previous_block_sums = { ext.batch().get_block_sums(&fb.header.prev_hash)? };
 		verify_block_sums(&fb, previous_block_sums, ext)?;
 		// Re-apply the blocks.
 		apply_block_to_txhashset(&fb, ext)?;
