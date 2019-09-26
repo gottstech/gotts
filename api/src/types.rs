@@ -200,8 +200,8 @@ impl OutputPrintable {
 		})
 	}
 
-	pub fn commit(&self) -> Result<pedersen::Commitment, ser::Error> {
-		Ok(self.output.commit.clone())
+	pub fn commit(&self) -> pedersen::Commitment {
+		self.output.commit.clone()
 	}
 }
 
