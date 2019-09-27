@@ -577,8 +577,10 @@ impl Chain {
 
 		let (prev_root, roots, sizes) =
 			txhashset::extending_readonly(&mut header_pmmr, &mut txhashset, |ext| {
-				let previous_header = ext.batch().get_previous_header(&b.header)?;
-				pipe::rewind_and_apply_fork(&previous_header, ext)?;
+				if b.header.height > 0 {
+					let previous_header = ext.batch().get_previous_header(&b.header)?;
+					pipe::rewind_and_apply_fork(&previous_header, ext)?;
+				}
 
 				let ref mut extension = ext.extension;
 				let ref mut header_extension = ext.header_extension;
