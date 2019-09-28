@@ -58,8 +58,10 @@ pub const WEEK_HEIGHT: u64 = 7 * DAY_HEIGHT;
 /// A year is 524_160 blocks
 pub const YEAR_HEIGHT: u64 = 52 * WEEK_HEIGHT;
 
-/// Number of blocks before a coinbase matures and can be spent
+/// For Mainnet, Number of blocks before a coinbase matures and can be spent
 pub const COINBASE_MATURITY: u64 = DAY_HEIGHT;
+/// For Floonet, Number of blocks before a coinbase matures and can be spent
+pub const FLOONET_COINBASE_MATURITY: u64 = HOUR_HEIGHT;
 
 /// Target ratio of secondary proof of work to primary proof of work,
 /// as a function of block height (time). Starts at 90% losing a percent

@@ -15,10 +15,14 @@
 
 //! Transactions
 
-use crate::core::hash::{DefaultHashable, Hashed};
+use crate::blake2::blake2b::blake2b;
+use crate::core::hash::{DefaultHashable, Hash, Hashed};
 use crate::core::verifier_cache::VerifierCache;
 use crate::core::{committed, Committed};
 use crate::keychain::{self, BlindingFactor};
+use crate::libtx::proof::{
+	OutputLocker, PathMessage, SecuredPath, OUTPUT_LOCKER_SIZE, SECURED_PATH_SIZE,
+};
 use crate::libtx::secp_ser;
 use crate::ser::{
 	self, read_multi, FixedLength, PMMRable, Readable, Reader, VerifySortedAndUnique, Writeable,
@@ -26,15 +30,22 @@ use crate::ser::{
 };
 use crate::util;
 use crate::util::secp;
-use crate::util::secp::pedersen::{Commitment, RangeProof};
+use crate::util::secp::pedersen::Commitment;
 use crate::util::static_secp_instance;
 use crate::util::RwLock;
 use crate::{consensus, global};
+
+use chrono::naive::{MAX_DATE, MIN_DATE};
+use chrono::prelude::{DateTime, NaiveDateTime, Utc};
 use enum_primitive::FromPrimitive;
 use std::cmp::Ordering;
 use std::cmp::{max, min};
 use std::sync::Arc;
+use std::u32;
 use std::{error, fmt};
+
+/// Single output message size. (features || commit || value)
+pub const SINGLE_MSG_SIZE: usize = 1 + secp::PEDERSEN_COMMITMENT_SIZE + 8;
 
 /// Various tx kernel variants.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -194,10 +205,20 @@ pub enum Error {
 	/// Validation error relating to kernel features.
 	/// It is invalid for a transaction to contain a coinbase kernel, for example.
 	InvalidKernelFeatures,
+	/// Validation error relating to input signature message.
+	InvalidInputSigMsg,
 	/// Signature verification error.
 	IncorrectSignature,
+	/// Input does not exist among UTXO sets.
+	InputNotExist,
+	/// Spend time is earlier than output timestamp.
+	IncorrectTimestamp,
 	/// Underlying serialization error.
 	Serialization(ser::Error),
+	/// SecuredPath error.
+	SecuredPath(String),
+	/// OutputLocker error.
+	OutputLocker(String),
 }
 
 impl error::Error for Error {
@@ -355,6 +376,15 @@ impl TxKernel {
 	/// Return the excess commitment for this tx_kernel.
 	pub fn excess(&self) -> Commitment {
 		self.excess
+	}
+
+	/// Return the transaction fee for this tx_kernel.
+	pub fn fee(&self) -> u64 {
+		match self.features {
+			KernelFeatures::Plain { fee } => fee,
+			KernelFeatures::Coinbase => 0,
+			KernelFeatures::HeightLocked { fee, .. } => fee,
+		}
 	}
 
 	/// The msg signed as part of the tx kernel.
@@ -608,7 +638,7 @@ impl Committed for TransactionBody {
 		self.inputs.iter().map(|x| x.commitment()).collect()
 	}
 
-	fn outputs_committed(&self) -> Vec<Commitment> {
+	fn outputs_i_committed(&self) -> Vec<Commitment> {
 		self.outputs.iter().map(|x| x.commitment()).collect()
 	}
 
@@ -716,13 +746,7 @@ impl TransactionBody {
 	pub fn fee(&self) -> u64 {
 		self.kernels
 			.iter()
-			.filter_map(|k| match k.features {
-				KernelFeatures::Coinbase => None,
-				KernelFeatures::Plain { fee } | KernelFeatures::HeightLocked { fee, .. } => {
-					Some(fee)
-				}
-			})
-			.fold(0, |acc, fee| acc.saturating_add(fee))
+			.fold(0, |acc, k| acc.saturating_add(k.fee()))
 	}
 
 	fn overage(&self) -> i64 {
@@ -817,7 +841,7 @@ impl TransactionBody {
 	// Assumes inputs and outputs are sorted
 	fn verify_cut_through(&self) -> Result<(), Error> {
 		let mut inputs = self.inputs.iter().map(|x| x.hash()).peekable();
-		let mut outputs = self.outputs.iter().map(|x| x.hash()).peekable();
+		let mut outputs = self.outputs.iter().map(|x| x.id().hash()).peekable();
 		while let (Some(ih), Some(oh)) = (inputs.peek(), outputs.peek()) {
 			match ih.cmp(oh) {
 				Ordering::Less => {
@@ -880,22 +904,8 @@ impl TransactionBody {
 	) -> Result<(), Error> {
 		self.validate_read(weighting)?;
 
-		// Find all the outputs that have not had their rangeproofs verified.
-		let outputs = {
-			let mut verifier = verifier.write();
-			verifier.filter_rangeproof_unverified(&self.outputs)
-		};
-
-		// Now batch verify all those unverified rangeproofs
-		if !outputs.is_empty() {
-			let mut commits = vec![];
-			let mut proofs = vec![];
-			for x in &outputs {
-				commits.push(x.commit);
-				proofs.push(x.proof);
-			}
-			Output::batch_verify_proofs(&commits, &proofs)?;
-		}
+		// Find all the outputs that have not had their InputUnlocker verified.
+		//todo: add cache for InputUnlocker signature verification
 
 		// Find all the kernels that have not yet been verified.
 		let kernels = {
@@ -909,7 +919,8 @@ impl TransactionBody {
 		// Cache the successful verification results for the new outputs and kernels.
 		{
 			let mut verifier = verifier.write();
-			verifier.add_rangeproof_verified(outputs);
+			//todo:
+			//			verifier.add_inputunlocker_verified(outputs);
 			verifier.add_kernel_sig_verified(kernels);
 		}
 		Ok(())
@@ -978,8 +989,8 @@ impl Committed for Transaction {
 		self.body.inputs_committed()
 	}
 
-	fn outputs_committed(&self) -> Vec<Commitment> {
-		self.body.outputs_committed()
+	fn outputs_i_committed(&self) -> Vec<Commitment> {
+		self.body.outputs_i_committed()
 	}
 
 	fn kernels_committed(&self) -> Vec<Commitment> {
@@ -1126,7 +1137,14 @@ impl Transaction {
 	) -> Result<(), Error> {
 		self.body.validate(weighting, verifier)?;
 		self.body.verify_features()?;
-		self.verify_kernel_sums(self.overage(), self.offset.clone())?;
+		let _overage = self.overage();
+		// todo: no way to easily validate the public value balance?
+		// let mut sum: i64 = self.body.inputs.iter().fold(0i64, |acc, x| acc.saturating_add(x.value));
+		// sum = self.body.outputs.iter().fold(sum, |acc, x| acc.saturating_sub(x.value as i64));
+		// if sum != overage {
+		//     return Err(ErrorKind::KernelSumMismatch)?;
+		// }
+		self.verify_kernel_sums(self.offset.clone())?;
 		Ok(())
 	}
 
@@ -1167,7 +1185,10 @@ pub fn cut_through(inputs: &mut Vec<Input>, outputs: &mut Vec<Output>) -> Result
 	let mut outputs_idx = 0;
 	let mut ncut = 0;
 	while inputs_idx < inputs.len() && outputs_idx < outputs.len() {
-		match inputs[inputs_idx].hash().cmp(&outputs[outputs_idx].hash()) {
+		match inputs[inputs_idx]
+			.hash()
+			.cmp(&outputs[outputs_idx].id().hash())
+		{
 			Ordering::Less => {
 				inputs[inputs_idx - ncut] = inputs[inputs_idx];
 				inputs_idx += 1;
@@ -1360,6 +1381,14 @@ impl Input {
 		Input { features, commit }
 	}
 
+	/// Identifier for the output
+	pub fn id(&self) -> OutputIdentifier {
+		OutputIdentifier {
+			features: self.features,
+			commit: self.commit,
+		}
+	}
+
 	/// The input commitment which _partially_ identifies the output being
 	/// spent. In the presence of a fork we need additional info to uniquely
 	/// identify the output. Specifically the block hash (to correctly
@@ -1379,16 +1408,186 @@ impl Input {
 	}
 }
 
-// Enum of various supported kernel "features".
+/// The unlocker in a transaction input when spending an output with a locker.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+pub struct InputUnlocker {
+	/// Timestamp at which the transaction was built.
+	pub timestamp: DateTime<Utc>,
+	/// The signature for the output which has a locked public key / address.
+	#[serde(with = "secp_ser::sig_serde")]
+	pub sig: secp::Signature,
+	/// The public key.
+	#[serde(with = "secp_ser::pubkey_serde")]
+	pub pub_key: secp::key::PublicKey,
+}
+
+impl DefaultHashable for InputUnlocker {}
+hashable_ord!(InputUnlocker);
+
+/// Implementation of Writeable for a transaction Input, defines how to write
+/// an Input as binary.
+impl Writeable for InputUnlocker {
+	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
+		writer.write_i64(self.timestamp.timestamp())?;
+		self.sig.write(writer)?;
+		self.pub_key.write(writer)?;
+		Ok(())
+	}
+}
+
+/// Implementation of Readable for a transaction Input, defines how to read
+/// an Input from a binary stream.
+impl Readable for InputUnlocker {
+	fn read(reader: &mut dyn Reader) -> Result<InputUnlocker, ser::Error> {
+		let timestamp = reader.read_i64()?;
+		if timestamp > MAX_DATE.and_hms(0, 0, 0).timestamp()
+			|| timestamp < MIN_DATE.and_hms(0, 0, 0).timestamp()
+		{
+			return Err(ser::Error::CorruptedData);
+		}
+
+		let sig = secp::Signature::read(reader)?;
+		let pub_key = secp::key::PublicKey::read(reader)?;
+		Ok(InputUnlocker {
+			timestamp: DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(timestamp, 0), Utc),
+			sig,
+			pub_key,
+		})
+	}
+}
+
+/// A transaction inputs with the unlocker.
+///
+/// Primarily a reference to a batch of outputs (with same 'p2pkh' locker) being spent by the transaction.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct InputsUnlocking {
+	/// Inputs. To spend those outputs with same 'p2pkh' locker.
+	pub inputs: Vec<Input>,
+	/// The unlocker for spending one or a batch of output/s with same 'p2pkh' locker.
+	pub unlocker: InputUnlocker,
+}
+
+impl DefaultHashable for InputsUnlocking {}
+hashable_ord!(InputsUnlocking);
+
+impl ::std::hash::Hash for InputsUnlocking {
+	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
+		let mut vec = Vec::new();
+		ser::serialize_default(&mut vec, &self).expect("serialization failed");
+		::std::hash::Hash::hash(&vec, state);
+	}
+}
+
+/// Implementation of Writeable for a transaction Inputs, defines how to write
+/// an InputsUnlocking as binary.
+impl Writeable for InputsUnlocking {
+	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
+		assert!(self.inputs.len() <= u32::MAX as usize);
+		writer.write_u32(self.inputs.len() as u32)?;
+		self.inputs.write(writer)?;
+		self.unlocker.write(writer)?;
+		Ok(())
+	}
+}
+
+/// Implementation of Readable for a transaction Input, defines how to read
+/// an Input from a binary stream.
+impl Readable for InputsUnlocking {
+	fn read(reader: &mut dyn Reader) -> Result<InputsUnlocking, ser::Error> {
+		let input_len = reader.read_u32()?;
+		let inputs = read_multi(reader, input_len as u64)?;
+		let unlocker = InputUnlocker::read(reader)?;
+		Ok(InputsUnlocking::new(inputs, unlocker))
+	}
+}
+
+/// The input for a transaction, which spends a pre-existing unspent output.
+/// The input commitment is a reproduction of the commitment of the output
+/// being spent. Input must also provide the original output features.
+impl InputsUnlocking {
+	/// Build a new input from the data required to identify and verify an
+	/// output being spent.
+	pub fn new(inputs: Vec<Input>, unlocker: InputUnlocker) -> InputsUnlocking {
+		InputsUnlocking { inputs, unlocker }
+	}
+
+	/// The input commitment which _partially_ identifies the output being
+	/// spent. In the presence of a fork we need additional info to uniquely
+	/// identify the output. Specifically the block hash (to correctly
+	/// calculate lock_height for coinbase outputs).
+	pub fn commitments(&self) -> Vec<Commitment> {
+		self.inputs
+			.iter()
+			.map(|input| input.commit.clone())
+			.collect()
+	}
+
+	/// Verify the transaction proof validity. Entails checking the signature verifies with
+	/// the ([(features || commit || value), ...] || timestamp) as message.
+	/// Caution:
+	/// 1. It's the caller's responsibility to make sure 'max_timestamp' came from the
+	/// max height of the 'outputs_to_spent', the block timestamp at that height.
+	/// 2. 'check_sig_only' must be true on production. 'false' only for test.
+	///
+	pub fn verify(
+		&self,
+		outputs_to_spent: &Vec<OutputEx>,
+		max_timestamp: DateTime<Utc>,
+		check_sig_only: bool,
+	) -> Result<(), Error> {
+		if !check_sig_only && outputs_to_spent.is_empty() {
+			return Err(Error::InputNotExist);
+		}
+
+		// First checking: timestamp must not earlier than any input
+		if !check_sig_only && self.unlocker.timestamp <= max_timestamp {
+			return Err(Error::IncorrectTimestamp);
+		}
+
+		let secp = static_secp_instance();
+		let secp = secp.lock();
+		let p2pkh = self.unlocker.pub_key.serialize_vec(&secp, true).hash();
+		let mut msg_to_sign: Vec<u8> = Vec::with_capacity(outputs_to_spent.len() * SINGLE_MSG_SIZE);
+
+		for output_ex in outputs_to_spent {
+			if output_ex.output.pkh_locked() != Ok(p2pkh) {
+				return Err(Error::IncorrectSignature);
+			}
+			msg_to_sign.extend_from_slice(&output_ex.output.msg_to_sign()?);
+		}
+
+		// Hashing to get the final msg for signature
+		let hash = (msg_to_sign, self.unlocker.timestamp.timestamp()).hash();
+		let msg = secp::Message::from_slice(&hash.as_bytes())?;
+
+		if !secp::aggsig::verify_single(
+			&secp,
+			&self.unlocker.sig,
+			&msg,
+			None,
+			&self.unlocker.pub_key,
+			Some(&self.unlocker.pub_key),
+			None,
+			false,
+		) {
+			return Err(Error::IncorrectSignature);
+		}
+		Ok(())
+	}
+}
+
+// Enum of various supported output "features".
 enum_from_primitive! {
-	/// Various flavors of tx kernel.
-	#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+	/// Enum of various flavors of output, in a single byte flag.
+	#[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize)]
 	#[repr(u8)]
 	pub enum OutputFeatures {
-		/// Plain output (the default for Gotts txs).
+		/// Plain output of Interactive Transaction.
 		Plain = 0,
 		/// A coinbase output.
 		Coinbase = 1,
+		/// Plain output of Non-Interactive Transaction.
+		SigLocked = 2,
 	}
 }
 
@@ -1407,22 +1606,195 @@ impl Readable for OutputFeatures {
 	}
 }
 
+impl OutputFeatures {
+	/// Is this a coinbase output?
+	pub fn is_coinbase(&self) -> bool {
+		*self == OutputFeatures::Coinbase
+	}
+
+	/// Is this a plain output?
+	pub fn is_plain(&self) -> bool {
+		*self == OutputFeatures::Plain
+	}
+}
+
+/// Enum of various flavors of output.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum OutputFeaturesEx {
+	/// Plain output of Interactive Transaction.
+	Plain {
+		/// A secured path message which hide the key derivation path and the random w of commitment.
+		#[serde(
+			serialize_with = "secp_ser::as_hex",
+			deserialize_with = "secp_ser::securedpath_from_hex"
+		)]
+		spath: SecuredPath,
+	},
+	/// Coinbase output.
+	Coinbase {
+		/// A secured path message, same as Plain.
+		#[serde(
+			serialize_with = "secp_ser::as_hex",
+			deserialize_with = "secp_ser::securedpath_from_hex"
+		)]
+		spath: SecuredPath,
+	},
+	/// Plain output of Non-Interactive Transaction.
+	SigLocked {
+		/// A locker to make it only spendable for who can unlock it with a signature.
+		locker: OutputLocker,
+	},
+}
+
+impl OutputFeaturesEx {
+	/// Underlying (u8) value representing this output variant.
+	/// This is the first byte when we serialize/deserialize the output features.
+	pub fn as_u8(&self) -> u8 {
+		match self {
+			OutputFeaturesEx::Plain { .. } => OutputFeatures::Plain as u8,
+			OutputFeaturesEx::Coinbase { .. } => OutputFeatures::Coinbase as u8,
+			OutputFeaturesEx::SigLocked { .. } => OutputFeatures::SigLocked as u8,
+		}
+	}
+
+	/// Underlying enum flag representing this output variant.
+	pub fn as_flag(&self) -> OutputFeatures {
+		match self {
+			OutputFeaturesEx::Plain { .. } => OutputFeatures::Plain,
+			OutputFeaturesEx::Coinbase { .. } => OutputFeatures::Coinbase,
+			OutputFeaturesEx::SigLocked { .. } => OutputFeatures::SigLocked,
+		}
+	}
+
+	/// Conversion for backward compatibility.
+	pub fn as_string(&self) -> String {
+		match self {
+			OutputFeaturesEx::Plain { .. } => String::from("Plain"),
+			OutputFeaturesEx::Coinbase { .. } => String::from("Coinbase"),
+			OutputFeaturesEx::SigLocked { .. } => String::from("SigLocked"),
+		}
+	}
+
+	/// Is this a coinbase output?
+	pub fn is_coinbase(&self) -> bool {
+		self.as_flag() == OutputFeatures::Coinbase
+	}
+
+	/// Is this a plain output?
+	pub fn is_plain(&self) -> bool {
+		let features = self.as_flag();
+		features == OutputFeatures::Plain || features == OutputFeatures::SigLocked
+	}
+
+	/// Is this a SigLocked output?
+	pub fn is_siglocked(&self) -> bool {
+		self.as_flag() == OutputFeatures::SigLocked
+	}
+
+	/// Get the SecuredPath if this is not a SigLocked output
+	pub fn get_spath(&self) -> Result<&SecuredPath, Error> {
+		match self {
+			OutputFeaturesEx::Plain { spath } => Ok(spath),
+			OutputFeaturesEx::Coinbase { spath } => Ok(spath),
+			OutputFeaturesEx::SigLocked { .. } => {
+				Err(Error::SecuredPath("type not match".to_owned()))
+			}
+		}
+	}
+
+	/// Get the SecuredPath if this is not a SigLocked output
+	pub fn get_locker(&self) -> Result<&OutputLocker, Error> {
+		match self {
+			OutputFeaturesEx::Plain { .. } | OutputFeaturesEx::Coinbase { .. } => {
+				Err(Error::SecuredPath("type not match".to_owned()))
+			}
+			OutputFeaturesEx::SigLocked { locker } => Ok(locker),
+		}
+	}
+}
+
+impl Writeable for OutputFeaturesEx {
+	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
+		writer.write_u8(self.as_u8())?;
+		match self {
+			OutputFeaturesEx::Plain { spath } => {
+				spath.write(writer)?;
+			}
+			OutputFeaturesEx::Coinbase { spath } => {
+				spath.write(writer)?;
+			}
+			OutputFeaturesEx::SigLocked { locker } => {
+				locker.write(writer)?;
+			}
+		}
+		Ok(())
+	}
+}
+
+impl Readable for OutputFeaturesEx {
+	fn read(reader: &mut dyn Reader) -> Result<OutputFeaturesEx, ser::Error> {
+		let features =
+			OutputFeatures::from_u8(reader.read_u8()?).ok_or(ser::Error::CorruptedData)?;
+		let features = match features {
+			OutputFeatures::Plain => OutputFeaturesEx::Plain {
+				spath: SecuredPath::read(reader)?,
+			},
+			OutputFeatures::Coinbase => OutputFeaturesEx::Coinbase {
+				spath: SecuredPath::read(reader)?,
+			},
+			OutputFeatures::SigLocked => OutputFeaturesEx::SigLocked {
+				locker: OutputLocker::read(reader)?,
+			},
+		};
+		Ok(features)
+	}
+}
+
+/// Output with block height and mmr index
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OutputEx {
+	/// The output
+	pub output: Output,
+	/// Height of the block which contains the output
+	pub height: u64,
+	/// MMR Index of output
+	pub mmr_index: u64,
+}
+
 /// Output for a transaction, defining the new ownership of coins that are being
-/// transferred. The commitment is a blinded value for the output while the
-/// range proof guarantees the commitment includes a positive value without
-/// overflow and the ownership of the private key.
+/// transferred. The commitment is a blinded value for the output and the ownership
+/// of the private key.
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct Output {
 	/// Options for an output's structure or use
-	pub features: OutputFeatures,
+	pub features: OutputFeaturesEx,
 	/// The homomorphic commitment representing the output amount
 	pub commit: Commitment,
-	/// A proof that the commitment is in the right range
-	pub proof: RangeProof,
+	/// The explicit amount
+	pub value: u64,
 }
 
 impl DefaultHashable for Output {}
-hashable_ord!(Output);
+
+impl Ord for Output {
+	fn cmp(&self, other: &Output) -> Ordering {
+		self.id().cmp(&other.id())
+	}
+}
+impl PartialOrd for Output {
+	fn partial_cmp(&self, other: &Output) -> Option<Ordering> {
+		Some(self.cmp(other))
+	}
+}
+
+/// Use id() instead of the hash() for Eq, for the convenience of Input/Output compare.
+/// todo: then, how to give the exact content comparing?
+impl PartialEq for Output {
+	fn eq(&self, other: &Output) -> bool {
+		self.id() == other.id()
+	}
+}
+impl Eq for Output {}
 
 impl ::std::hash::Hash for Output {
 	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
@@ -1436,12 +1808,14 @@ impl ::std::hash::Hash for Output {
 /// an Output as binary.
 impl Writeable for Output {
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
-		self.features.write(writer)?;
-		self.commit.write(writer)?;
-		// The hash of an output doesn't include the range proof, which
-		// is committed to separately
-		if writer.serialization_mode() != ser::SerializationMode::Hash {
-			writer.write_bytes(&self.proof)?
+		if writer.serialization_mode() == ser::SerializationMode::Hash {
+			// The hash of an output ONLY include its id(), i.e. the features flag and the commit.
+			writer.write_u8(self.features.as_u8())?;
+			self.commit.write(writer)?;
+		} else {
+			self.features.write(writer)?;
+			self.commit.write(writer)?;
+			writer.write_u64(self.value)?;
 		}
 		Ok(())
 	}
@@ -1451,36 +1825,26 @@ impl Writeable for Output {
 /// an Output from a binary stream.
 impl Readable for Output {
 	fn read(reader: &mut dyn Reader) -> Result<Output, ser::Error> {
+		let features = OutputFeaturesEx::read(reader)?;
+		let commit = Commitment::read(reader)?;
+		let value = reader.read_u64()?;
 		Ok(Output {
-			features: OutputFeatures::read(reader)?,
-			commit: Commitment::read(reader)?,
-			proof: RangeProof::read(reader)?,
+			features,
+			commit,
+			value,
 		})
 	}
 }
 
-/// We can build an Output MMR but store instances of OutputIdentifier in the MMR data file.
-impl PMMRable for Output {
-	type E = OutputIdentifier;
-
-	fn as_elmt(&self) -> OutputIdentifier {
-		OutputIdentifier::from_output(self)
-	}
-}
-
-impl OutputFeatures {
-	/// Is this a coinbase output?
-	pub fn is_coinbase(&self) -> bool {
-		*self == OutputFeatures::Coinbase
-	}
-
-	/// Is this a plain output?
-	pub fn is_plain(&self) -> bool {
-		*self == OutputFeatures::Plain
-	}
-}
-
 impl Output {
+	/// Identifier for the output
+	pub fn id(&self) -> OutputIdentifier {
+		OutputIdentifier {
+			features: self.features.as_flag(),
+			commit: self.commit,
+		}
+	}
+
 	/// Commitment for the output
 	pub fn commitment(&self) -> Commitment {
 		self.commit
@@ -1496,35 +1860,289 @@ impl Output {
 		self.features.is_plain()
 	}
 
-	/// Range proof for the output
-	pub fn proof(&self) -> RangeProof {
-		self.proof
+	/// PublicKeyHash which this output has been locked on
+	pub fn pkh_locked(&self) -> Result<Hash, Error> {
+		match self.features {
+			OutputFeaturesEx::Plain { .. } | OutputFeaturesEx::Coinbase { .. } => {
+				Err(Error::OutputLocker("output w/o locker".to_owned()))
+			}
+			OutputFeaturesEx::SigLocked { locker } => Ok(locker.p2pkh),
+		}
 	}
 
-	/// Validates the range proof using the commitment
-	pub fn verify_proof(&self) -> Result<(), Error> {
-		let secp = static_secp_instance();
-		secp.lock()
-			.verify_bullet_proof(self.commit, self.proof, None)?;
-		Ok(())
+	/// PathMessage for the output
+	pub fn path_message(&self, rewind_hash: &Hash) -> Result<PathMessage, Error> {
+		let rewind_nonce =
+			Hash::from_vec(blake2b(32, &self.commit.0, rewind_hash.as_bytes()).as_bytes());
+		match self.features {
+			OutputFeaturesEx::Plain { spath } => spath
+				.get_path(&rewind_nonce)
+				.map_err(|e| Error::SecuredPath(e.to_string())),
+			OutputFeaturesEx::Coinbase { spath } => spath
+				.get_path(&rewind_nonce)
+				.map_err(|e| Error::SecuredPath(e.to_string())),
+			OutputFeaturesEx::SigLocked { .. } => {
+				Err(Error::SecuredPath("output w/o SecuredPath".to_owned()))
+			}
+		}
 	}
 
-	/// Batch validates the range proofs using the commitments
-	pub fn batch_verify_proofs(
-		commits: &Vec<Commitment>,
-		proofs: &Vec<RangeProof>,
-	) -> Result<(), Error> {
-		let secp = static_secp_instance();
-		secp.lock()
-			.verify_bullet_proof_multi(commits.clone(), proofs.clone(), None)?;
+	/// The msg signed as part of the Input with a signature.
+	/// 	msg = hash(features || commit || value || timestamp) for single input
+	/// 	msg = hash((features || commit || value) || (...) || timestamp) for multiple inputs
+	/// Leave to caller to execute the final hash.
+	pub fn msg_to_sign(&self) -> Result<Vec<u8>, Error> {
+		match self.features {
+			OutputFeaturesEx::SigLocked { .. } => {
+				let mut msg: Vec<u8> = Vec::with_capacity(SINGLE_MSG_SIZE);
+				msg.push(self.features.as_u8());
+				msg.extend_from_slice(self.commit.clone().as_ref());
+				msg.extend_from_slice(&self.value.to_be_bytes());
+				Ok(msg)
+			}
+			_ => Err(Error::InvalidInputSigMsg),
+		}
+	}
+
+	/// Return the binary of output, unhashed
+	pub fn to_vec(&self) -> Vec<u8> {
+		let mut bin_buf = vec![];
+		{
+			let mut writer = ser::BinWriter::default(&mut bin_buf);
+			self.features.write(&mut writer).unwrap();
+			self.commit.write(&mut writer).unwrap();
+			writer.write_u64(self.value).unwrap();
+		}
+		bin_buf
+	}
+
+	/// Full hash with all contents
+	pub fn full_hash(&self) -> Hash {
+		self.to_vec().hash()
+	}
+}
+
+/// OutputI.
+/// To make an easy PMMRable type, we need a FixedLength element.
+/// But SigLocked Output has different size from Plain and Coinbase output, so we wrap them into
+/// two new wrapper types.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OutputI {
+	/// Output value
+	pub value: u64,
+	/// Output features and commit.
+	pub id: OutputIdentifier,
+	/// A secured path message which hide the key derivation path and the random w of commitment.
+	pub spath: SecuredPath,
+}
+
+impl DefaultHashable for OutputI {}
+
+impl Ord for OutputI {
+	fn cmp(&self, other: &OutputI) -> Ordering {
+		self.id.cmp(&other.id)
+	}
+}
+impl PartialOrd for OutputI {
+	fn partial_cmp(&self, other: &OutputI) -> Option<Ordering> {
+		Some(self.cmp(other))
+	}
+}
+
+/// Use id instead of the hash() for Eq, for the convenience of Input/Output compare.
+/// For the exact content comparing, please use hash() instead.
+impl PartialEq for OutputI {
+	fn eq(&self, other: &OutputI) -> bool {
+		self.id == other.id
+	}
+}
+impl Eq for OutputI {}
+
+impl ::std::hash::Hash for OutputI {
+	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
+		let mut vec = Vec::new();
+		ser::serialize_default(&mut vec, &self).expect("serialization failed");
+		::std::hash::Hash::hash(&vec, state);
+	}
+}
+
+/// Implementation of Writeable for a transaction Output, defines how to write
+/// an Output as binary.
+impl Writeable for OutputI {
+	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
+		if writer.serialization_mode() == ser::SerializationMode::Hash {
+			// The hash of an output ONLY include its id, i.e. the features flag and the commit.
+			self.id.write(writer)?;
+		} else {
+			writer.write_u64(self.value)?;
+			self.id.write(writer)?;
+			self.spath.write(writer)?;
+		}
 		Ok(())
+	}
+}
+
+/// Implementation of Readable for a transaction Output, defines how to read
+/// an Output from a binary stream.
+impl Readable for OutputI {
+	fn read(reader: &mut dyn Reader) -> Result<OutputI, ser::Error> {
+		let value = reader.read_u64()?;
+		let id = OutputIdentifier::read(reader)?;
+		let spath = SecuredPath::read(reader)?;
+		Ok(OutputI { value, id, spath })
+	}
+}
+
+impl FixedLength for OutputI {
+	const LEN: usize = 8 + (1 + secp::constants::PEDERSEN_COMMITMENT_SIZE) + SECURED_PATH_SIZE;
+}
+
+impl PMMRable for OutputI {
+	type E = Self;
+
+	fn as_elmt(&self) -> Self::E {
+		self.clone()
+	}
+}
+
+impl OutputI {
+	/// Build an OutputI from an Output.
+	pub fn from_output(output: &Output) -> Result<Self, Error> {
+		Ok(OutputI {
+			value: output.value,
+			id: output.id(),
+			spath: output.features.get_spath()?.clone(),
+		})
+	}
+
+	/// Converts OutputI to an Output
+	pub fn into_output(self) -> Output {
+		let features = match self.id.features {
+			OutputFeatures::Plain => OutputFeaturesEx::Plain { spath: self.spath },
+			OutputFeatures::Coinbase => OutputFeaturesEx::Coinbase { spath: self.spath },
+			OutputFeatures::SigLocked => panic!("impossible match"),
+		};
+		Output {
+			features,
+			commit: self.id.commit,
+			value: self.value,
+		}
+	}
+}
+
+/// OutputII
+/// To make an easy PMMRable type, we need a FixedLength element.
+/// But SigLocked Output has different size from Plain and Coinbase output, so we wrap them into
+/// two new wrapper types.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OutputII {
+	/// Output value
+	pub value: u64,
+	/// Output features and commit.
+	pub id: OutputIdentifier,
+	/// A locker to make it only spendable for who can unlock it with a signature.
+	pub locker: OutputLocker,
+}
+
+impl DefaultHashable for OutputII {}
+
+impl Ord for OutputII {
+	fn cmp(&self, other: &OutputII) -> Ordering {
+		self.id.cmp(&other.id)
+	}
+}
+impl PartialOrd for OutputII {
+	fn partial_cmp(&self, other: &OutputII) -> Option<Ordering> {
+		Some(self.cmp(other))
+	}
+}
+
+/// Use id instead of the hash() for Eq, for the convenience of Input/Output compare.
+/// For the exact content comparing, please use hash() instead.
+impl PartialEq for OutputII {
+	fn eq(&self, other: &OutputII) -> bool {
+		self.id == other.id
+	}
+}
+impl Eq for OutputII {}
+
+impl ::std::hash::Hash for OutputII {
+	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
+		let mut vec = Vec::new();
+		ser::serialize_default(&mut vec, &self).expect("serialization failed");
+		::std::hash::Hash::hash(&vec, state);
+	}
+}
+
+/// Implementation of Writeable for a transaction Output, defines how to write
+/// an Output as binary.
+impl Writeable for OutputII {
+	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
+		if writer.serialization_mode() == ser::SerializationMode::Hash {
+			// The hash of an output ONLY include its id, i.e. the features flag and the commit.
+			self.id.write(writer)?;
+		} else {
+			writer.write_u64(self.value)?;
+			self.id.write(writer)?;
+			self.locker.write(writer)?;
+		}
+		Ok(())
+	}
+}
+
+/// Implementation of Readable for a transaction Output, defines how to read
+/// an Output from a binary stream.
+impl Readable for OutputII {
+	fn read(reader: &mut dyn Reader) -> Result<OutputII, ser::Error> {
+		let value = reader.read_u64()?;
+		let id = OutputIdentifier::read(reader)?;
+		let locker = OutputLocker::read(reader)?;
+		Ok(OutputII { value, id, locker })
+	}
+}
+
+impl FixedLength for OutputII {
+	const LEN: usize = 8 + (1 + secp::constants::PEDERSEN_COMMITMENT_SIZE) + OUTPUT_LOCKER_SIZE;
+}
+
+impl PMMRable for OutputII {
+	type E = Self;
+
+	fn as_elmt(&self) -> Self::E {
+		self.clone()
+	}
+}
+
+impl OutputII {
+	/// Build an OutputII from an Output.
+	pub fn from_output(output: &Output) -> Result<Self, Error> {
+		Ok(OutputII {
+			value: output.value,
+			id: output.id(),
+			locker: output.features.get_locker()?.clone(),
+		})
+	}
+
+	/// Converts OutputII to an Output
+	pub fn into_output(self) -> Output {
+		let features = match self.id.features {
+			OutputFeatures::Plain | OutputFeatures::Coinbase => panic!("impossible match"),
+			OutputFeatures::SigLocked => OutputFeaturesEx::SigLocked {
+				locker: self.locker,
+			},
+		};
+		Output {
+			features,
+			commit: self.id.commit,
+			value: self.value,
+		}
 	}
 }
 
 /// An output_identifier can be build from either an input _or_ an output and
 /// contains everything we need to uniquely identify an output being spent.
 /// Needed because it is not sufficient to pass a commitment around.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct OutputIdentifier {
 	/// Output features (coinbase vs. regular transaction output)
 	/// We need to include this when hashing to ensure coinbase maturity can be
@@ -1535,6 +2153,7 @@ pub struct OutputIdentifier {
 }
 
 impl DefaultHashable for OutputIdentifier {}
+hashable_ord!(OutputIdentifier);
 
 impl OutputIdentifier {
 	/// Build a new output_identifier.
@@ -1553,25 +2172,8 @@ impl OutputIdentifier {
 	/// Build an output_identifier from an existing output.
 	pub fn from_output(output: &Output) -> OutputIdentifier {
 		OutputIdentifier {
-			features: output.features,
+			features: output.features.as_flag(),
 			commit: output.commit,
-		}
-	}
-
-	/// Converts this identifier to a full output, provided a RangeProof
-	pub fn into_output(self, proof: RangeProof) -> Output {
-		Output {
-			proof,
-			features: self.features,
-			commit: self.commit,
-		}
-	}
-
-	/// Build an output_identifier from an existing input.
-	pub fn from_input(input: &Input) -> OutputIdentifier {
-		OutputIdentifier {
-			features: input.features,
-			commit: input.commit,
 		}
 	}
 
@@ -1583,10 +2185,14 @@ impl OutputIdentifier {
 			util::to_hex(self.commit.0.to_vec()),
 		)
 	}
-}
 
-impl FixedLength for OutputIdentifier {
-	const LEN: usize = 1 + secp::constants::PEDERSEN_COMMITMENT_SIZE;
+	/// convert an output_identifier to vector.
+	pub fn to_vec(&self) -> Vec<u8> {
+		let mut ret: Vec<u8> = Vec::with_capacity(1 + secp::constants::PEDERSEN_COMMITMENT_SIZE);
+		ret.push(self.features as u8);
+		ret.extend_from_slice(&self.commit.0);
+		ret
+	}
 }
 
 impl Writeable for OutputIdentifier {
@@ -1608,10 +2214,7 @@ impl Readable for OutputIdentifier {
 
 impl From<Output> for OutputIdentifier {
 	fn from(out: Output) -> Self {
-		OutputIdentifier {
-			features: out.features,
-			commit: out.commit,
-		}
+		OutputIdentifier::from_output(&out)
 	}
 }
 
@@ -1620,16 +2223,16 @@ mod test {
 	use super::*;
 	use crate::core::hash::Hash;
 	use crate::core::id::{ShortId, ShortIdentifiable};
-	use crate::keychain::{ExtKeychain, Keychain, SwitchCommitmentType};
+	use crate::keychain::{ExtKeychain, Keychain};
 	use crate::util::secp;
+	use rand::{thread_rng, Rng};
 
 	#[test]
 	fn test_kernel_ser_deser() {
 		let keychain = ExtKeychain::from_random_seed(false).unwrap();
 		let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
-		let commit = keychain
-			.commit(5, &key_id, &SwitchCommitmentType::Regular)
-			.unwrap();
+		let w: i64 = thread_rng().gen();
+		let commit = keychain.commit(w, &key_id).unwrap();
 
 		// just some bytes for testing ser/deser
 		let sig = secp::Signature::from_raw_data(&[0; 64]).unwrap();
@@ -1676,14 +2279,11 @@ mod test {
 		let keychain = ExtKeychain::from_seed(&[0; 32], false).unwrap();
 		let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 
-		let commit = keychain
-			.commit(1003, &key_id, &SwitchCommitmentType::Regular)
-			.unwrap();
+		let w: i64 = thread_rng().gen();
+		let commit = keychain.commit(w, &key_id).unwrap();
 		let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 
-		let commit_2 = keychain
-			.commit(1003, &key_id, &SwitchCommitmentType::Regular)
-			.unwrap();
+		let commit_2 = keychain.commit(w, &key_id).unwrap();
 
 		assert!(commit == commit_2);
 	}
@@ -1692,9 +2292,8 @@ mod test {
 	fn input_short_id() {
 		let keychain = ExtKeychain::from_seed(&[0; 32], false).unwrap();
 		let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
-		let commit = keychain
-			.commit(5, &key_id, &SwitchCommitmentType::Regular)
-			.unwrap();
+		let w = 9999i64;
+		let commit = keychain.commit(w, &key_id).unwrap();
 
 		let input = Input {
 			features: OutputFeatures::Plain,
@@ -1708,7 +2307,7 @@ mod test {
 		let nonce = 0;
 
 		let short_id = input.short_id(&block_hash, nonce);
-		assert_eq!(short_id, ShortId::from_hex("c4b05f2ba649").unwrap());
+		assert_eq!(short_id, ShortId::from_hex("cf2483f90e64").unwrap());
 
 		// now generate the short_id for a *very* similar output (single feature flag
 		// different) and check it generates a different short_id
@@ -1718,7 +2317,7 @@ mod test {
 		};
 
 		let short_id = input.short_id(&block_hash, nonce);
-		assert_eq!(short_id, ShortId::from_hex("3f0377c624e9").unwrap());
+		assert_eq!(short_id, ShortId::from_hex("933d5a52f535").unwrap());
 	}
 
 	#[test]

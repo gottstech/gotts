@@ -17,33 +17,34 @@
 
 pub mod common;
 
-use self::core::core::{Output, OutputFeatures};
+use self::core::core::{Output, OutputFeaturesEx};
 use self::core::libtx::proof;
 use self::core::ser;
 use self::keychain::{ExtKeychain, Keychain};
 use gotts_core as core;
 use gotts_keychain as keychain;
+use rand::{thread_rng, Rng};
 
 #[test]
 fn test_output_ser_deser() {
 	let keychain = ExtKeychain::from_random_seed(false).unwrap();
 	let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
-	let switch = &keychain::SwitchCommitmentType::Regular;
-	let commit = keychain.commit(5, &key_id, switch).unwrap();
+	let w: i64 = thread_rng().gen();
+	let commit = keychain.commit(w, &key_id).unwrap();
 	let builder = proof::ProofBuilder::new(&keychain);
-	let proof = proof::create(&keychain, &builder, 5, &key_id, switch, commit, None).unwrap();
+	let spath = proof::create_secured_path(&keychain, &builder, w, &key_id, commit);
 
 	let out = Output {
-		features: OutputFeatures::Plain,
-		commit: commit,
-		proof: proof,
+		features: OutputFeaturesEx::Plain { spath },
+		commit,
+		value: 5,
 	};
 
 	let mut vec = vec![];
 	ser::serialize_default(&mut vec, &out).expect("serialized failed");
 	let dout: Output = ser::deserialize_default(&mut &vec[..]).unwrap();
 
-	assert_eq!(dout.features, OutputFeatures::Plain);
+	assert_eq!(dout.features, out.features);
 	assert_eq!(dout.commit, out.commit);
-	assert_eq!(dout.proof, out.proof);
+	assert_eq!(dout.value, out.value);
 }

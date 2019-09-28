@@ -28,7 +28,7 @@ pub struct Error {
 }
 
 #[derive(Clone, Debug, Eq, Fail, PartialEq, Serialize, Deserialize)]
-/// Libwallet error types
+/// Lib tx error types
 pub enum ErrorKind {
 	/// SECP error
 	#[fail(display = "Secp Error")]
@@ -45,6 +45,9 @@ pub enum ErrorKind {
 	/// Rangeproof error
 	#[fail(display = "Rangeproof Error")]
 	RangeProof(String),
+	/// PathMessage error
+	#[fail(display = "PathMessage Error")]
+	PathMessage(String),
 }
 
 impl Fail for Error {

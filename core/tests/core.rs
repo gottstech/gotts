@@ -21,27 +21,28 @@ use self::core::core::block::BlockHeader;
 use self::core::core::block::Error::KernelLockHeight;
 use self::core::core::hash::{Hashed, ZERO_HASH};
 use self::core::core::verifier_cache::{LruVerifierCache, VerifierCache};
-use self::core::core::{aggregate, deaggregate, KernelFeatures, Output, Transaction, Weighting};
+use self::core::core::{aggregate, deaggregate, KernelFeatures, Transaction, Weighting};
 use self::core::libtx::build::{
 	self, initial_tx, input, output, with_excess, with_fee, with_lock_height,
 };
 use self::core::libtx::ProofBuilder;
 use self::core::ser;
 use self::keychain::{BlindingFactor, ExtKeychain, Keychain};
-use self::util::static_secp_instance;
 use self::util::RwLock;
 use crate::common::{new_block, tx1i1o, tx1i2o, tx2i1o};
 use gotts_core as core;
 use gotts_keychain as keychain;
 use gotts_util as util;
+use serde_json;
 use std::sync::Arc;
 
 #[test]
 fn simple_tx_ser() {
 	let tx = tx2i1o();
+	println!("tx = {}", serde_json::to_string_pretty(&tx).unwrap());
 	let mut vec = Vec::new();
 	ser::serialize_default(&mut vec, &tx).expect("serialization failed");
-	let target_len = 955;
+	let target_len = 308;
 	assert_eq!(vec.len(), target_len,);
 }
 
@@ -83,7 +84,10 @@ fn test_zero_commit_fails() {
 
 	// blinding should fail as signing with a zero r*G shouldn't work
 	build::transaction(
-		vec![input(10, key_id1.clone()), output(10, key_id1.clone())],
+		vec![
+			input(10, 0i64, key_id1.clone()),
+			output(10, Some(0i64), key_id1.clone()),
+		],
 		&keychain,
 		&builder,
 	)
@@ -105,9 +109,9 @@ fn build_tx_kernel() {
 	// first build a valid tx with corresponding blinding factor
 	let tx = build::transaction(
 		vec![
-			input(10, key_id1),
-			output(5, key_id2),
-			output(3, key_id3),
+			input(10, 0i64, key_id1),
+			output(5, Some(0i64), key_id2),
+			output(3, Some(0i64), key_id3),
 			with_fee(2),
 		],
 		&keychain,
@@ -358,9 +362,9 @@ fn hash_output() {
 
 	let tx = build::transaction(
 		vec![
-			input(75, key_id1),
-			output(42, key_id2),
-			output(32, key_id3),
+			input(75, 0i64, key_id1),
+			output(42, Some(0i64), key_id2),
+			output(32, Some(0i64), key_id3),
 			with_fee(1),
 		],
 		&keychain,
@@ -368,31 +372,17 @@ fn hash_output() {
 	)
 	.unwrap();
 	let h = tx.outputs()[0].hash();
-	assert!(h != ZERO_HASH);
+	assert_ne!(h, ZERO_HASH);
 	let h2 = tx.outputs()[1].hash();
-	assert!(h != h2);
+	assert_ne!(h, h2);
 }
 
-#[ignore]
 #[test]
 fn blind_tx() {
 	let btx = tx2i1o();
 	assert!(btx
 		.validate(Weighting::AsTransaction, verifier_cache())
 		.is_ok());
-
-	// Ignored for bullet proofs, because calling range_proof_info
-	// with a bullet proof causes painful errors
-
-	// checks that the range proof on our blind output is sufficiently hiding
-	let Output { proof, .. } = btx.outputs()[0];
-
-	let secp = static_secp_instance();
-	let secp = secp.lock();
-	let info = secp.range_proof_info(proof);
-
-	assert!(info.min == 0);
-	assert!(info.max == u64::max_value());
 }
 
 #[test]
@@ -419,12 +409,12 @@ fn tx_build_exchange() {
 	let (tx_alice, blind_sum) = {
 		// Alice gets 2 of her pre-existing outputs to send 5 coins to Bob, they
 		// become inputs in the new transaction
-		let (in1, in2) = (input(4, key_id1), input(3, key_id2));
+		let (in1, in2) = (input(4, 0i64, key_id1), input(3, 0i64, key_id2));
 
 		// Alice builds her transaction, with change, which also produces the sum
 		// of blinding factors before they're obscured.
 		let (tx, sum) = build::partial_transaction(
-			vec![in1, in2, output(1, key_id3), with_fee(2)],
+			vec![in1, in2, output(1, Some(0i64), key_id3), with_fee(2)],
 			&keychain,
 			&builder,
 		)
@@ -440,7 +430,7 @@ fn tx_build_exchange() {
 		vec![
 			initial_tx(tx_alice),
 			with_excess(blind_sum),
-			output(4, key_id4),
+			output(4, Some(0i64), key_id4),
 		],
 		&keychain,
 		&builder,
@@ -532,8 +522,8 @@ fn test_block_with_timelocked_tx() {
 	// block height and that the resulting block is valid
 	let tx1 = build::transaction(
 		vec![
-			input(5, key_id1.clone()),
-			output(3, key_id2.clone()),
+			input(5, 0i64, key_id1.clone()),
+			output(3, Some(0i64), key_id2.clone()),
 			with_fee(2),
 			with_lock_height(1),
 		],
@@ -557,8 +547,8 @@ fn test_block_with_timelocked_tx() {
 	// block height
 	let tx1 = build::transaction(
 		vec![
-			input(5, key_id1.clone()),
-			output(3, key_id2.clone()),
+			input(5, 0i64, key_id1.clone()),
+			output(3, Some(0i64), key_id2.clone()),
 			with_fee(2),
 			with_lock_height(2),
 		],

@@ -15,7 +15,7 @@
 
 use super::utils::{get_output, w};
 use crate::chain;
-use crate::core::core::{hash::Hashed, TxKernelApiEntry};
+use crate::core::core::{hash::Hashed, OutputEx, TxKernelApiEntry};
 use crate::rest::*;
 use crate::router::{Handler, ResponseFuture};
 use crate::types::*;
@@ -138,19 +138,19 @@ pub struct OutputHandler {
 }
 
 impl OutputHandler {
-	fn get_output(&self, id: &str) -> Result<Output, Error> {
+	fn get_output(&self, id: &str) -> Result<OutputEx, Error> {
 		let res = get_output(&self.chain, id)?;
 		Ok(res.0)
 	}
 
-	fn outputs_by_ids(&self, req: &Request<Body>) -> Result<Vec<Output>, Error> {
+	fn outputs_by_ids(&self, req: &Request<Body>) -> Result<Vec<OutputEx>, Error> {
 		let mut commitments: Vec<String> = vec![];
 
 		let query = must_get_query!(req);
 		let params = QueryParams::from(query);
 		params.process_multival_param("id", |id| commitments.push(id.to_owned()));
 
-		let mut outputs: Vec<Output> = vec![];
+		let mut outputs: Vec<OutputEx> = vec![];
 		for x in commitments {
 			match self.get_output(&x) {
 				Ok(output) => outputs.push(output),
@@ -168,7 +168,6 @@ impl OutputHandler {
 		&self,
 		block_height: u64,
 		commitments: Vec<Commitment>,
-		include_proof: bool,
 	) -> Result<BlockOutputs, Error> {
 		let header = w(&self.chain)?
 			.get_header_by_height(block_height)
@@ -184,15 +183,7 @@ impl OutputHandler {
 			.outputs()
 			.iter()
 			.filter(|output| commitments.is_empty() || commitments.contains(&output.commit))
-			.map(|output| {
-				OutputPrintable::from_output(
-					output,
-					chain.clone(),
-					Some(&header),
-					include_proof,
-					true,
-				)
-			})
+			.map(|output| OutputPrintable::from_output(output, chain.clone(), Some(&header), true))
 			.collect::<Result<Vec<_>, _>>()
 			.context(ErrorKind::Internal("cain error".to_owned()))?;
 
@@ -216,16 +207,15 @@ impl OutputHandler {
 		});
 		let start_height = parse_param!(params, "start_height", 1);
 		let end_height = parse_param!(params, "end_height", 1);
-		let include_rp = params.get("include_rp").is_some();
 
 		debug!(
-			"outputs_block_batch: {}-{}, {:?}, {:?}",
-			start_height, end_height, commitments, include_rp,
+			"outputs_block_batch: {}-{}, {:?}",
+			start_height, end_height, commitments,
 		);
 
 		let mut return_vec = vec![];
 		for i in (start_height..=end_height).rev() {
-			if let Ok(res) = self.outputs_at_height(i, commitments.clone(), include_rp) {
+			if let Ok(res) = self.outputs_at_height(i, commitments.clone()) {
 				if res.outputs.len() > 0 {
 					return_vec.push(res);
 				}

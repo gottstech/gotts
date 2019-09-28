@@ -59,7 +59,7 @@ fn test_unexpected_zip() {
 		File::create(
 			&Path::new(&db_root)
 				.join("txhashset")
-				.join("output")
+				.join("outputI")
 				.join("badfile"),
 		)
 		.expect("problem creating a file");
@@ -70,11 +70,9 @@ fn test_unexpected_zip() {
 			"kernel/pmmr_data.bin",
 			"kernel/pmmr_hash.bin",
 			"kernel/pmmr_size.bin",
-			"output/badfile",
-			"output/pmmr_data.bin",
-			"output/pmmr_hash.bin",
-			"rangeproof/pmmr_data.bin",
-			"rangeproof/pmmr_hash.bin",
+			"outputI/badfile",
+			"outputI/pmmr_data.bin",
+			"outputI/pmmr_hash.bin",
 		];
 		assert_eq!(
 			files,
@@ -98,10 +96,8 @@ fn test_unexpected_zip() {
 		let expected_files: Vec<_> = vec![
 			"kernel/pmmr_data.bin",
 			"kernel/pmmr_hash.bin",
-			"output/pmmr_data.bin",
-			"output/pmmr_hash.bin",
-			"rangeproof/pmmr_data.bin",
-			"rangeproof/pmmr_hash.bin",
+			"outputI/pmmr_data.bin",
+			"outputI/pmmr_hash.bin",
 		];
 		assert_eq!(
 			files,

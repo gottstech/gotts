@@ -76,7 +76,7 @@ pub trait Committed {
 			let mut commits = vec![kernel_sum];
 			if *offset != BlindingFactor::zero() {
 				let key = offset.secret_key(&secp)?;
-				let offset_commit = secp.commit(0, key)?;
+				let offset_commit = secp.commit_i(0i64, key)?;
 				commits.push(offset_commit);
 			}
 			secp.commit_sum(commits, vec![])?
@@ -86,26 +86,10 @@ pub trait Committed {
 	}
 
 	/// Gathers commitments and sum them.
-	fn sum_commitments(&self, overage: i64) -> Result<Commitment, Error> {
+	fn sum_commitments(&self) -> Result<Commitment, Error> {
 		// gather the commitments
-		let mut input_commits = self.inputs_committed();
-		let mut output_commits = self.outputs_committed();
-
-		// add the overage as output commitment if positive,
-		// or as an input commitment if negative
-		if overage != 0 {
-			let over_commit = {
-				let secp = static_secp_instance();
-				let secp = secp.lock();
-				let overage_abs = overage.checked_abs().ok_or_else(|| Error::InvalidValue)? as u64;
-				secp.commit_value(overage_abs).unwrap()
-			};
-			if overage < 0 {
-				input_commits.push(over_commit);
-			} else {
-				output_commits.push(over_commit);
-			}
-		}
+		let input_commits = self.inputs_committed();
+		let output_commits = self.outputs_i_committed();
 
 		sum_commits(output_commits, input_commits)
 	}
@@ -114,21 +98,19 @@ pub trait Committed {
 	fn inputs_committed(&self) -> Vec<Commitment>;
 
 	/// Vector of output commitments to verify.
-	fn outputs_committed(&self) -> Vec<Commitment>;
+	fn outputs_i_committed(&self) -> Vec<Commitment>;
 
 	/// Vector of kernel excesses to verify.
 	fn kernels_committed(&self) -> Vec<Commitment>;
 
 	/// Verify the sum of the kernel excesses equals the
-	/// sum of the outputs, taking into account both
-	/// the kernel_offset and overage.
+	/// sum of the outputs, taking into account the kernel_offset.
 	fn verify_kernel_sums(
 		&self,
-		overage: i64,
 		kernel_offset: BlindingFactor,
 	) -> Result<((Commitment, Commitment)), Error> {
 		// Sum all input|output|overage commitments.
-		let utxo_sum = self.sum_commitments(overage)?;
+		let utxo_sum = self.sum_commitments()?;
 
 		// Sum the kernel excesses accounting for the kernel offset.
 		let (kernel_sum, kernel_sum_plus_offset) = self.sum_kernel_excesses(&kernel_offset)?;

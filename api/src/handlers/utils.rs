@@ -14,9 +14,8 @@
 // limitations under the License.
 
 use crate::chain;
-use crate::core::core::{OutputFeatures, OutputIdentifier};
+use crate::core::core::{OutputEx, OutputFeatures, OutputIdentifier};
 use crate::rest::*;
-use crate::types::*;
 use crate::util;
 use crate::util::secp::pedersen::Commitment;
 use failure::ResultExt;
@@ -34,7 +33,7 @@ pub fn w<T>(weak: &Weak<T>) -> Result<Arc<T>, Error> {
 pub fn get_output(
 	chain: &Weak<chain::Chain>,
 	id: &str,
-) -> Result<(Output, OutputIdentifier), Error> {
+) -> Result<(OutputEx, OutputIdentifier), Error> {
 	let c = util::from_hex(String::from(id)).context(ErrorKind::Argument(format!(
 		"Not a valid commitment: {}",
 		id
@@ -56,10 +55,24 @@ pub fn get_output(
 		let res = chain.is_unspent(x);
 		match res {
 			Ok(output_pos) => {
-				return Ok((
-					Output::new(&commit, output_pos.height, output_pos.position),
-					x.clone(),
-				));
+				if let Some(out) = chain.unspent_output_by_position(output_pos.position) {
+					return Ok((
+						OutputEx {
+							output: out,
+							height: output_pos.height,
+							mmr_index: output_pos.position,
+						},
+						x.clone(),
+					));
+				} else {
+					error!(
+						"get_output: err: {} for commit: {:?} with feature: {:?}",
+						"corrupted storage? unspent output not found in pmmr backend.",
+						x.commit,
+						x.features
+					);
+					return Err(ErrorKind::NotFound)?;
+				}
 			}
 			Err(e) => {
 				trace!(

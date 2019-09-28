@@ -16,15 +16,12 @@
 //! Builds the blinded output and related signature proof for the block
 //! reward.
 use crate::consensus::reward;
-use crate::core::{KernelFeatures, Output, OutputFeatures, TxKernel};
+use crate::core::{KernelFeatures, Output, OutputFeaturesEx, TxKernel};
 use crate::keychain::{Identifier, Keychain};
+use crate::libtx::aggsig;
 use crate::libtx::error::Error;
-use crate::libtx::{
-	aggsig,
-	proof::{self, ProofBuild},
-};
+use crate::libtx::proof::{self, ProofBuild};
 use crate::util::{secp, static_secp_instance};
-use gotts_keychain::SwitchCommitmentType;
 
 /// output a reward output
 pub fn output<K, B>(
@@ -39,25 +36,23 @@ where
 	B: ProofBuild,
 {
 	let value = reward(fees);
-	// TODO: proper support for different switch commitment schemes
-	let switch = &SwitchCommitmentType::Regular;
-	let commit = keychain.commit(value, key_id, switch)?;
+	let w = 0i64;
+	let commit = keychain.commit(w, key_id)?;
 
 	trace!("Block reward - Pedersen Commit is: {:?}", commit,);
 
-	let rproof = proof::create(keychain, builder, value, key_id, switch, commit, None)?;
+	let spath = proof::create_secured_path(keychain, builder, w, &key_id, commit);
 
 	let output = Output {
-		features: OutputFeatures::Coinbase,
+		features: OutputFeaturesEx::Coinbase { spath },
 		commit,
-		proof: rproof,
+		value,
 	};
 
 	let secp = static_secp_instance();
 	let secp = secp.lock();
-	let over_commit = secp.commit_value(reward(fees))?;
 	let out_commit = output.commitment();
-	let excess = secp.commit_sum(vec![out_commit], vec![over_commit])?;
+	let excess = out_commit;
 	let pubkey = excess.to_pubkey(&secp)?;
 
 	let features = KernelFeatures::Coinbase;
@@ -69,15 +64,12 @@ where
 				&secp,
 				keychain,
 				&msg,
-				value,
 				&key_id,
 				Some(&test_nonce),
 				Some(&pubkey),
 			)?
 		}
-		false => {
-			aggsig::sign_from_key_id(&secp, keychain, &msg, value, &key_id, None, Some(&pubkey))?
-		}
+		false => aggsig::sign_from_key_id(&secp, keychain, &msg, &key_id, None, Some(&pubkey))?,
 	};
 
 	let proof = TxKernel {

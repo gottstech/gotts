@@ -31,6 +31,7 @@ use crate::ser::{
 	self, AsFixedBytes, Error, FixedLength, ProtocolVersion, Readable, Reader, Writeable, Writer,
 };
 use crate::util;
+use crate::zeroize::Zeroize;
 
 /// A hash consisting of all zeroes, used as a sentinel. No known preimage.
 pub const ZERO_HASH: Hash = Hash([0; 32]);
@@ -191,6 +192,12 @@ impl Default for Hash {
 	}
 }
 
+impl Zeroize for Hash {
+	fn zeroize(&mut self) {
+		self.0.copy_from_slice(ZERO_HASH.as_ref());
+	}
+}
+
 /// Serializer that outputs a hash of the serialized object
 pub struct HashWriter {
 	state: Blake2b,
@@ -260,6 +267,8 @@ impl<D: DefaultHashable, E: DefaultHashable, F: DefaultHashable> DefaultHashable
 
 /// Implement Hashed trait for external types here
 impl DefaultHashable for crate::util::secp::pedersen::RangeProof {}
+impl DefaultHashable for crate::util::secp::PublicKey {}
 impl DefaultHashable for Vec<u8> {}
 impl DefaultHashable for u8 {}
 impl DefaultHashable for u64 {}
+impl DefaultHashable for i64 {}

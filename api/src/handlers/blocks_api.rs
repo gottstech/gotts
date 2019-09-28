@@ -88,15 +88,10 @@ pub struct BlockHandler {
 }
 
 impl BlockHandler {
-	fn get_block(
-		&self,
-		h: &Hash,
-		include_proof: bool,
-		include_merkle_proof: bool,
-	) -> Result<BlockPrintable, Error> {
+	fn get_block(&self, h: &Hash, include_merkle_proof: bool) -> Result<BlockPrintable, Error> {
 		let chain = w(&self.chain)?;
 		let block = chain.get_block(h).context(ErrorKind::NotFound)?;
-		BlockPrintable::from_block(&block, chain, include_proof, include_merkle_proof)
+		BlockPrintable::from_block(&block, chain, include_merkle_proof)
 			.map_err(|_| ErrorKind::Internal("chain error".to_owned()).into())
 	}
 
@@ -147,7 +142,6 @@ impl Handler for BlockHandler {
 			Ok(h) => h,
 		};
 
-		let mut include_proof = false;
 		let mut include_merkle_proof = true;
 		if let Some(params) = req.uri().query() {
 			let query = url::form_urlencoded::parse(params.as_bytes());
@@ -156,7 +150,6 @@ impl Handler for BlockHandler {
 				match param.as_ref() {
 					"compact" => compact = true,
 					"no_merkle_proof" => include_merkle_proof = false,
-					"include_proof" => include_proof = true,
 					_ => {
 						return response(
 							StatusCode::BAD_REQUEST,
@@ -170,10 +163,6 @@ impl Handler for BlockHandler {
 				return result_with_cuckoo_solution_to_response(self.get_compact_block(&h));
 			}
 		}
-		result_with_cuckoo_solution_to_response(self.get_block(
-			&h,
-			include_proof,
-			include_merkle_proof,
-		))
+		result_with_cuckoo_solution_to_response(self.get_block(&h, include_merkle_proof))
 	}
 }

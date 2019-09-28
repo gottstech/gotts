@@ -26,13 +26,11 @@
 //! build::transaction(vec![input_rand(75), output_rand(42), output_rand(32),
 //!   with_fee(1)])
 
-use crate::core::{Input, Output, OutputFeatures, Transaction, TxKernel};
+use crate::core::{Input, Output, OutputFeatures, OutputFeaturesEx, Transaction, TxKernel};
 use crate::keychain::{BlindSum, BlindingFactor, Identifier, Keychain};
-use crate::libtx::proof::{self, ProofBuild};
-use crate::libtx::{aggsig, Error};
-use crate::util::Mutex;
-use gotts_keychain::SwitchCommitmentType;
-use std::sync::Arc;
+use crate::libtx::proof::ProofBuild;
+use crate::libtx::{aggsig, proof, Error};
+use rand::{thread_rng, Rng};
 
 /// Context information available to transaction combinators.
 pub struct Context<'a, K, B>
@@ -55,22 +53,24 @@ pub type Append<K, B> = dyn for<'a> Fn(
 
 /// Adds an input with the provided value and blinding key to the transaction
 /// being built.
-fn build_input<K, B>(value: u64, features: OutputFeatures, key_id: Identifier) -> Box<Append<K, B>>
+fn build_input<K, B>(
+	value: u64,
+	w: i64,
+	features: OutputFeatures,
+	key_id: Identifier,
+) -> Box<Append<K, B>>
 where
 	K: Keychain,
 	B: ProofBuild,
 {
 	Box::new(
 		move |build, (tx, kern, sum)| -> (Transaction, TxKernel, BlindSum) {
-			let commit = build
-				.keychain
-				.commit(value, &key_id, &SwitchCommitmentType::Regular)
-				.unwrap(); // TODO: proper support for different switch commitment schemes
+			let commit = build.keychain.commit(w, &key_id).unwrap();
 			let input = Input::new(features, commit);
 			(
 				tx.with_input(input),
 				kern,
-				sum.sub_key_id(key_id.to_value_path(value)),
+				sum.sub_key_id(key_id.to_value_path(value, w)),
 			)
 		},
 	)
@@ -78,7 +78,7 @@ where
 
 /// Adds an input with the provided value and blinding key to the transaction
 /// being built.
-pub fn input<K, B>(value: u64, key_id: Identifier) -> Box<Append<K, B>>
+pub fn input<K, B>(value: u64, w: i64, key_id: Identifier) -> Box<Append<K, B>>
 where
 	K: Keychain,
 	B: ProofBuild,
@@ -87,7 +87,7 @@ where
 		"Building input (spending regular output): {}, {}",
 		value, key_id
 	);
-	build_input(value, OutputFeatures::Plain, key_id)
+	build_input(value, w, OutputFeatures::Plain, key_id)
 }
 
 /// Adds a coinbase input spending a coinbase output.
@@ -97,116 +97,38 @@ where
 	B: ProofBuild,
 {
 	debug!("Building input (spending coinbase): {}, {}", value, key_id);
-	build_input(value, OutputFeatures::Coinbase, key_id)
+	build_input(value, 0i64, OutputFeatures::Coinbase, key_id)
 }
 
 /// Adds an output with the provided value and key identifier from the
 /// keychain.
-pub fn output<K, B>(value: u64, key_id: Identifier) -> Box<Append<K, B>>
+pub fn output<K, B>(value: u64, w: Option<i64>, key_id: Identifier) -> Box<Append<K, B>>
 where
 	K: Keychain,
 	B: ProofBuild,
 {
 	Box::new(
 		move |build, (tx, kern, sum)| -> (Transaction, TxKernel, BlindSum) {
-			// TODO: proper support for different switch commitment schemes
-			let switch = &SwitchCommitmentType::Regular;
-
-			let commit = build.keychain.commit(value, &key_id, switch).unwrap();
+			let w: i64 = if let Some(w) = w {
+				w
+			} else {
+				thread_rng().gen()
+			};
+			let commit = build.keychain.commit(w, &key_id).unwrap();
 
 			debug!("Building output: {}, {:?}", value, commit);
 
-			let rproof = proof::create(
-				build.keychain,
-				build.builder,
-				value,
-				&key_id,
-				switch,
-				commit,
-				None,
-			)
-			.unwrap();
+			let spath =
+				proof::create_secured_path(build.keychain, build.builder, w, &key_id, commit);
 
 			(
 				tx.with_output(Output {
-					features: OutputFeatures::Plain,
+					features: OutputFeaturesEx::Plain { spath },
 					commit,
-					proof: rproof,
+					value,
 				}),
 				kern,
-				sum.add_key_id(key_id.to_value_path(value)),
-			)
-		},
-	)
-}
-
-/// Adds multiple outputs with the provided value and key identifier from the
-/// keychain. Optimized by multiple threads.
-pub fn outputs<K, B>(amounts_and_keys: Vec<(u64, Identifier)>) -> Box<Append<K, B>>
-where
-	K: Keychain,
-	B: ProofBuild,
-{
-	const MAX_THREADS: usize = 3;
-	Box::new(
-		move |build, (tx, kern, sum)| -> (Transaction, TxKernel, BlindSum) {
-			let num_outputs = amounts_and_keys.len();
-			assert!(num_outputs > 0);
-
-			// Sum the blinding
-			let mut blind_sum = sum;
-			for (value, key_id) in &amounts_and_keys {
-				blind_sum = blind_sum.add_key_id(key_id.to_value_path(*value));
-			}
-
-			// Calculate how many threads needed.
-			let num_threads = if num_outputs < MAX_THREADS {
-				num_outputs
-			} else {
-				MAX_THREADS
-			};
-
-			// Split for threads
-			let chunk_size = std::cmp::max(1, (num_outputs + num_threads - 1) / num_threads);
-
-			// Collect all created outputs from worker threads
-			let outputs = Arc::new(Mutex::new(vec![]));
-			crossbeam::scope(|scope| {
-				for chunk in amounts_and_keys.chunks(chunk_size) {
-					let chunk = chunk.to_owned();
-
-					let keychain = build.keychain.clone();
-					let builder = build.builder.clone();
-					let outputs_arc = outputs.clone();
-					scope.spawn(move |_| {
-						for elem in chunk {
-							// TODO: proper support for different switch commitment schemes
-							let switch = &SwitchCommitmentType::Regular;
-							let commit = keychain.commit(elem.0, &elem.1, switch).unwrap();
-
-							debug!("Building output: {}, {:?}", elem.0, commit);
-
-							let rproof = proof::create(
-								&keychain, &builder, elem.0, &elem.1, switch, commit, None,
-							)
-							.unwrap();
-
-							let mut outputs = outputs_arc.lock();
-							outputs.push(Output {
-								features: OutputFeatures::Plain,
-								commit,
-								proof: rproof,
-							});
-						}
-					});
-				}
-			})
-			.expect("One of output building threads has panicked");
-
-			(
-				tx.with_outputs(outputs.clone().lock().to_vec()),
-				kern,
-				blind_sum,
+				sum.add_key_id(key_id.to_value_path(value, w)),
 			)
 		},
 	)
@@ -344,7 +266,7 @@ where
 
 	// Generate kernel excess and excess_sig using the split key k1.
 	let skey = k1.secret_key(&keychain.secp())?;
-	kern.excess = ctx.keychain.secp().commit(0, skey)?;
+	kern.excess = ctx.keychain.secp().commit_i(0i64, skey)?;
 	let pubkey = &kern.excess.to_pubkey(&keychain.secp())?;
 	kern.excess_sig =
 		aggsig::sign_with_blinding(&keychain.secp(), &msg, &k1, Some(&pubkey)).unwrap();
@@ -389,9 +311,9 @@ mod test {
 
 		let tx = transaction(
 			vec![
-				input(10, key_id1),
-				input(12, key_id2),
-				output(20, key_id3),
+				input(10, 0i64, key_id1),
+				input(12, 0i64, key_id2),
+				output(20, Some(0i64), key_id3),
 				with_fee(2),
 			],
 			&keychain,
@@ -414,9 +336,9 @@ mod test {
 
 		let tx = transaction(
 			vec![
-				input(10, key_id1),
-				input(12, key_id2),
-				output(20, key_id3),
+				input(10, 0i64, key_id1),
+				input(12, 0i64, key_id2),
+				output(20, Some(0i64), key_id3),
 				with_fee(2),
 			],
 			&keychain,
@@ -437,7 +359,11 @@ mod test {
 		let vc = verifier_cache();
 
 		let tx = transaction(
-			vec![input(6, key_id1), output(2, key_id2), with_fee(4)],
+			vec![
+				input(6, 0i64, key_id1),
+				output(2, Some(0i64), key_id2),
+				with_fee(4),
+			],
 			&keychain,
 			&builder,
 		)

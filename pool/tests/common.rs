@@ -71,14 +71,14 @@ impl ChainAdapter {
 
 		// Overage is based purely on the new block.
 		// Previous block_sums have taken all previous overage into account.
-		let overage = header.overage();
+		let _overage = header.overage();
 
 		// Offset on the other hand is the total kernel offset from the new block.
 		let offset = header.total_kernel_offset();
 
 		// Verify the kernel sums for the block_sums with the new block applied.
 		let (utxo_sum, kernel_sum) = (prev_sums, block as &dyn Committed)
-			.verify_kernel_sums(overage, offset)
+			.verify_kernel_sums(offset)
 			.unwrap();
 
 		let block_sums = BlockSums {
@@ -192,7 +192,8 @@ where
 
 	for output_value in output_values {
 		let key_id = ExtKeychain::derive_key_id(1, output_value as u32, 0, 0, 0);
-		tx_elements.push(libtx::build::output(output_value, key_id));
+		//todo: change the 0u64 here when secp library support i64 value.
+		tx_elements.push(libtx::build::output(output_value, Some(0i64), key_id));
 	}
 
 	tx_elements.push(libtx::build::with_fee(fees as u64));
@@ -218,12 +219,14 @@ where
 
 	for input_value in input_values {
 		let key_id = ExtKeychain::derive_key_id(1, input_value as u32, 0, 0, 0);
-		tx_elements.push(libtx::build::input(input_value, key_id));
+		//todo: change the 0u64 here when secp library support i64 value.
+		tx_elements.push(libtx::build::input(input_value, 0i64, key_id));
 	}
 
 	for output_value in output_values {
 		let key_id = ExtKeychain::derive_key_id(1, output_value as u32, 0, 0, 0);
-		tx_elements.push(libtx::build::output(output_value, key_id));
+		//todo: change the 0u64 here when secp library support i64 value.
+		tx_elements.push(libtx::build::output(output_value, Some(0i64), key_id));
 	}
 	tx_elements.push(libtx::build::with_fee(fees as u64));
 

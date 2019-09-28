@@ -1,6 +1,5 @@
 // Copyright 2018 The Grin Developers
 // Modifications Copyright 2019 The Gotts Developers
-// Modifications Copyright 2019 The Gotts Developers
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -84,13 +83,14 @@ fn main() {
 
 	// build the wallet seed and derive a coinbase from local wallet.seed
 	let seed = WalletSeed::from_file(
-		&WalletConfig::default(),
+		WalletConfig::default().data_file_dir.as_str(),
 		&rpassword::prompt_password_stdout("Password: ").unwrap(),
 	)
 	.unwrap();
 	let keychain: ExtKeychain = seed.derive_keychain(false).unwrap();
+	let builder = core::libtx::ProofBuilder::new(&keychain);
 	let key_id = ExtKeychain::derive_key_id(3, 1, 0, 0, 0);
-	let reward = core::libtx::reward::output(&keychain, &key_id, 0, false).unwrap();
+	let reward = core::libtx::reward::output(&keychain, &builder, &key_id, 0, false).unwrap();
 	gen = gen.with_reward(reward.0, reward.1);
 
 	{
@@ -151,7 +151,7 @@ fn main() {
 	.unwrap();
 
 	println!("\nFinal genesis cyclehash: {}", gen.hash().to_hex());
-	let gen_bin = core::ser::ser_vec(&gen).unwrap();
+	let gen_bin = core::ser::ser_vec(&gen, core::ser::ProtocolVersion(1)).unwrap();
 	println!("Final genesis full hash: {}\n", gen_bin.hash().to_hex());
 
 	update_genesis_rs(&gen);
@@ -237,8 +237,11 @@ fn update_genesis_rs(gen: &core::core::Block) {
 		),
 	));
 	replacements.push((
-		"proof".to_string(),
-		format!("{:?}", gen.outputs()[0].proof.bytes().to_vec()),
+		"spath".to_string(),
+		format!(
+			"SecuredPath::from_vec(util::from_hex({:x?}.to_string()).unwrap())",
+			util::to_hex(gen.outputs()[0].features.get_spath().unwrap().0.to_vec())
+		),
 	));
 
 	// check each possible replacement in the file, remove the replacement from
@@ -281,6 +284,7 @@ fn setup_chain(dir_name: &str, genesis: core::core::Block) -> chain::Chain {
 		genesis,
 		core::pow::verify_size,
 		verifier_cache,
+		false,
 		false,
 	)
 	.unwrap()

@@ -15,11 +15,23 @@
 
 //! Sane serialization & deserialization of cryptographic structs into hex
 
+use super::proof::SecuredPath;
 use crate::keychain::BlindingFactor;
 use crate::serde::{Deserialize, Deserializer, Serializer};
 use crate::util::to_hex;
 
-pub use crate::util::secp::{hex_to_key, option_sig_serde, pubkey_serde, sig_serde};
+pub use crate::util::secp::{hex_to_key, option_sig_serde, pubkey_serde, sig_serde, u8_to_hex};
+
+/// Creates a SecuredPath from a hex string
+pub fn securedpath_from_hex<'de, D>(deserializer: D) -> Result<SecuredPath, D::Error>
+where
+	D: Deserializer<'de>,
+{
+	use serde::de::Error;
+	String::deserialize(deserializer).and_then(|string| {
+		SecuredPath::from_hex(&string).map_err(|err| Error::custom(err.to_string()))
+	})
+}
 
 /// Creates a BlindingFactor from a hex string
 pub fn blind_from_hex<'de, D>(deserializer: D) -> Result<BlindingFactor, D::Error>
@@ -131,6 +143,48 @@ pub mod opt_string_or_u64 {
 			{
 				let val: u64 = s.parse().map_err(de::Error::custom)?;
 				Ok(Some(val))
+			}
+		}
+		deserializer.deserialize_any(Visitor)
+	}
+}
+
+/// As above, for i64
+pub mod string_or_i64 {
+	use serde::{de, Deserializer, Serializer};
+	use std::fmt;
+
+	/// serialize into a string
+	pub fn serialize<T, S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		T: fmt::Display,
+		S: Serializer,
+	{
+		serializer.collect_str(value)
+	}
+
+	/// deserialize from either literal or string
+	pub fn deserialize<'de, D>(deserializer: D) -> Result<i64, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		struct Visitor;
+		impl<'a> de::Visitor<'a> for Visitor {
+			type Value = i64;
+			fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+				write!(
+					formatter,
+					"a string containing digits or an int fitting into u64"
+				)
+			}
+			fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E> {
+				Ok(v)
+			}
+			fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
+			where
+				E: de::Error,
+			{
+				s.parse().map_err(de::Error::custom)
 			}
 		}
 		deserializer.deserialize_any(Visitor)

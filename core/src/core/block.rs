@@ -457,8 +457,8 @@ impl Committed for Block {
 		self.body.inputs_committed()
 	}
 
-	fn outputs_committed(&self) -> Vec<Commitment> {
-		self.body.outputs_committed()
+	fn outputs_i_committed(&self) -> Vec<Commitment> {
+		self.body.outputs_i_committed()
 	}
 
 	fn kernels_committed(&self) -> Vec<Commitment> {
@@ -713,10 +713,8 @@ impl Block {
 
 		// take the kernel offset for this block (block offset minus previous) and
 		// verify.body.outputs and kernel sums
-		let (_utxo_sum, kernel_sum) = self.verify_kernel_sums(
-			self.header.overage(),
-			self.block_kernel_offset(prev_kernel_offset.clone())?,
-		)?;
+		let (_utxo_sum, kernel_sum) =
+			self.verify_kernel_sums(self.block_kernel_offset(prev_kernel_offset.clone())?)?;
 
 		Ok(kernel_sum)
 	}
@@ -742,17 +740,28 @@ impl Block {
 		{
 			let secp = static_secp_instance();
 			let secp = secp.lock();
-			let over_commit = secp.commit_value(reward(self.total_fees()))?;
 
-			let out_adjust_sum =
-				secp.commit_sum(map_vec!(cb_outs, |x| x.commitment()), vec![over_commit])?;
+			let out_adjust_sum = secp
+				.commit_sum(map_vec!(cb_outs, |x| x.commitment()), vec![])
+				.map_err(|_| Error::CoinbaseSumMismatch)?;
 
-			let kerns_sum = secp.commit_sum(cb_kerns.iter().map(|x| x.excess).collect(), vec![])?;
+			let kerns_sum = secp
+				.commit_sum(cb_kerns.iter().map(|x| x.excess).collect(), vec![])
+				.map_err(|_| Error::CoinbaseSumMismatch)?;
 
 			// Verify the kernel sum equals the output sum accounting for block fees.
 			if kerns_sum != out_adjust_sum {
 				return Err(Error::CoinbaseSumMismatch);
 			}
+		}
+
+		// Verify the coinbase public value
+		let over_commit = reward(self.total_fees());
+		let amount: u64 = cb_outs
+			.iter()
+			.fold(0u64, |acc, x| acc.saturating_add(x.value));
+		if over_commit != amount {
+			return Err(Error::CoinbaseSumMismatch);
 		}
 
 		Ok(())

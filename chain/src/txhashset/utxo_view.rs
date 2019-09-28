@@ -17,7 +17,7 @@
 
 use crate::core::core::hash::{Hash, Hashed};
 use crate::core::core::pmmr::{self, ReadonlyPMMR};
-use crate::core::core::{Block, BlockHeader, Input, Output, Transaction};
+use crate::core::core::{Block, BlockHeader, Input, Output, OutputI, Transaction};
 use crate::core::global;
 use crate::core::ser::PMMRIndexHashable;
 use crate::error::{Error, ErrorKind};
@@ -26,7 +26,7 @@ use gotts_store::pmmr::PMMRBackend;
 
 /// Readonly view of the UTXO set (based on output MMR).
 pub struct UTXOView<'a> {
-	output_pmmr: ReadonlyPMMR<'a, Output, PMMRBackend<Output>>,
+	output_i_pmmr: ReadonlyPMMR<'a, OutputI, PMMRBackend<OutputI>>,
 	header_pmmr: ReadonlyPMMR<'a, BlockHeader, PMMRBackend<BlockHeader>>,
 	batch: &'a Batch<'a>,
 }
@@ -34,12 +34,12 @@ pub struct UTXOView<'a> {
 impl<'a> UTXOView<'a> {
 	/// Build a new UTXO view.
 	pub fn new(
-		output_pmmr: ReadonlyPMMR<'a, Output, PMMRBackend<Output>>,
+		output_i_pmmr: ReadonlyPMMR<'a, OutputI, PMMRBackend<OutputI>>,
 		header_pmmr: ReadonlyPMMR<'a, BlockHeader, PMMRBackend<BlockHeader>>,
 		batch: &'a Batch<'_>,
 	) -> UTXOView<'a> {
 		UTXOView {
-			output_pmmr,
+			output_i_pmmr,
 			header_pmmr,
 			batch,
 		}
@@ -63,24 +63,57 @@ impl<'a> UTXOView<'a> {
 	/// Every input must spend an output that currently exists in the UTXO set.
 	/// No duplicate outputs.
 	pub fn validate_tx(&self, tx: &Transaction) -> Result<(), Error> {
+		let mut sum = 0i64;
+
 		for output in tx.outputs() {
 			self.validate_output(output)?;
+			sum = sum.saturating_sub(output.value as i64);
 		}
 
 		for input in tx.inputs() {
-			self.validate_input(input)?;
+			let input_value = self.validate_input(input)?;
+			sum = sum.saturating_add(input_value as i64);
 		}
+
+		if sum != tx.overage() {
+			return Err(ErrorKind::TransactionSumMismatch)?;
+		}
+
 		Ok(())
+	}
+
+	/// Given a vector of Input, return the corresponding Outputs full bodies.
+	pub fn inputs_body(&self, inputs: &Vec<Input>) -> Result<Vec<Output>, Error> {
+		let mut outputs: Vec<Output> = Vec::with_capacity(inputs.len());
+		for input in inputs {
+			if let Ok(pos) = self.batch.get_output_pos(&input.commitment()) {
+				if let Some(output) = self.output_i_pmmr.get_data(pos) {
+					if output.id.commit == input.commit {
+						outputs.push(output.into_output());
+						continue;
+					}
+				}
+			}
+			return Err(ErrorKind::AlreadySpent(input.commitment()).into());
+		}
+		Ok(outputs)
 	}
 
 	// Input is valid if it is spending an (unspent) output
 	// that currently exists in the output MMR.
 	// Compare the hash in the output MMR at the expected pos.
-	fn validate_input(&self, input: &Input) -> Result<(), Error> {
+	fn validate_input(&self, input: &Input) -> Result<u64, Error> {
 		if let Ok(pos) = self.batch.get_output_pos(&input.commitment()) {
-			if let Some(hash) = self.output_pmmr.get_hash(pos) {
-				if hash == input.hash_with_index(pos - 1) {
-					return Ok(());
+			if let Some(hash) = self.output_i_pmmr.get_hash(pos) {
+				if let Some(output) = self.output_i_pmmr.get_data(pos) {
+					if hash == output.hash_with_index(pos - 1) && output.id.commit == input.commit {
+						return Ok(output.value);
+					}
+				} else {
+					error!(
+						"validate_input: corrupted storage? pmmr hash and data mismatch at pos: {}",
+						pos
+					);
 				}
 			}
 		}
@@ -90,8 +123,8 @@ impl<'a> UTXOView<'a> {
 	// Output is valid if it would not result in a duplicate commitment in the output MMR.
 	fn validate_output(&self, output: &Output) -> Result<(), Error> {
 		if let Ok(pos) = self.batch.get_output_pos(&output.commitment()) {
-			if let Some(out_mmr) = self.output_pmmr.get_data(pos) {
-				if out_mmr.commitment() == output.commitment() {
+			if let Some(out_mmr) = self.output_i_pmmr.get_data(pos) {
+				if out_mmr.id.commitment() == output.commitment() {
 					return Err(ErrorKind::DuplicateCommitment(output.commitment()).into());
 				}
 			}

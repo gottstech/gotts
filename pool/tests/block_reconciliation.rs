@@ -68,7 +68,7 @@ fn test_transaction_pool_block_reconciliation() {
 		// Now create tx to spend that first coinbase (now matured).
 		// Provides us with some useful outputs to test with.
 		let initial_tx =
-			test_transaction_spending_coinbase(&keychain, &header, vec![10, 20, 30, 40]);
+			test_transaction_spending_coinbase(&keychain, &header, vec![1000, 2000, 3000, 4000]);
 
 		let block = {
 			let key_id = ExtKeychain::derive_key_id(1, 2, 0, 0, 0);
@@ -100,34 +100,34 @@ fn test_transaction_pool_block_reconciliation() {
 		// 2. A transaction that should be invalidated because the input is
 		//  consumed in the block, although it is not exactly consumed.
 		// 3. A transaction that should remain after block reconciliation.
-		let block_transaction = test_transaction(&keychain, vec![10], vec![8]);
-		let conflict_transaction = test_transaction(&keychain, vec![20], vec![12, 6]);
-		let valid_transaction = test_transaction(&keychain, vec![30], vec![13, 15]);
+		let block_transaction = test_transaction(&keychain, vec![1000], vec![800]);
+		let conflict_transaction = test_transaction(&keychain, vec![2000], vec![1200, 600]);
+		let valid_transaction = test_transaction(&keychain, vec![3000], vec![1300, 1500]);
 
 		// We will also introduce a few children:
 		// 4. A transaction that descends from transaction 1, that is in
 		//  turn exactly contained in the block.
-		let block_child = test_transaction(&keychain, vec![8], vec![5, 1]);
+		let block_child = test_transaction(&keychain, vec![800], vec![500, 100]);
 		// 5. A transaction that descends from transaction 4, that is not
 		//  contained in the block at all and should be valid after
 		//  reconciliation.
-		let pool_child = test_transaction(&keychain, vec![5], vec![3]);
+		let pool_child = test_transaction(&keychain, vec![500], vec![300]);
 		// 6. A transaction that descends from transaction 2 that does not
 		//  conflict with anything in the block in any way, but should be
 		//  invalidated (orphaned).
-		let conflict_child = test_transaction(&keychain, vec![12], vec![2]);
+		let conflict_child = test_transaction(&keychain, vec![1200], vec![200]);
 		// 7. A transaction that descends from transaction 2 that should be
 		//  valid due to its inputs being satisfied by the block.
-		let conflict_valid_child = test_transaction(&keychain, vec![6], vec![4]);
+		let conflict_valid_child = test_transaction(&keychain, vec![600], vec![400]);
 		// 8. A transaction that descends from transaction 3 that should be
 		//  invalidated due to an output conflict.
-		let valid_child_conflict = test_transaction(&keychain, vec![13], vec![9]);
+		let valid_child_conflict = test_transaction(&keychain, vec![1300], vec![900]);
 		// 9. A transaction that descends from transaction 3 that should remain
 		//  valid after reconciliation.
-		let valid_child_valid = test_transaction(&keychain, vec![15], vec![11]);
+		let valid_child_valid = test_transaction(&keychain, vec![1500], vec![1100]);
 		// 10. A transaction that descends from both transaction 6 and
 		//  transaction 9
-		let mixed_child = test_transaction(&keychain, vec![2, 11], vec![7]);
+		let mixed_child = test_transaction(&keychain, vec![200, 1100], vec![700]);
 
 		let txs_to_add = vec![
 			block_transaction,
@@ -160,13 +160,13 @@ fn test_transaction_pool_block_reconciliation() {
 		// Now we prepare the block that will cause the above conditions to be met.
 		// First, the transactions we want in the block:
 		// - Copy of 1
-		let block_tx_1 = test_transaction(&keychain, vec![10], vec![8]);
+		let block_tx_1 = test_transaction(&keychain, vec![1000], vec![800]);
 		// - Conflict w/ 2, satisfies 7
-		let block_tx_2 = test_transaction(&keychain, vec![20], vec![6]);
+		let block_tx_2 = test_transaction(&keychain, vec![2000], vec![600]);
 		// - Copy of 4
-		let block_tx_3 = test_transaction(&keychain, vec![8], vec![5, 1]);
+		let block_tx_3 = test_transaction(&keychain, vec![800], vec![500, 100]);
 		// - Output conflict w/ 8
-		let block_tx_4 = test_transaction(&keychain, vec![40], vec![9, 31]);
+		let block_tx_4 = test_transaction(&keychain, vec![4000], vec![900, 3100]);
 
 		let block_txs = vec![block_tx_1, block_tx_2, block_tx_3, block_tx_4];
 

@@ -102,6 +102,12 @@ pub enum ErrorKind {
 	/// output spent
 	#[fail(display = "Output is spent")]
 	OutputSpent,
+	/// Block public value sums do not match.
+	#[fail(display = "Block sum mismatch")]
+	BlockSumMismatch,
+	/// Transaction public value sums do not match.
+	#[fail(display = "Transaction sum mismatch")]
+	TransactionSumMismatch,
 	/// Invalid block version, either a mistake or outdated software
 	#[fail(display = "Invalid Block Version: {:?}", _0)]
 	InvalidBlockVersion(block::HeaderVersion),

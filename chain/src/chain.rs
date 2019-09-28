@@ -20,8 +20,8 @@ use crate::core::core::hash::{Hash, Hashed, ZERO_HASH};
 use crate::core::core::merkle_proof::MerkleProof;
 use crate::core::core::verifier_cache::VerifierCache;
 use crate::core::core::{
-	Block, BlockHeader, BlockSums, Committed, Output, OutputIdentifier, Transaction, TxKernel,
-	TxKernelApiEntry, TxKernelEntry,
+	Block, BlockHeader, BlockSums, Committed, Output, OutputI, OutputIdentifier, Transaction,
+	TxKernel, TxKernelApiEntry, TxKernelEntry,
 };
 use crate::core::global;
 use crate::core::pow;
@@ -35,7 +35,7 @@ use crate::types::{
 	BlockStatus, ChainAdapter, NoStatus, Options, OutputMMRPosition, Tip, TxHashSetRoots,
 	TxHashsetWriteStatus,
 };
-use crate::util::secp::pedersen::{Commitment, RangeProof};
+use crate::util::secp::pedersen::Commitment;
 use crate::util::RwLock;
 use gotts_store::Error::NotFoundErr;
 use std::collections::HashMap;
@@ -577,8 +577,10 @@ impl Chain {
 
 		let (prev_root, roots, sizes) =
 			txhashset::extending_readonly(&mut header_pmmr, &mut txhashset, |ext| {
-				let previous_header = ext.batch().get_previous_header(&b.header)?;
-				pipe::rewind_and_apply_fork(&previous_header, ext)?;
+				if b.header.height > 0 {
+					let previous_header = ext.batch().get_previous_header(&b.header)?;
+					pipe::rewind_and_apply_fork(&previous_header, ext)?;
+				}
 
 				let ref mut extension = ext.extension;
 				let ref mut header_extension = ext.header_extension;
@@ -596,14 +598,14 @@ impl Chain {
 		b.header.prev_root = prev_root;
 
 		// Set the output, rangeproof and kernel MMR roots.
-		b.header.output_root = roots.output_root;
-		b.header.range_proof_root = roots.rproof_root;
+		b.header.output_root = roots.output_i_root;
+		b.header.range_proof_root = ZERO_HASH;
 		b.header.kernel_root = roots.kernel_root;
 
 		// Set the output and kernel MMR sizes.
 		{
 			// Carefully destructure these correctly...
-			let (output_mmr_size, _, kernel_mmr_size) = sizes;
+			let (output_mmr_size, kernel_mmr_size) = sizes;
 			b.header.output_mmr_size = output_mmr_size;
 			b.header.kernel_mmr_size = kernel_mmr_size;
 		}
@@ -631,9 +633,12 @@ impl Chain {
 
 	/// Return a merkle proof valid for the current output pmmr state at the
 	/// given output commitment
-	pub fn get_merkle_proof_for_output(&self, commit: Commitment) -> Result<MerkleProof, Error> {
+	pub fn get_merkle_proof_for_output(
+		&self,
+		output: &OutputIdentifier,
+	) -> Result<MerkleProof, Error> {
 		let mut txhashset = self.txhashset.write();
-		txhashset.merkle_proof(commit)
+		txhashset.merkle_proof(output)
 	}
 
 	/// Returns current txhashset roots.
@@ -1135,13 +1140,8 @@ impl Chain {
 	}
 
 	/// returns the last n nodes inserted into the output sum tree
-	pub fn get_last_n_output(&self, distance: u64) -> Vec<(Hash, OutputIdentifier)> {
-		self.txhashset.read().last_n_output(distance)
-	}
-
-	/// as above, for rangeproofs
-	pub fn get_last_n_rangeproof(&self, distance: u64) -> Vec<(Hash, RangeProof)> {
-		self.txhashset.read().last_n_rangeproof(distance)
+	pub fn get_last_n_output_i(&self, distance: u64) -> Vec<(Hash, OutputI)> {
+		self.txhashset.read().last_n_output_i(distance)
 	}
 
 	/// as above, for kernels
@@ -1161,24 +1161,23 @@ impl Chain {
 		max: u64,
 	) -> Result<(u64, u64, Vec<Output>), Error> {
 		let txhashset = self.txhashset.read();
-		let max_index = txhashset.highest_output_insertion_index();
-		let outputs = txhashset.outputs_by_insertion_index(start_index, max);
-		let rangeproofs = txhashset.rangeproofs_by_insertion_index(start_index, max);
-		if outputs.0 != rangeproofs.0 || outputs.1.len() != rangeproofs.1.len() {
-			return Err(ErrorKind::TxHashSetErr(String::from(
-				"Output and rangeproof sets don't match",
-			))
-			.into());
-		}
+		let max_index = txhashset.highest_output_i_insertion_index();
+		let outputs = txhashset.outputs_i_by_insertion_index(start_index, max);
 		let mut output_vec: Vec<Output> = vec![];
-		for (ref x, &y) in outputs.1.iter().zip(rangeproofs.1.iter()) {
-			output_vec.push(Output {
-				commit: x.commit,
-				features: x.features,
-				proof: y,
-			});
+		for x in outputs.1 {
+			output_vec.push(x.into_output());
 		}
 		Ok((outputs.0, max_index, output_vec))
+	}
+
+	/// output by mmr position
+	pub fn unspent_output_by_position(&self, position: u64) -> Option<Output> {
+		let txhashset = self.txhashset.read();
+		if let Some(out) = txhashset.output_i_by_position(position) {
+			Some(out.into_output())
+		} else {
+			None
+		}
 	}
 
 	/// Orphans pool size
@@ -1601,10 +1600,8 @@ fn setup_head(
 			batch.save_header_head(&tip)?;
 
 			if genesis.kernels().len() > 0 {
-				let (utxo_sum, kernel_sum) = (sums, genesis as &dyn Committed).verify_kernel_sums(
-					genesis.header.overage(),
-					genesis.header.total_kernel_offset(),
-				)?;
+				let (utxo_sum, kernel_sum) = (sums, genesis as &dyn Committed)
+					.verify_kernel_sums(genesis.header.total_kernel_offset())?;
 				sums = BlockSums {
 					utxo_sum,
 					kernel_sum,

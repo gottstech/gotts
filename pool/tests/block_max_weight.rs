@@ -77,7 +77,7 @@ fn test_block_building_max_weight() {
 		// Now create tx to spend that first coinbase (now matured).
 		// Provides us with some useful outputs to test with.
 		let initial_tx =
-			test_transaction_spending_coinbase(&keychain, &header, vec![100, 200, 300]);
+			test_transaction_spending_coinbase(&keychain, &header, vec![1000, 2000, 3000]);
 
 		// Mine that initial tx so we can spend it with multiple txs
 		let block = add_block(header, vec![initial_tx], &mut chain);
@@ -89,17 +89,17 @@ fn test_block_building_max_weight() {
 		// Build some dependent txs to add to the txpool.
 		// We will build a block from a subset of these.
 		let txs = vec![
-			test_transaction(&keychain, vec![100], vec![90, 1]),
-			test_transaction(&keychain, vec![90], vec![80, 2]),
-			test_transaction(&keychain, vec![200], vec![199]),
-			test_transaction(&keychain, vec![300], vec![290, 3]),
-			test_transaction(&keychain, vec![290], vec![280, 4]),
+			test_transaction(&keychain, vec![1000], vec![900, 10]),
+			test_transaction(&keychain, vec![900], vec![800, 20]),
+			test_transaction(&keychain, vec![2000], vec![1990]),
+			test_transaction(&keychain, vec![3000], vec![2900, 30]),
+			test_transaction(&keychain, vec![2900], vec![2800, 40]),
 		];
 
 		// Fees and weights of our original txs in insert order.
 		assert_eq!(
 			txs.iter().map(|x| x.fee()).collect::<Vec<_>>(),
-			[9, 8, 1, 7, 6]
+			[90, 80, 10, 70, 60]
 		);
 		assert_eq!(
 			txs.iter().map(|x| x.tx_weight()).collect::<Vec<_>>(),
@@ -107,7 +107,7 @@ fn test_block_building_max_weight() {
 		);
 		assert_eq!(
 			txs.iter().map(|x| x.fee_to_weight()).collect::<Vec<_>>(),
-			[1125, 1000, 250, 875, 750]
+			[11250, 10000, 2500, 8750, 7500]
 		);
 
 		// Populate our txpool with the txs.
@@ -129,14 +129,17 @@ fn test_block_building_max_weight() {
 		let txs = pool.read().prepare_mineable_transactions().unwrap();
 
 		// Fees and weights of the "mineable" txs.
-		assert_eq!(txs.iter().map(|x| x.fee()).collect::<Vec<_>>(), [9, 8, 7]);
+		assert_eq!(
+			txs.iter().map(|x| x.fee()).collect::<Vec<_>>(),
+			[90, 80, 70]
+		);
 		assert_eq!(
 			txs.iter().map(|x| x.tx_weight()).collect::<Vec<_>>(),
 			[8, 8, 8]
 		);
 		assert_eq!(
 			txs.iter().map(|x| x.fee_to_weight()).collect::<Vec<_>>(),
-			[1125, 1000, 875]
+			[11250, 10000, 8750]
 		);
 
 		let block = add_block(header, txs, &mut chain);

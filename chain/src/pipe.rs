@@ -136,7 +136,8 @@ pub fn process_block(b: &Block, ctx: &mut BlockContext<'_>) -> Result<Option<Tip
 		// accounting for inputs/outputs/kernels in this new block.
 		// We know there are no double-spends etc. if this verifies successfully.
 		// Remember to save these to the db later on (regardless of extension rollback)
-		let block_sums = verify_block_sums(b, ext.batch())?;
+		let previous_block_sums = { ext.batch().get_block_sums(&b.header.prev_hash)? };
+		let block_sums = verify_block_sums(b, previous_block_sums, ext)?;
 
 		// Apply the block to the txhashset state.
 		// Validate the txhashset roots and sizes against the block header.
@@ -425,20 +426,37 @@ fn verify_coinbase_maturity(
 
 /// Verify kernel sums across the full utxo and kernel sets based on block_sums
 /// of previous block accounting for the inputs|outputs|kernels of the new block.
-fn verify_block_sums(b: &Block, batch: &store::Batch<'_>) -> Result<BlockSums, Error> {
-	// Retrieve the block_sums for the previous block.
-	let block_sums = batch.get_block_sums(&b.header.prev_hash)?;
+fn verify_block_sums(
+	b: &Block,
+	previous_block_sums: BlockSums,
+	ext: &txhashset::ExtensionPair<'_>,
+) -> Result<BlockSums, Error> {
+	let ref extension = ext.extension;
+	let ref header_extension = ext.header_extension;
+	let inputs_body = extension
+		.utxo_view(header_extension)
+		.inputs_body(b.inputs())?;
 
 	// Overage is based purely on the new block.
 	// Previous block_sums have taken all previous overage into account.
 	let overage = b.header.overage();
+	let mut sum: i64 = b
+		.outputs()
+		.iter()
+		.fold(0i64, |acc, x| acc.saturating_add(x.value as i64));
+	sum = inputs_body
+		.iter()
+		.fold(sum, |acc, x| acc.saturating_sub(x.value as i64));
+	if sum + overage != 0 {
+		return Err(ErrorKind::BlockSumMismatch)?;
+	}
 
 	// Offset on the other hand is the total kernel offset from the new block.
 	let offset = b.header.total_kernel_offset();
 
 	// Verify the kernel sums for the block_sums with the new block applied.
 	let (utxo_sum, kernel_sum) =
-		(block_sums, b as &dyn Committed).verify_kernel_sums(overage, offset)?;
+		(previous_block_sums, b as &dyn Committed).verify_kernel_sums(offset)?;
 
 	Ok(BlockSums {
 		utxo_sum,
@@ -600,7 +618,8 @@ pub fn rewind_and_apply_fork(
 		// Validate the block against the UTXO set.
 		validate_utxo(&fb, ext)?;
 		// Re-verify block_sums to set the block_sums up on this fork correctly.
-		verify_block_sums(&fb, batch)?;
+		let previous_block_sums = { ext.batch().get_block_sums(&fb.header.prev_hash)? };
+		verify_block_sums(&fb, previous_block_sums, ext)?;
 		// Re-apply the blocks.
 		apply_block_to_txhashset(&fb, ext)?;
 	}
