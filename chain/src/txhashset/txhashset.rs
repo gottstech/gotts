@@ -212,11 +212,6 @@ impl TxHashSet {
 		Ok(self.commit_index.get_block_header(&hash)?)
 	}
 
-	/// Get all outputs MMR pos
-	pub fn get_all_output_pos(&self) -> Result<Vec<(Commitment, u64)>, Error> {
-		Ok(self.commit_index.get_all_output_pos()?)
-	}
-
 	/// returns outputs from the given insertion (leaf) index up to the
 	/// specified limit. Also returns the last index actually populated
 	pub fn outputs_i_by_insertion_index(
@@ -333,7 +328,7 @@ impl TxHashSet {
 
 	/// Rebuild the index of block height & MMR positions to the corresponding UTXOs.
 	/// This is a costly operation performed only when we receive a full new chain state.
-	/// Note: only called by compact.
+	/// Note: only called by compact and txhashset_write.
 	pub fn rebuild_height_pos_index(
 		&self,
 		header_pmmr: &PMMRHandle<BlockHeader>,
@@ -376,7 +371,13 @@ impl TxHashSet {
 					// Note: MMR position is 1-based and not 0-based, so here must be '>' instead of '>='
 					break;
 				}
-				batch.save_output_pos_height(&commit, pos, h.height)?;
+				let height = if pos == 1 {
+					// Special care about the unspent Genesis output
+					0
+				} else {
+					h.height
+				};
+				batch.save_output_pos_height(&commit, pos, height)?;
 				trace!("rebuild_height_pos_index: {:?}", (commit, pos, h.height));
 				i += 1;
 			}

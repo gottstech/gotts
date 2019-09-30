@@ -34,7 +34,6 @@ const HEAD_PREFIX: u8 = 'H' as u8;
 const TAIL_PREFIX: u8 = 'T' as u8;
 const HEADER_HEAD_PREFIX: u8 = 'I' as u8;
 const SYNC_HEAD_PREFIX: u8 = 's' as u8;
-const COMMIT_POS_PREFIX: u8 = 'c' as u8;
 const COMMIT_POS_HGT_PREFIX: u8 = 'p' as u8;
 const TXKERNEL_POS_PREFIX: u8 = 'k' as u8;
 const BLOCK_INPUT_BITMAP_PREFIX: u8 = 'B' as u8;
@@ -116,16 +115,6 @@ impl ChainStore {
 				.get_ser(&to_key(BLOCK_HEADER_PREFIX, &mut h.to_vec())),
 			|| format!("BLOCK HEADER: {}", h),
 		)
-	}
-
-	/// Get all outputs PMMR pos. (only for migration purpose)
-	pub fn get_all_output_pos(&self) -> Result<Vec<(Commitment, u64)>, Error> {
-		let mut outputs_pos = Vec::new();
-		let key = to_key(COMMIT_POS_PREFIX, &mut "".to_string().into_bytes());
-		for (k, pos) in self.db.iter::<u64>(&key)? {
-			outputs_pos.push((Commitment::from_vec(k[2..].to_vec()), pos));
-		}
-		Ok(outputs_pos)
 	}
 
 	/// Get PMMR pos for the given output commitment.
@@ -337,15 +326,6 @@ impl<'a> Batch<'a> {
 			)),
 			|| format!("Output position for commit: {:?}", commit),
 		)
-	}
-
-	/// Clear all entries from the output_pos index. (only for migration purpose)
-	pub fn clear_output_pos(&self) -> Result<(), Error> {
-		let key = to_key(COMMIT_POS_PREFIX, &mut "".to_string().into_bytes());
-		for (k, _) in self.db.iter::<u64>(&key)? {
-			self.db.delete(&k)?;
-		}
-		Ok(())
 	}
 
 	/// Clear all entries from the (output_pos,height) index (must be rebuilt after).

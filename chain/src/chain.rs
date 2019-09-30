@@ -1270,57 +1270,6 @@ impl Chain {
 		Ok(tx_kernel_api_entry)
 	}
 
-	/// Migrate the index 'commitment -> output_pos' to index 'commitment -> (output_pos, block_height)'
-	/// Note: should only be called when Node start-up, for database migration from the old version.
-	pub fn rebuild_height_for_pos(&self) -> Result<(), Error> {
-		let header_pmmr = self.header_pmmr.read();
-		let txhashset = self.txhashset.read();
-		let mut outputs_pos = txhashset.get_all_output_pos()?;
-		let total_outputs = outputs_pos.len();
-		if total_outputs == 0 {
-			debug!("rebuild_height_for_pos: nothing to be rebuilt");
-			return Ok(());
-		} else {
-			debug!(
-				"rebuild_height_for_pos: rebuilding {} output_pos's height...",
-				total_outputs
-			);
-		}
-		outputs_pos.sort_by(|a, b| a.1.cmp(&b.1));
-
-		let max_height = {
-			let head = self.head()?;
-			head.height
-		};
-
-		let batch = self.store.batch()?;
-		// clear it before rebuilding
-		batch.clear_output_pos_height()?;
-
-		let mut i = 0;
-		for search_height in 0..max_height {
-			let hash = header_pmmr.get_header_hash_by_height(search_height + 1)?;
-			let h = batch.get_block_header(&hash)?;
-			while i < total_outputs {
-				let (commit, pos) = outputs_pos[i];
-				if pos > h.output_mmr_size {
-					// Note: MMR position is 1-based and not 0-based, so here must be '>' instead of '>='
-					break;
-				}
-				batch.save_output_pos_height(&commit, pos, h.height)?;
-				trace!("rebuild_height_for_pos: {:?}", (commit, pos, h.height));
-				i += 1;
-			}
-		}
-
-		// clear the output_pos since now it has been replaced by the new index
-		batch.clear_output_pos()?;
-
-		batch.commit()?;
-		debug!("rebuild_height_for_pos: done");
-		Ok(())
-	}
-
 	/// Build a tx kernel MMR position index.
 	/// Note:
 	///   * this function should only be called when node start-up
@@ -1388,6 +1337,17 @@ impl Chain {
 			pos - start_pos,
 			pos - 1,
 		);
+		Ok(())
+	}
+
+	/// Init the Genesis Output Pos/Height Index.
+	pub fn init_genesis_height_pos_index(&self) -> Result<(), Error> {
+		let txhashset = self.txhashset.read();
+		if let Some(out) = txhashset.output_i_by_position(1) {
+			let batch = self.store.batch()?;
+			batch.save_output_pos_height(&out.id.commit, 1, 0)?;
+			batch.commit()?;
+		}
 		Ok(())
 	}
 
