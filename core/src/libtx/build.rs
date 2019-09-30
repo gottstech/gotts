@@ -175,19 +175,6 @@ where
 	)
 }
 
-/// Sets a known tx "offset". Used in final step of tx construction.
-pub fn with_offset<K, B>(offset: BlindingFactor) -> Box<Append<K, B>>
-where
-	K: Keychain,
-	B: ProofBuild,
-{
-	Box::new(
-		move |_build, (tx, kern, sum)| -> (Transaction, TxKernel, BlindSum) {
-			(tx.with_offset(offset.clone()), kern, sum)
-		},
-	)
-}
-
 /// Sets an initial transaction to add to when building a new transaction.
 /// We currently only support building a tx with a single kernel with
 /// build::transaction()
@@ -250,30 +237,21 @@ where
 	B: ProofBuild,
 {
 	let mut ctx = Context { keychain, builder };
-	let (mut tx, mut kern, sum) = elems.iter().fold(
+	let (tx, mut kern, sum) = elems.iter().fold(
 		(Transaction::empty(), TxKernel::empty(), BlindSum::new()),
 		|acc, elem| elem(&mut ctx, acc),
 	);
 	let blind_sum = ctx.keychain.blind_sum(&sum)?;
 
-	// Split the key so we can generate an offset for the tx.
-	let split = blind_sum.split(&keychain.secp())?;
-	let k1 = split.blind_1;
-	let k2 = split.blind_2;
-
 	// Construct the message to be signed.
 	let msg = kern.msg_to_sign()?;
 
 	// Generate kernel excess and excess_sig using the split key k1.
-	let skey = k1.secret_key(&keychain.secp())?;
+	let skey = blind_sum.secret_key(&keychain.secp())?;
 	kern.excess = ctx.keychain.secp().commit_i(0i64, skey)?;
 	let pubkey = &kern.excess.to_pubkey(&keychain.secp())?;
 	kern.excess_sig =
-		aggsig::sign_with_blinding(&keychain.secp(), &msg, &k1, Some(&pubkey)).unwrap();
-
-	// Store the kernel offset (k2) on the tx.
-	// Commitments will sum correctly when accounting for the offset.
-	tx.offset = k2.clone();
+		aggsig::sign_with_blinding(&keychain.secp(), &msg, &blind_sum, Some(&pubkey)).unwrap();
 
 	// Set the kernel on the tx (assert this is now a single-kernel tx).
 	assert!(tx.kernels().is_empty());

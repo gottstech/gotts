@@ -212,9 +212,9 @@ impl p2p::ChainAdapter for NetToChainAdapter {
 				}
 			};
 
-			if let Ok(prev) = self.chain().get_previous_header(&cb.header) {
+			if let Ok(_prev) = self.chain().get_previous_header(&cb.header) {
 				if block
-					.validate(&prev.total_kernel_offset, self.verifier_cache.clone())
+					.validate(self.verifier_cache.clone())
 					.is_ok()
 				{
 					debug!("successfully hydrated block from tx pool!");

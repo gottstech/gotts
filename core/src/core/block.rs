@@ -569,11 +569,8 @@ impl Block {
 			.with_output(reward_out)
 			.with_kernel(reward_kern);
 
-		// Now add the kernel offset of the previous block for a total
-		let total_kernel_offset = committed::sum_kernel_offsets(
-			vec![agg_tx.offset.clone(), prev.total_kernel_offset.clone()],
-			vec![],
-		)?;
+		// todo: to be removed
+		let total_kernel_offset = BlindingFactor::zero();
 
 		let height = prev.height + 1;
 
@@ -681,29 +678,11 @@ impl Block {
 		Ok(())
 	}
 
-	fn block_kernel_offset(
-		&self,
-		prev_kernel_offset: BlindingFactor,
-	) -> Result<BlindingFactor, Error> {
-		let offset = if self.header.total_kernel_offset() == prev_kernel_offset {
-			// special case when the sum hasn't changed (typically an empty block),
-			// zero isn't a valid private key but it's a valid blinding factor
-			BlindingFactor::zero()
-		} else {
-			committed::sum_kernel_offsets(
-				vec![self.header.total_kernel_offset()],
-				vec![prev_kernel_offset],
-			)?
-		};
-		Ok(offset)
-	}
-
 	/// Validates all the elements in a block that can be checked without
 	/// additional data. Includes commitment sums and kernels, Merkle
 	/// trees, reward, etc.
 	pub fn validate(
 		&self,
-		prev_kernel_offset: &BlindingFactor,
 		verifier: Arc<RwLock<dyn VerifierCache>>,
 	) -> Result<Commitment, Error> {
 		self.body.validate(Weighting::AsBlock, verifier)?;
@@ -713,8 +692,7 @@ impl Block {
 
 		// take the kernel offset for this block (block offset minus previous) and
 		// verify.body.outputs and kernel sums
-		let (_utxo_sum, kernel_sum) =
-			self.verify_kernel_sums(self.block_kernel_offset(prev_kernel_offset.clone())?)?;
+		let (_utxo_sum, kernel_sum) = self.verify_kernel_sums()?;
 
 		Ok(kernel_sum)
 	}

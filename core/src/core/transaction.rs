@@ -19,7 +19,7 @@ use crate::blake2::blake2b::blake2b;
 use crate::core::hash::{DefaultHashable, Hash, Hashed};
 use crate::core::verifier_cache::VerifierCache;
 use crate::core::{committed, Committed};
-use crate::keychain::{self, BlindingFactor};
+use crate::keychain::{self};
 use crate::libtx::proof::{
 	OutputLocker, PathMessage, SecuredPath, OUTPUT_LOCKER_SIZE, SECURED_PATH_SIZE,
 };
@@ -930,13 +930,6 @@ impl TransactionBody {
 /// A transaction
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Transaction {
-	/// The kernel "offset" k2
-	/// excess is k1G after splitting the key k = k1 + k2
-	#[serde(
-		serialize_with = "secp_ser::as_hex",
-		deserialize_with = "secp_ser::blind_from_hex"
-	)]
-	pub offset: BlindingFactor,
 	/// The transaction body - inputs/outputs/kernels
 	pub body: TransactionBody,
 }
@@ -946,7 +939,7 @@ impl DefaultHashable for Transaction {}
 /// PartialEq
 impl PartialEq for Transaction {
 	fn eq(&self, tx: &Transaction) -> bool {
-		self.body == tx.body && self.offset == tx.offset
+		self.body == tx.body
 	}
 }
 
@@ -960,7 +953,6 @@ impl Into<TransactionBody> for Transaction {
 /// write the transaction as binary.
 impl Writeable for Transaction {
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
-		self.offset.write(writer)?;
 		self.body.write(writer)?;
 		Ok(())
 	}
@@ -970,9 +962,8 @@ impl Writeable for Transaction {
 /// transaction from a binary stream.
 impl Readable for Transaction {
 	fn read(reader: &mut dyn Reader) -> Result<Transaction, ser::Error> {
-		let offset = BlindingFactor::read(reader)?;
 		let body = TransactionBody::read(reader)?;
-		let tx = Transaction { offset, body };
+		let tx = Transaction { body };
 
 		// Now "lightweight" validation of the tx.
 		// Treat any validation issues as data corruption.
@@ -1008,7 +999,6 @@ impl Transaction {
 	/// Creates a new empty transaction (no inputs or outputs, zero fee).
 	pub fn empty() -> Transaction {
 		Transaction {
-			offset: BlindingFactor::zero(),
 			body: Default::default(),
 		}
 	}
@@ -1016,19 +1006,11 @@ impl Transaction {
 	/// Creates a new transaction initialized with
 	/// the provided inputs, outputs, kernels
 	pub fn new(inputs: Vec<Input>, outputs: Vec<Output>, kernels: Vec<TxKernel>) -> Transaction {
-		let offset = BlindingFactor::zero();
-
 		// Initialize a new tx body and sort everything.
 		let body =
 			TransactionBody::init(inputs, outputs, kernels, false).expect("sorting, not verifying");
 
-		Transaction { offset, body }
-	}
-
-	/// Creates a new transaction using this transaction as a template
-	/// and with the specified offset.
-	pub fn with_offset(self, offset: BlindingFactor) -> Transaction {
-		Transaction { offset, ..self }
+		Transaction { body }
 	}
 
 	/// Builds a new transaction with the provided inputs added. Existing
@@ -1144,7 +1126,7 @@ impl Transaction {
 		// if sum != overage {
 		//     return Err(ErrorKind::KernelSumMismatch)?;
 		// }
-		self.verify_kernel_sums(self.offset.clone())?;
+		self.verify_kernel_sums()?;
 		Ok(())
 	}
 
@@ -1231,13 +1213,7 @@ pub fn aggregate(mut txs: Vec<Transaction>) -> Result<Transaction, Error> {
 	let mut outputs: Vec<Output> = Vec::with_capacity(n_outputs);
 	let mut kernels: Vec<TxKernel> = Vec::with_capacity(n_kernels);
 
-	// we will sum these together at the end to give us the overall offset for the
-	// transaction
-	let mut kernel_offsets: Vec<BlindingFactor> = Vec::with_capacity(txs.len());
 	for mut tx in txs {
-		// we will sum these later to give a single aggregate offset
-		kernel_offsets.push(tx.offset);
-
 		inputs.append(&mut tx.body.inputs);
 		outputs.append(&mut tx.body.outputs);
 		kernels.append(&mut tx.body.kernels);
@@ -1249,16 +1225,11 @@ pub fn aggregate(mut txs: Vec<Transaction>) -> Result<Transaction, Error> {
 	// Now sort kernels.
 	kernels.sort_unstable();
 
-	// now sum the kernel_offsets up to give us an aggregate offset for the
-	// transaction
-	let total_kernel_offset = committed::sum_kernel_offsets(kernel_offsets, vec![])?;
-
 	// build a new aggregate tx from the following -
 	//   * cut-through inputs
 	//   * cut-through outputs
 	//   * full set of tx kernels
-	//   * sum of all kernel offsets
-	let tx = Transaction::new(inputs, outputs, kernels).with_offset(total_kernel_offset);
+	let tx = Transaction::new(inputs, outputs, kernels);
 
 	Ok(tx)
 }
@@ -1269,10 +1240,6 @@ pub fn deaggregate(mk_tx: Transaction, txs: Vec<Transaction>) -> Result<Transact
 	let mut inputs: Vec<Input> = vec![];
 	let mut outputs: Vec<Output> = vec![];
 	let mut kernels: Vec<TxKernel> = vec![];
-
-	// we will subtract these at the end to give us the overall offset for the
-	// transaction
-	let mut kernel_offsets = vec![];
 
 	let tx = aggregate(txs)?;
 
@@ -1292,38 +1259,13 @@ pub fn deaggregate(mk_tx: Transaction, txs: Vec<Transaction>) -> Result<Transact
 		}
 	}
 
-	kernel_offsets.push(tx.offset);
-
-	// now compute the total kernel offset
-	let total_kernel_offset = {
-		let secp = static_secp_instance();
-		let secp = secp.lock();
-		let positive_key = vec![mk_tx.offset]
-			.into_iter()
-			.filter(|x| *x != BlindingFactor::zero())
-			.filter_map(|x| x.secret_key(&secp).ok())
-			.collect::<Vec<_>>();
-		let negative_keys = kernel_offsets
-			.into_iter()
-			.filter(|x| *x != BlindingFactor::zero())
-			.filter_map(|x| x.secret_key(&secp).ok())
-			.collect::<Vec<_>>();
-
-		if positive_key.is_empty() && negative_keys.is_empty() {
-			BlindingFactor::zero()
-		} else {
-			let sum = secp.blind_sum(positive_key, negative_keys)?;
-			BlindingFactor::from_secret_key(sum)
-		}
-	};
-
 	// Sorting them lexicographically
 	inputs.sort_unstable();
 	outputs.sort_unstable();
 	kernels.sort_unstable();
 
 	// Build a new tx from the above data.
-	let tx = Transaction::new(inputs, outputs, kernels).with_offset(total_kernel_offset);
+	let tx = Transaction::new(inputs, outputs, kernels);
 	Ok(tx)
 }
 

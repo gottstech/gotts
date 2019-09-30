@@ -28,7 +28,7 @@ use crate::core::core::{
 use crate::core::libtx::build::{self, input, output, with_fee};
 use crate::core::libtx::ProofBuilder;
 use crate::core::{global, ser};
-use crate::keychain::{BlindingFactor, ExtKeychain, Keychain};
+use crate::keychain::{ExtKeychain, Keychain};
 use crate::util::RwLock;
 use chrono::Duration;
 use gotts_core as core;
@@ -68,7 +68,7 @@ fn too_large_block() {
 	let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 	let b = new_block(vec![&tx], &keychain, &builder, &prev, &key_id);
 	assert!(b
-		.validate(&BlindingFactor::zero(), verifier_cache())
+		.validate(verifier_cache())
 		.is_err());
 }
 
@@ -117,7 +117,7 @@ fn block_with_cut_through() {
 
 	// block should have been automatically compacted (including reward
 	// output) and should still be valid
-	b.validate(&BlindingFactor::zero(), verifier_cache())
+	b.validate(verifier_cache())
 		.unwrap();
 	assert_eq!(b.inputs().len(), 3);
 	assert_eq!(b.outputs().len(), 3);
@@ -154,7 +154,7 @@ fn empty_block_with_coinbase_is_valid() {
 	// the block should be valid here (single coinbase output with corresponding
 	// txn kernel)
 	assert!(b
-		.validate(&BlindingFactor::zero(), verifier_cache())
+		.validate(verifier_cache())
 		.is_ok());
 }
 
@@ -175,9 +175,9 @@ fn remove_coinbase_output_flag() {
 	};
 
 	assert_eq!(b.verify_coinbase(), Err(Error::CoinbaseSumMismatch));
-	assert!(b.verify_kernel_sums(b.header.total_kernel_offset()).is_ok());
+	assert!(b.verify_kernel_sums().is_ok());
 	assert_eq!(
-		b.validate(&BlindingFactor::zero(), verifier_cache()),
+		b.validate(verifier_cache()),
 		Err(Error::CoinbaseSumMismatch)
 	);
 }
@@ -201,7 +201,7 @@ fn remove_coinbase_kernel_flag() {
 	// Also results in the block no longer validating correctly
 	// because the message being signed on each tx kernel includes the kernel features.
 	assert_eq!(
-		b.validate(&BlindingFactor::zero(), verifier_cache()),
+		b.validate(verifier_cache()),
 		Err(Error::Transaction(transaction::Error::IncorrectSignature))
 	);
 }

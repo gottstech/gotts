@@ -405,9 +405,9 @@ fn validate_header(header: &BlockHeader, ctx: &mut BlockContext<'_>) -> Result<(
 }
 
 fn validate_block(block: &Block, ctx: &mut BlockContext<'_>) -> Result<(), Error> {
-	let prev = ctx.batch.get_previous_header(&block.header)?;
+	let _prev = ctx.batch.get_previous_header(&block.header)?;
 	block
-		.validate(&prev.total_kernel_offset, ctx.verifier_cache.clone())
+		.validate(ctx.verifier_cache.clone())
 		.map_err(|e| ErrorKind::InvalidBlockProof(e))?;
 	Ok(())
 }
@@ -451,12 +451,9 @@ fn verify_block_sums(
 		return Err(ErrorKind::BlockSumMismatch)?;
 	}
 
-	// Offset on the other hand is the total kernel offset from the new block.
-	let offset = b.header.total_kernel_offset();
-
 	// Verify the kernel sums for the block_sums with the new block applied.
 	let (utxo_sum, kernel_sum) =
-		(previous_block_sums, b as &dyn Committed).verify_kernel_sums(offset)?;
+		(previous_block_sums, b as &dyn Committed).verify_kernel_sums()?;
 
 	Ok(BlockSums {
 		utxo_sum,

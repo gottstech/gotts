@@ -58,31 +58,14 @@ impl From<keychain::Error> for Error {
 /// summing, taking potential explicit overages of fees into account.
 pub trait Committed {
 	/// Gather the kernel excesses and sum them.
-	fn sum_kernel_excesses(
-		&self,
-		offset: &BlindingFactor,
-	) -> Result<(Commitment, Commitment), Error> {
+	fn sum_kernel_excesses(&self) -> Result<Commitment, Error> {
 		// then gather the kernel excess commitments
 		let kernel_commits = self.kernels_committed();
 
 		// sum the commitments
 		let kernel_sum = sum_commits(kernel_commits, vec![])?;
 
-		// sum the commitments along with the
-		// commit to zero built from the offset
-		let kernel_sum_plus_offset = {
-			let secp = static_secp_instance();
-			let secp = secp.lock();
-			let mut commits = vec![kernel_sum];
-			if *offset != BlindingFactor::zero() {
-				let key = offset.secret_key(&secp)?;
-				let offset_commit = secp.commit_i(0i64, key)?;
-				commits.push(offset_commit);
-			}
-			secp.commit_sum(commits, vec![])?
-		};
-
-		Ok((kernel_sum, kernel_sum_plus_offset))
+		Ok(kernel_sum)
 	}
 
 	/// Gathers commitments and sum them.
@@ -105,17 +88,14 @@ pub trait Committed {
 
 	/// Verify the sum of the kernel excesses equals the
 	/// sum of the outputs, taking into account the kernel_offset.
-	fn verify_kernel_sums(
-		&self,
-		kernel_offset: BlindingFactor,
-	) -> Result<((Commitment, Commitment)), Error> {
+	fn verify_kernel_sums(&self) -> Result<((Commitment, Commitment)), Error> {
 		// Sum all input|output|overage commitments.
 		let utxo_sum = self.sum_commitments()?;
 
 		// Sum the kernel excesses accounting for the kernel offset.
-		let (kernel_sum, kernel_sum_plus_offset) = self.sum_kernel_excesses(&kernel_offset)?;
+		let kernel_sum = self.sum_kernel_excesses()?;
 
-		if utxo_sum != kernel_sum_plus_offset {
+		if utxo_sum != kernel_sum {
 			return Err(Error::KernelSumMismatch);
 		}
 
