@@ -284,8 +284,6 @@ pub struct BlockHeaderPrintable {
 	pub total_difficulty: u64,
 	/// Variable difficulty scaling factor for secondary proof of work
 	pub secondary_scaling: u32,
-	/// Total kernel offset since genesis block
-	pub total_kernel_offset: String,
 }
 
 impl BlockHeaderPrintable {
@@ -305,7 +303,6 @@ impl BlockHeaderPrintable {
 			cuckoo_solution: header.pow.proof.nonces.clone(),
 			total_difficulty: header.pow.total_difficulty.to_num(),
 			secondary_scaling: header.pow.secondary_scaling,
-			total_kernel_offset: header.total_kernel_offset.to_hex(),
 		}
 	}
 }
