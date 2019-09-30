@@ -274,8 +274,7 @@ impl Pool {
 
 		// Verify the kernel sums for the block_sums with the new tx applied,
 		// accounting for overage and offset.
-		let (utxo_sum, kernel_sum) =
-			(block_sums, tx as &dyn Committed).verify_kernel_sums()?;
+		let (utxo_sum, kernel_sum) = (block_sums, tx as &dyn Committed).verify_kernel_sums()?;
 
 		Ok(BlockSums {
 			utxo_sum,

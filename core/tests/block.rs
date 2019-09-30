@@ -67,9 +67,7 @@ fn too_large_block() {
 	let prev = BlockHeader::default();
 	let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 	let b = new_block(vec![&tx], &keychain, &builder, &prev, &key_id);
-	assert!(b
-		.validate(verifier_cache())
-		.is_err());
+	assert!(b.validate(verifier_cache()).is_err());
 }
 
 #[test]
@@ -117,8 +115,7 @@ fn block_with_cut_through() {
 
 	// block should have been automatically compacted (including reward
 	// output) and should still be valid
-	b.validate(verifier_cache())
-		.unwrap();
+	b.validate(verifier_cache()).unwrap();
 	assert_eq!(b.inputs().len(), 3);
 	assert_eq!(b.outputs().len(), 3);
 }
@@ -153,9 +150,7 @@ fn empty_block_with_coinbase_is_valid() {
 
 	// the block should be valid here (single coinbase output with corresponding
 	// txn kernel)
-	assert!(b
-		.validate(verifier_cache())
-		.is_ok());
+	assert!(b.validate(verifier_cache()).is_ok());
 }
 
 #[test]

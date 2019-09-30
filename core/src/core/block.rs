@@ -681,10 +681,7 @@ impl Block {
 	/// Validates all the elements in a block that can be checked without
 	/// additional data. Includes commitment sums and kernels, Merkle
 	/// trees, reward, etc.
-	pub fn validate(
-		&self,
-		verifier: Arc<RwLock<dyn VerifierCache>>,
-	) -> Result<Commitment, Error> {
+	pub fn validate(&self, verifier: Arc<RwLock<dyn VerifierCache>>) -> Result<Commitment, Error> {
 		self.body.validate(Weighting::AsBlock, verifier)?;
 
 		self.verify_kernel_lock_heights()?;

@@ -96,7 +96,8 @@ fn test_zero_commit_fails() {
 		],
 		&keychain,
 		&builder,
-	).is_err());
+	)
+	.is_err());
 }
 
 fn verifier_cache() -> Arc<RwLock<dyn VerifierCache>> {
@@ -457,10 +458,7 @@ fn reward_empty_block() {
 
 	let b = new_block(vec![], &keychain, &builder, &previous_header, &key_id);
 
-	b.cut_through()
-		.unwrap()
-		.validate(verifier_cache())
-		.unwrap();
+	b.cut_through().unwrap().validate(verifier_cache()).unwrap();
 }
 
 #[test]
@@ -483,11 +481,7 @@ fn reward_with_tx_block() {
 		&previous_header,
 		&key_id,
 	);
-	block
-		.cut_through()
-		.unwrap()
-		.validate(vc.clone())
-		.unwrap();
+	block.cut_through().unwrap().validate(vc.clone()).unwrap();
 }
 
 #[test]
