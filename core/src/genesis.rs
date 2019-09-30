@@ -31,7 +31,6 @@ use crate::util::secp::pedersen::Commitment;
 use crate::util::secp::Signature;
 
 use crate::core::hash::Hash;
-use crate::keychain::BlindingFactor;
 
 /// Genesis block definition for development networks. The proof of work size
 /// is small enough to mine it on the fly, so it does not contain its own
@@ -67,10 +66,6 @@ pub fn genesis_floo() -> core::Block {
 		.unwrap(),
 		kernel_root: Hash::from_hex(
 			"72d28ce7d3f09e28f8c668ea823eeb90829af76872e9295f0374307b1747746b",
-		)
-		.unwrap(),
-		total_kernel_offset: BlindingFactor::from_hex(
-			"0000000000000000000000000000000000000000000000000000000000000000",
 		)
 		.unwrap(),
 		output_mmr_size: 1,
@@ -138,7 +133,6 @@ pub fn genesis_main() -> core::Block {
 		output_root: Hash::default(),                      // REPLACE
 		range_proof_root: Hash::default(),                 // REPLACE
 		kernel_root: Hash::default(),                      // REPLACE
-		total_kernel_offset: BlindingFactor::zero(),       // REPLACE
 		output_mmr_size: 1,
 		kernel_mmr_size: 1,
 		pow: ProofOfWork {
@@ -185,7 +179,7 @@ mod test {
 		);
 		assert_eq!(
 			gen_bin.hash().to_hex(),
-			"b50d74014c8315d115101bf1490d02fef1cbdda26b728758aa9187ccd4c618cf"
+			"676df90213f00f29a81a365f8a1235f0c4957b4a6c79845bf5668d7f0c840d1f"
 		);
 	}
 
@@ -201,7 +195,7 @@ mod test {
 		);
 		assert_eq!(
 			gen_bin.hash().to_hex(),
-			"83cadf68794eb38fe195bd780b08e9b9cd5ff15d9f24aaf71d7b432622167d9a"
+			"80ccaa1536bb2b0080886f8a79bc45a3eb9e43619f20b0223a4fd7ab1d0d6ff6"
 		);
 	}
 }

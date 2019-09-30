@@ -34,7 +34,7 @@ use crate::core::{
 };
 
 use crate::global;
-use crate::keychain::{self, BlindingFactor};
+use crate::keychain::{self};
 use crate::pow::{Difficulty, Proof, ProofOfWork};
 use crate::ser::{self, FixedLength, PMMRable, Readable, Reader, Writeable, Writer};
 use crate::util::{secp, static_secp_instance};
@@ -233,10 +233,6 @@ pub struct BlockHeader {
 	pub range_proof_root: Hash,
 	/// Merklish root of all transaction kernels in the TxHashSet
 	pub kernel_root: Hash,
-	/// Total accumulated sum of kernel offsets since genesis block.
-	/// We can derive the kernel offset sum for *this* block from
-	/// the total kernel offset of the previous block header.
-	pub total_kernel_offset: BlindingFactor,
 	/// Total size of the output MMR after applying this block
 	pub output_mmr_size: u64,
 	/// Total size of the kernel MMR after applying this block
@@ -257,7 +253,6 @@ impl Default for BlockHeader {
 			output_root: ZERO_HASH,
 			range_proof_root: ZERO_HASH,
 			kernel_root: ZERO_HASH,
-			total_kernel_offset: BlindingFactor::zero(),
 			output_mmr_size: 0,
 			kernel_mmr_size: 0,
 			pow: ProofOfWork::default(),
@@ -300,7 +295,6 @@ impl Readable for BlockHeader {
 		let output_root = Hash::read(reader)?;
 		let range_proof_root = Hash::read(reader)?;
 		let kernel_root = Hash::read(reader)?;
-		let total_kernel_offset = BlindingFactor::read(reader)?;
 		let (output_mmr_size, kernel_mmr_size) = ser_multiread!(reader, read_u64, read_u64);
 		let pow = ProofOfWork::read(reader)?;
 
@@ -327,7 +321,6 @@ impl Readable for BlockHeader {
 			output_root,
 			range_proof_root,
 			kernel_root,
-			total_kernel_offset,
 			output_mmr_size,
 			kernel_mmr_size,
 			pow,
@@ -348,7 +341,6 @@ impl BlockHeader {
 			[write_fixed_bytes, &self.output_root],
 			[write_fixed_bytes, &self.range_proof_root],
 			[write_fixed_bytes, &self.kernel_root],
-			[write_fixed_bytes, &self.total_kernel_offset],
 			[write_u64, self.output_mmr_size],
 			[write_u64, self.kernel_mmr_size]
 		);
@@ -390,11 +382,6 @@ impl BlockHeader {
 		}
 
 		((reward_count * REWARD) as i64).checked_neg().unwrap_or(0)
-	}
-
-	/// Total kernel offset for the chain state up to and including this block.
-	pub fn total_kernel_offset(&self) -> BlindingFactor {
-		self.total_kernel_offset.clone()
 	}
 }
 
@@ -569,9 +556,6 @@ impl Block {
 			.with_output(reward_out)
 			.with_kernel(reward_kern);
 
-		// todo: to be removed
-		let total_kernel_offset = BlindingFactor::zero();
-
 		let height = prev.height + 1;
 
 		let mut version = prev.version;
@@ -591,7 +575,6 @@ impl Block {
 				height,
 				timestamp,
 				prev_hash: prev.hash(),
-				total_kernel_offset,
 				pow: ProofOfWork {
 					total_difficulty: difficulty + prev.pow.total_difficulty,
 					..Default::default()
