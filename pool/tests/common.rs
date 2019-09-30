@@ -73,12 +73,9 @@ impl ChainAdapter {
 		// Previous block_sums have taken all previous overage into account.
 		let _overage = header.overage();
 
-		// Offset on the other hand is the total kernel offset from the new block.
-		let offset = header.total_kernel_offset();
-
 		// Verify the kernel sums for the block_sums with the new block applied.
 		let (utxo_sum, kernel_sum) = (prev_sums, block as &dyn Committed)
-			.verify_kernel_sums(offset)
+			.verify_kernel_sums()
 			.unwrap();
 
 		let block_sums = BlockSums {

@@ -269,14 +269,12 @@ impl Pool {
 		header: &BlockHeader,
 	) -> Result<BlockSums, PoolError> {
 		let _overage = tx.overage();
-		let offset = (header.total_kernel_offset() + tx.offset.clone())?;
 
 		let block_sums = self.blockchain.get_block_sums(&header.hash())?;
 
 		// Verify the kernel sums for the block_sums with the new tx applied,
 		// accounting for overage and offset.
-		let (utxo_sum, kernel_sum) =
-			(block_sums, tx as &dyn Committed).verify_kernel_sums(offset)?;
+		let (utxo_sum, kernel_sum) = (block_sums, tx as &dyn Committed).verify_kernel_sums()?;
 
 		Ok(BlockSums {
 			utxo_sum,

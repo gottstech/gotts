@@ -27,7 +27,7 @@ use self::core::libtx::build::{
 };
 use self::core::libtx::ProofBuilder;
 use self::core::ser;
-use self::keychain::{BlindingFactor, ExtKeychain, Keychain};
+use self::keychain::{ExtKeychain, Keychain};
 use self::util::RwLock;
 use crate::common::{new_block, tx1i1o, tx1i2o, tx2i1o};
 use gotts_core as core;
@@ -39,10 +39,17 @@ use std::sync::Arc;
 #[test]
 fn simple_tx_ser() {
 	let tx = tx2i1o();
+	let mut vec = Vec::new();
+	ser::serialize_default(&mut vec, &tx).expect("serialization failed");
+	let target_len = 276;
+	assert_eq!(vec.len(), target_len,);
+
+	let tx = tx1i2o();
 	println!("tx = {}", serde_json::to_string_pretty(&tx).unwrap());
 	let mut vec = Vec::new();
 	ser::serialize_default(&mut vec, &tx).expect("serialization failed");
-	let target_len = 308;
+	let target_len = 312;
+	println!("tx vec = {:02x?}", vec);
 	assert_eq!(vec.len(), target_len,);
 }
 
@@ -76,14 +83,13 @@ fn tx_double_ser_deser() {
 }
 
 #[test]
-#[should_panic(expected = "Keychain Error")]
 fn test_zero_commit_fails() {
 	let keychain = ExtKeychain::from_random_seed(false).unwrap();
 	let builder = ProofBuilder::new(&keychain);
 	let key_id1 = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 
 	// blinding should fail as signing with a zero r*G shouldn't work
-	build::transaction(
+	assert!(build::transaction(
 		vec![
 			input(10, 0i64, key_id1.clone()),
 			output(10, Some(0i64), key_id1.clone()),
@@ -91,7 +97,7 @@ fn test_zero_commit_fails() {
 		&keychain,
 		&builder,
 	)
-	.unwrap();
+	.is_err());
 }
 
 fn verifier_cache() -> Arc<RwLock<dyn VerifierCache>> {
@@ -452,10 +458,7 @@ fn reward_empty_block() {
 
 	let b = new_block(vec![], &keychain, &builder, &previous_header, &key_id);
 
-	b.cut_through()
-		.unwrap()
-		.validate(&BlindingFactor::zero(), verifier_cache())
-		.unwrap();
+	b.cut_through().unwrap().validate(verifier_cache()).unwrap();
 }
 
 #[test]
@@ -478,11 +481,7 @@ fn reward_with_tx_block() {
 		&previous_header,
 		&key_id,
 	);
-	block
-		.cut_through()
-		.unwrap()
-		.validate(&BlindingFactor::zero(), vc.clone())
-		.unwrap();
+	block.cut_through().unwrap().validate(vc.clone()).unwrap();
 }
 
 #[test]
@@ -505,7 +504,7 @@ fn simple_block() {
 		&key_id,
 	);
 
-	b.validate(&BlindingFactor::zero(), vc.clone()).unwrap();
+	b.validate(vc.clone()).unwrap();
 }
 
 #[test]
@@ -541,7 +540,7 @@ fn test_block_with_timelocked_tx() {
 		&previous_header,
 		&key_id3.clone(),
 	);
-	b.validate(&BlindingFactor::zero(), vc.clone()).unwrap();
+	b.validate(vc.clone()).unwrap();
 
 	// now try adding a timelocked tx where lock height is greater than current
 	// block height
@@ -566,7 +565,7 @@ fn test_block_with_timelocked_tx() {
 		&key_id3.clone(),
 	);
 
-	match b.validate(&BlindingFactor::zero(), vc.clone()) {
+	match b.validate(vc.clone()) {
 		Err(KernelLockHeight(height)) => {
 			assert_eq!(height, 2);
 		}
