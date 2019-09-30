@@ -195,8 +195,7 @@ impl Server {
 			pruning_kernel_index,
 		)?);
 
-		// launching the database migration if needed
-		shared_chain.rebuild_height_for_pos()?;
+		shared_chain.init_genesis_height_pos_index()?;
 		// build the tx kernel mmr position index if needed
 		shared_chain.build_txkernel_pos()?;
 
