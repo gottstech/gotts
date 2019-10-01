@@ -144,10 +144,8 @@ fn main() {
 	assert!(gen.header.pow.is_secondary(), "Not a secondary header");
 	println!("Built genesis:\n{:?}", gen);
 	core::pow::verify_size(&gen.header).unwrap();
-	gen.validate(
-		Arc::new(util::RwLock::new(LruVerifierCache::new())),
-	)
-	.unwrap();
+	gen.validate(Arc::new(util::RwLock::new(LruVerifierCache::new())))
+		.unwrap();
 
 	println!("\nFinal genesis cyclehash: {}", gen.hash().to_hex());
 	let gen_bin = core::ser::ser_vec(&gen, core::ser::ProtocolVersion(1)).unwrap();
