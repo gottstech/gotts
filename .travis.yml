@@ -42,8 +42,8 @@ cache:
   cargo: true
   timeout: 240
   directories:
-    - $HOME/.cargo
-    - $TRAVIS_BUILD_DIR/target
+    - "$HOME/.cargo"
+    - "$TRAVIS_BUILD_DIR/target"
 
 env:
   global:
@@ -62,6 +62,8 @@ matrix:
       env: CI_JOB="test"        CI_JOB_ARGS="keychain"
     - os: linux
       env: CI_JOB="test"        CI_JOB_ARGS="api util store"
+    - os: linux
+      env: CI_JOB="release"     CI_JOB_ARGS=""
     - os: osx
       env: CI_JOB="test"        CI_JOB_ARGS="servers"
     - os: osx
@@ -72,6 +74,8 @@ matrix:
       env: CI_JOB="test"        CI_JOB_ARGS="keychain"
     - os: osx
       env: CI_JOB="test"        CI_JOB_ARGS="api util store"
+    - os: osx
+      env: CI_JOB="release"     CI_JOB_ARGS=""
     - os: windows
       env: CI_JOB="test"        CI_JOB_ARGS="servers"
     - os: windows
@@ -82,13 +86,29 @@ matrix:
       env: CI_JOB="test"        CI_JOB_ARGS="keychain"
     - os: windows
       env: CI_JOB="test"        CI_JOB_ARGS="api util store"
+    - os: windows
+      env: CI_JOB="release"     CI_JOB_ARGS=""
 
 script:
-    - if [ "$TRAVIS_OS_NAME" = "windows" ]; then git checkout Cargo.toml; git apply windows.patch; fi
-    - .ci/general-jobs
+    - if [ "$TRAVIS_OS_NAME" = "windows" ]; then git checkout Cargo.toml; git apply windows.patch;
+      fi
+    - ".ci/general-jobs"
 
 before_cache:
   - rm -rf $TRAVIS_BUILD_DIR/target/tmp
   - rm -rf $TRAVIS_BUILD_DIR/util/target/tmp
   - rm -rf $TRAVIS_BUILD_DIR/store/test_output
 
+before_deploy:
+- bash .ci/release-jobs
+
+deploy:
+  provider: releases
+  api_key:
+    secure: mqCl/afJWikooSS612NmPGtO9obiOOqiGhok8YibV0/1jLFUXZYFjzpU9LmjFAp/uh1scSneQrm4WFOz8NyDR+f/zg0F9h0usrQtyt2PVdwR5GqeUEC53iRnOdpWvQvx2h0HbN39uZRWYqswXxzU9RiX1KRbl/aCvwm1KhFtWFqPIqqfKKLH0exZ4Ws/4pSkLmcwFKTWa68Uy2e+tIbemtgYJ4p/L1G5urZsd28AlULYar33L/lElwfBUq73H/4DU62kGx8BQ4rXRWrzIz5gJJg94FtWVXOPrkqPV5IQPsUSBzpCzbm2WhCPKhudYjQND99q6wj6h1LhLwT0LkcGdcme3wvubUqHdERvBLEuWcjlWpCOTSM/mAD5QWblP41ZhB9IjQWRk4QsFr3GT3wtzrwORKJj8l9rF8vZ55JCh600ptz4NuRkVLes74+VCkDu/KfvdKQVU7eT4JhpnYH8yr+YtBIp9J8JAvRlgQEpErl6ClSX/UQjw8yxTfVkR0qaESexQBAuHg/aIZyXZDMK6qR/y6zP63adkFHBu90GJA2zcX0b8SFy9p6Ie+7m6bCaKt3vCt4aTYZYQf1S9keNHPpSHeJ0ZXF8XTlcD2BXxFTpGRQ1J7jT6+0Y3VtsbW7OcVZePPURupteYW2ZKuPfV286CM+Pzy051P0SKtxA0Cw=
+  file_glob: true
+  file: target/release/gotts-*.*
+  skip_cleanup: true
+  on:
+    repo: gottstech/gotts
+    tags: true

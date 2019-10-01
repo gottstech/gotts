@@ -2,5 +2,5 @@
 .DS_Store
 target
 */Cargo.lock
-*.iml
-.idea/
+.gotts
+test_output
