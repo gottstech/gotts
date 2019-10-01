@@ -34,13 +34,13 @@ pub struct ExtKeychain {
 }
 
 impl Keychain for ExtKeychain {
-	fn from_seed(seed: &[u8], is_floo: bool) -> Result<ExtKeychain, Error> {
+	fn from_seed(seed: &[u8], is_floo: bool) -> Result<Self, Error> {
 		let mut h = BIP32GottsHasher::new(is_floo);
 		let secp = secp::Secp256k1::with_caps(secp::ContextFlag::Commit);
 		let master = ExtendedPrivKey::new_master(&secp, &mut h, seed)?;
 		let keychain = ExtKeychain {
-			secp: secp,
-			master: master,
+			secp,
+			master,
 			hasher: h,
 		};
 		Ok(keychain)
@@ -59,7 +59,7 @@ impl Keychain for ExtKeychain {
 	}
 
 	/// For testing - probably not a good idea to use outside of tests.
-	fn from_random_seed(is_floo: bool) -> Result<ExtKeychain, Error> {
+	fn from_random_seed(is_floo: bool) -> Result<Self, Error> {
 		let seed: String = thread_rng().sample_iter(&Alphanumeric).take(16).collect();
 		let seed = blake2b(32, &[], seed.as_bytes());
 		ExtKeychain::from_seed(seed.as_bytes(), is_floo)
