@@ -33,7 +33,7 @@ use grin_miner_plugin as plugin;
 
 use gotts_core::core::hash::Hashed;
 use gotts_core::core::verifier_cache::LruVerifierCache;
-use gotts_keychain::{BlindingFactor, ExtKeychain, Keychain};
+use gotts_keychain::{ExtKeychain, Keychain};
 
 use gotts_wallet_config::WalletConfig;
 use gotts_wallet_impls::WalletSeed;
@@ -145,7 +145,6 @@ fn main() {
 	println!("Built genesis:\n{:?}", gen);
 	core::pow::verify_size(&gen.header).unwrap();
 	gen.validate(
-		&BlindingFactor::zero(),
 		Arc::new(util::RwLock::new(LruVerifierCache::new())),
 	)
 	.unwrap();
@@ -201,13 +200,6 @@ fn update_genesis_rs(gen: &core::core::Block) {
 		format!(
 			"Hash::from_hex(\"{}\").unwrap()",
 			gen.header.kernel_root.to_hex()
-		),
-	));
-	replacements.push((
-		"total_kernel_offset".to_string(),
-		format!(
-			"BlindingFactor::from_hex(\"{}\").unwrap()",
-			gen.header.total_kernel_offset.to_hex()
 		),
 	));
 	replacements.push(("nonce".to_string(), format!("{}", gen.header.pow.nonce)));
