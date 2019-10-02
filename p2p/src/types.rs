@@ -490,8 +490,10 @@ impl From<PeerInfo> for PeerInfoDisplay {
 /// The full txhashset data along with indexes required for a consumer to
 /// rewind to a consistent requested state.
 pub struct TxHashSetRead {
-	/// Output tree index the receiver should rewind to
-	pub output_index: u64,
+	/// OutputI tree index the receiver should rewind to
+	pub output_i_index: u64,
+	/// OutputII tree index the receiver should rewind to
+	pub output_ii_index: u64,
 	/// Kernel tree index the receiver should rewind to
 	pub kernel_index: u64,
 	/// Binary stream for the txhashset zipped data

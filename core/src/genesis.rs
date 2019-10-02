@@ -56,11 +56,11 @@ pub fn genesis_floo() -> core::Block {
 			"0000000000000000000535990d39e96feb09c619e310ed7d4cfc1567f1f10a28",
 		)
 		.unwrap(),
-		output_root: Hash::from_hex(
+		output_i_root: Hash::from_hex(
 			"0a624971e148e56fc50a300945990f5b2abffd41af32fae418005c0fc5f86d68",
 		)
 		.unwrap(),
-		range_proof_root: Hash::from_hex(
+		output_ii_root: Hash::from_hex(
 			"0000000000000000000000000000000000000000000000000000000000000000",
 		)
 		.unwrap(),
@@ -68,7 +68,8 @@ pub fn genesis_floo() -> core::Block {
 			"31526c03ae25dc66671bf0f308c676b2243ab7bf42363301076e429b808d8af3",
 		)
 		.unwrap(),
-		output_mmr_size: 1,
+		output_i_mmr_size: 1,
+		output_ii_mmr_size: 0,
 		kernel_mmr_size: 1,
 		pow: ProofOfWork {
 			total_difficulty: Difficulty::from_num(10_u64.pow(4)),
@@ -130,10 +131,11 @@ pub fn genesis_main() -> core::Block {
 		height: 0,
 		timestamp: Utc.ymd(2020, 1, 15).and_hms(12, 0, 0), // REPLACE
 		prev_root: Hash::default(),                        // REPLACE
-		output_root: Hash::default(),                      // REPLACE
-		range_proof_root: Hash::default(),                 // REPLACE
+		output_i_root: Hash::default(),                    // REPLACE
+		output_ii_root: Hash::default(),                   // REPLACE
 		kernel_root: Hash::default(),                      // REPLACE
-		output_mmr_size: 1,
+		output_i_mmr_size: 1,
+		output_ii_mmr_size: 0,
 		kernel_mmr_size: 1,
 		pow: ProofOfWork {
 			total_difficulty: Difficulty::from_num(10_u64.pow(8)),
@@ -179,7 +181,7 @@ mod test {
 		);
 		assert_eq!(
 			gen_bin.hash().to_hex(),
-			"adf441d4fcea72c2a9a73bbad2e501f08d97af44f194da27119d7dc26c18c094"
+			"7c7e997950fa6acaba8e86a1844566417badb83c7a7401a5f4ae2f2b2ee14490"
 		);
 	}
 
@@ -195,7 +197,7 @@ mod test {
 		);
 		assert_eq!(
 			gen_bin.hash().to_hex(),
-			"80ccaa1536bb2b0080886f8a79bc45a3eb9e43619f20b0223a4fd7ab1d0d6ff6"
+			"a2636b7a5a739dd4da7cfefc535660ac06bbd8c60af141ee9589918610f13ef8"
 		);
 	}
 }

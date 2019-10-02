@@ -598,15 +598,16 @@ impl Chain {
 		b.header.prev_root = prev_root;
 
 		// Set the output, rangeproof and kernel MMR roots.
-		b.header.output_root = roots.output_i_root;
-		b.header.range_proof_root = ZERO_HASH;
+		b.header.output_i_root = roots.output_i_root;
+		b.header.output_ii_root = roots.output_ii_root;;
 		b.header.kernel_root = roots.kernel_root;
 
 		// Set the output and kernel MMR sizes.
 		{
 			// Carefully destructure these correctly...
-			let (output_mmr_size, kernel_mmr_size) = sizes;
-			b.header.output_mmr_size = output_mmr_size;
+			let (output_i_mmr_size, output_ii_mmr_size, kernel_mmr_size) = sizes;
+			b.header.output_i_mmr_size = output_i_mmr_size;
+			b.header.output_ii_mmr_size = output_ii_mmr_size;
 			b.header.kernel_mmr_size = kernel_mmr_size;
 		}
 
@@ -671,7 +672,7 @@ impl Chain {
 	/// Provides a reading view into the current txhashset state as well as
 	/// the required indexes for a consumer to rewind to a consistent state
 	/// at the provided block hash.
-	pub fn txhashset_read(&self, h: Hash) -> Result<(u64, u64, File), Error> {
+	pub fn txhashset_read(&self, h: Hash) -> Result<(u64, u64, u64, File), Error> {
 		// now we want to rewind the txhashset extension and
 		// sync a "rewound" copy of the leaf_set files to disk
 		// so we can send these across as part of the zip file.
@@ -692,7 +693,8 @@ impl Chain {
 		// prepares the zip and return the corresponding Read
 		let txhashset_reader = txhashset::zip_read(self.db_root.clone(), &header)?;
 		Ok((
-			header.output_mmr_size,
+			header.output_i_mmr_size,
+			header.output_ii_mmr_size,
 			header.kernel_mmr_size,
 			txhashset_reader,
 		))

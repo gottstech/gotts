@@ -19,7 +19,7 @@ use chrono::prelude::{DateTime, Utc};
 use std::sync::Arc;
 
 use crate::core::core::hash::{Hash, Hashed, ZERO_HASH};
-use crate::core::core::{Block, BlockHeader};
+use crate::core::core::{Block, BlockHeader, OutputFeatures};
 use crate::core::pow::Difficulty;
 use crate::core::ser;
 use crate::error::Error;
@@ -208,8 +208,10 @@ impl TxHashsetWriteStatus for SyncState {
 /// readable.
 #[derive(Debug, PartialEq)]
 pub struct TxHashSetRoots {
-	/// Output root
+	/// Output I root
 	pub output_i_root: Hash,
+	/// Output II root
+	pub output_ii_root: Hash,
 	/// Kernel root
 	pub kernel_root: Hash,
 }
@@ -220,6 +222,18 @@ pub struct TxHashSetRoots {
 pub struct OutputMMRPosition {
 	/// The hash at the output position in the MMR.
 	pub output_mmr_hash: Hash,
+	/// MMR position
+	pub position: u64,
+	/// Block height
+	pub height: u64,
+}
+
+/// A helper to hold the output feature, pmmr position, and height in order to keep them
+/// readable.
+#[derive(Debug)]
+pub struct OutputFeaturePosHeight {
+	/// The output features
+	pub features: OutputFeatures,
 	/// MMR position
 	pub position: u64,
 	/// Block height

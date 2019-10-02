@@ -17,7 +17,7 @@
 
 use crate::core::core::hash::{Hash, Hashed};
 use crate::core::core::pmmr::{self, ReadonlyPMMR};
-use crate::core::core::{Block, BlockHeader, Input, Output, OutputI, Transaction};
+use crate::core::core::{Block, BlockHeader, Input, Output, OutputI, OutputII, Transaction};
 use crate::core::global;
 use crate::core::ser::PMMRIndexHashable;
 use crate::error::{Error, ErrorKind};
@@ -27,6 +27,7 @@ use gotts_store::pmmr::PMMRBackend;
 /// Readonly view of the UTXO set (based on output MMR).
 pub struct UTXOView<'a> {
 	output_i_pmmr: ReadonlyPMMR<'a, OutputI, PMMRBackend<OutputI>>,
+	output_ii_pmmr: ReadonlyPMMR<'a, OutputII, PMMRBackend<OutputII>>,
 	header_pmmr: ReadonlyPMMR<'a, BlockHeader, PMMRBackend<BlockHeader>>,
 	batch: &'a Batch<'a>,
 }
@@ -35,11 +36,13 @@ impl<'a> UTXOView<'a> {
 	/// Build a new UTXO view.
 	pub fn new(
 		output_i_pmmr: ReadonlyPMMR<'a, OutputI, PMMRBackend<OutputI>>,
+		output_ii_pmmr: ReadonlyPMMR<'a, OutputII, PMMRBackend<OutputII>>,
 		header_pmmr: ReadonlyPMMR<'a, BlockHeader, PMMRBackend<BlockHeader>>,
 		batch: &'a Batch<'_>,
 	) -> UTXOView<'a> {
 		UTXOView {
 			output_i_pmmr,
+			output_ii_pmmr,
 			header_pmmr,
 			batch,
 		}
@@ -123,7 +126,13 @@ impl<'a> UTXOView<'a> {
 	// Output is valid if it would not result in a duplicate commitment in the output MMR.
 	fn validate_output(&self, output: &Output) -> Result<(), Error> {
 		if let Ok(pos) = self.batch.get_output_pos(&output.commitment()) {
+			//todo: `get_output_pos` should also give the output features
 			if let Some(out_mmr) = self.output_i_pmmr.get_data(pos) {
+				if out_mmr.id.commitment() == output.commitment() {
+					return Err(ErrorKind::DuplicateCommitment(output.commitment()).into());
+				}
+			}
+			if let Some(out_mmr) = self.output_ii_pmmr.get_data(pos) {
 				if out_mmr.id.commitment() == output.commitment() {
 					return Err(ErrorKind::DuplicateCommitment(output.commitment()).into());
 				}
@@ -137,29 +146,26 @@ impl<'a> UTXOView<'a> {
 	pub fn verify_coinbase_maturity(&self, inputs: &Vec<Input>, height: u64) -> Result<(), Error> {
 		// Find the greatest output pos of any coinbase
 		// outputs we are attempting to spend.
-		let pos = inputs
+		let max_height = inputs
 			.iter()
 			.filter(|x| x.is_coinbase())
-			.filter_map(|x| self.batch.get_output_pos(&x.commitment()).ok())
+			.filter_map(|x| self.batch.get_output_height(&x.commitment()).ok())
 			.max()
 			.unwrap_or(0);
 
-		if pos > 0 {
-			// If we have not yet reached 1440 blocks then
+		if max_height > 0 {
+			// If we have not yet reached 1,440 blocks then
 			// we can fail immediately as coinbase cannot be mature.
 			if height < global::coinbase_maturity() {
 				return Err(ErrorKind::ImmatureCoinbase.into());
 			}
 
-			// Find the "cutoff" pos in the output MMR based on the
-			// header from 1,000 blocks ago.
+			// Find the "cutoff" height.
 			let cutoff_height = height.checked_sub(global::coinbase_maturity()).unwrap_or(0);
-			let cutoff_header = self.get_header_by_height(cutoff_height)?;
-			let cutoff_pos = cutoff_header.output_mmr_size;
 
-			// If any output pos exceed the cutoff_pos
+			// If any input height exceed the cutoff_height
 			// we know they have not yet sufficiently matured.
-			if pos > cutoff_pos {
+			if max_height > cutoff_height {
 				return Err(ErrorKind::ImmatureCoinbase.into());
 			}
 		}

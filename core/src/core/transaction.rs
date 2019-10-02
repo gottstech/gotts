@@ -638,7 +638,7 @@ impl Committed for TransactionBody {
 		self.inputs.iter().map(|x| x.commitment()).collect()
 	}
 
-	fn outputs_i_committed(&self) -> Vec<Commitment> {
+	fn outputs_committed(&self) -> Vec<Commitment> {
 		self.outputs.iter().map(|x| x.commitment()).collect()
 	}
 
@@ -980,8 +980,8 @@ impl Committed for Transaction {
 		self.body.inputs_committed()
 	}
 
-	fn outputs_i_committed(&self) -> Vec<Commitment> {
-		self.body.outputs_i_committed()
+	fn outputs_committed(&self) -> Vec<Commitment> {
+		self.body.outputs_committed()
 	}
 
 	fn kernels_committed(&self) -> Vec<Commitment> {
@@ -1738,6 +1738,10 @@ impl PartialEq for Output {
 }
 impl Eq for Output {}
 
+/// To make it simple among all 3 types: Output, OutputI, and OutputII, we define same Hash
+/// for all of them:
+/// 1. Only the OutputIdentifier is used for Hash.
+/// 2. All 3 types (Output, OutputI, OutputII) have same Hash result.
 impl ::std::hash::Hash for Output {
 	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
 		let mut vec = Vec::new();
@@ -1748,6 +1752,10 @@ impl ::std::hash::Hash for Output {
 
 /// Implementation of Writeable for a transaction Output, defines how to write
 /// an Output as binary.
+/// Note: To make it simple among all 3 types: Output, OutputI, and OutputII, we define same Hash
+/// for all of them:
+/// 1. Only the OutputIdentifier is used for Hash.
+/// 2. All 3 types (Output, OutputI, OutputII) have same Hash result.
 impl Writeable for Output {
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
 		if writer.serialization_mode() == ser::SerializationMode::Hash {

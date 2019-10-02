@@ -227,14 +227,16 @@ pub struct BlockHeader {
 	pub prev_root: Hash,
 	/// Timestamp at which the block was built.
 	pub timestamp: DateTime<Utc>,
-	/// Merklish root of all the commitments in the TxHashSet
-	pub output_root: Hash,
-	/// Merklish root of all range proofs in the TxHashSet
-	pub range_proof_root: Hash,
+	/// Merklish root of all the outputI commitments in the TxHashSet
+	pub output_i_root: Hash,
+	/// Merklish root of all the outputII commitments in the TxHashSet
+	pub output_ii_root: Hash,
 	/// Merklish root of all transaction kernels in the TxHashSet
 	pub kernel_root: Hash,
-	/// Total size of the output MMR after applying this block
-	pub output_mmr_size: u64,
+	/// Total size of the outputI MMR after applying this block
+	pub output_i_mmr_size: u64,
+	/// Total size of the outputII MMR after applying this block
+	pub output_ii_mmr_size: u64,
 	/// Total size of the kernel MMR after applying this block
 	pub kernel_mmr_size: u64,
 	/// Proof of work and related
@@ -250,10 +252,11 @@ impl Default for BlockHeader {
 			timestamp: DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc),
 			prev_hash: ZERO_HASH,
 			prev_root: ZERO_HASH,
-			output_root: ZERO_HASH,
-			range_proof_root: ZERO_HASH,
+			output_i_root: ZERO_HASH,
+			output_ii_root: ZERO_HASH,
 			kernel_root: ZERO_HASH,
-			output_mmr_size: 0,
+			output_i_mmr_size: 0,
+			output_ii_mmr_size: 0,
 			kernel_mmr_size: 0,
 			pow: ProofOfWork::default(),
 		}
@@ -292,10 +295,10 @@ impl Readable for BlockHeader {
 		let (height, timestamp) = ser_multiread!(reader, read_u64, read_i64);
 		let prev_hash = Hash::read(reader)?;
 		let prev_root = Hash::read(reader)?;
-		let output_root = Hash::read(reader)?;
-		let range_proof_root = Hash::read(reader)?;
+		let output_i_root = Hash::read(reader)?;
+		let output_ii_root = Hash::read(reader)?;
 		let kernel_root = Hash::read(reader)?;
-		let (output_mmr_size, kernel_mmr_size) = ser_multiread!(reader, read_u64, read_u64);
+		let (output_i_mmr_size, output_ii_mmr_size, kernel_mmr_size) = ser_multiread!(reader, read_u64, read_u64, read_u64);
 		let pow = ProofOfWork::read(reader)?;
 
 		if timestamp > MAX_DATE.and_hms(0, 0, 0).timestamp()
@@ -318,10 +321,11 @@ impl Readable for BlockHeader {
 			timestamp: DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(timestamp, 0), Utc),
 			prev_hash,
 			prev_root,
-			output_root,
-			range_proof_root,
+			output_i_root,
+			output_ii_root,
 			kernel_root,
-			output_mmr_size,
+			output_i_mmr_size,
+			output_ii_mmr_size,
 			kernel_mmr_size,
 			pow,
 		})
@@ -338,10 +342,11 @@ impl BlockHeader {
 			[write_i64, self.timestamp.timestamp()],
 			[write_fixed_bytes, &self.prev_hash],
 			[write_fixed_bytes, &self.prev_root],
-			[write_fixed_bytes, &self.output_root],
-			[write_fixed_bytes, &self.range_proof_root],
+			[write_fixed_bytes, &self.output_i_root],
+			[write_fixed_bytes, &self.output_ii_root],
 			[write_fixed_bytes, &self.kernel_root],
-			[write_u64, self.output_mmr_size],
+			[write_u64, self.output_i_mmr_size],
+			[write_u64, self.output_ii_mmr_size],
 			[write_u64, self.kernel_mmr_size]
 		);
 		Ok(())
@@ -444,8 +449,8 @@ impl Committed for Block {
 		self.body.inputs_committed()
 	}
 
-	fn outputs_i_committed(&self) -> Vec<Commitment> {
-		self.body.outputs_i_committed()
+	fn outputs_committed(&self) -> Vec<Commitment> {
+		self.body.outputs_committed()
 	}
 
 	fn kernels_committed(&self) -> Vec<Commitment> {

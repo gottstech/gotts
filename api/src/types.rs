@@ -268,10 +268,10 @@ pub struct BlockHeaderPrintable {
 	pub prev_root: String,
 	/// rfc3339 timestamp at which the block was built.
 	pub timestamp: String,
-	/// Merklish root of all the commitments in the TxHashSet
-	pub output_root: String,
-	/// Merklish root of all range proofs in the TxHashSet
-	pub range_proof_root: String,
+	/// Merklish root of all the OutputI commitments in the TxHashSet
+	pub output_i_root: String,
+	/// Merklish root of all the OutputII commitments in the TxHashSet
+	pub output_ii_root: String,
 	/// Merklish root of all transaction kernels in the TxHashSet
 	pub kernel_root: String,
 	/// Nonce increment used to mine this block.
@@ -295,8 +295,8 @@ impl BlockHeaderPrintable {
 			previous: util::to_hex(header.prev_hash.to_vec()),
 			prev_root: util::to_hex(header.prev_root.to_vec()),
 			timestamp: header.timestamp.to_rfc3339(),
-			output_root: util::to_hex(header.output_root.to_vec()),
-			range_proof_root: util::to_hex(header.range_proof_root.to_vec()),
+			output_i_root: util::to_hex(header.output_i_root.to_vec()),
+			output_ii_root: util::to_hex(header.output_ii_root.to_vec()),
 			kernel_root: util::to_hex(header.kernel_root.to_vec()),
 			nonce: header.pow.nonce,
 			edge_bits: header.pow.edge_bits(),
@@ -351,9 +351,9 @@ impl BlockPrintable {
 			.collect();
 		Ok(BlockPrintable {
 			header: BlockHeaderPrintable::from_header(&block.header),
-			inputs: inputs,
-			outputs: outputs,
-			kernels: kernels,
+			inputs,
+			outputs,
+			kernels,
 		})
 	}
 }

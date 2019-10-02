@@ -68,9 +68,9 @@ impl<'a> Committed for (BlockSums, &'a dyn Committed) {
 		self.1.inputs_committed()
 	}
 
-	fn outputs_i_committed(&self) -> Vec<Commitment> {
+	fn outputs_committed(&self) -> Vec<Commitment> {
 		let mut outputs = vec![self.0.utxo_sum];
-		outputs.extend(&self.1.outputs_i_committed());
+		outputs.extend(&self.1.outputs_committed());
 		outputs
 	}
 

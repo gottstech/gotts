@@ -299,9 +299,6 @@ impl<'a> Batch<'a> {
 	}
 
 	/// Get output_pos from index.
-	/// Note:
-	/// 	- Original prefix 'COMMIT_POS_PREFIX' is not used for normal case anymore, refer to #2889 for detail.
-	///		- To be compatible with the old callers, let's keep this function name but replace with new prefix 'COMMIT_POS_HGT_PREFIX'
 	pub fn get_output_pos(&self, commit: &Commitment) -> Result<u64, Error> {
 		let res: Result<Option<(u64, u64)>, Error> = self.db.get_ser(&to_key(
 			COMMIT_POS_HGT_PREFIX,
@@ -313,6 +310,22 @@ impl<'a> Batch<'a> {
 				commit
 			))),
 			Ok(Some((pos, _height))) => Ok(pos),
+			Err(e) => Err(e),
+		}
+	}
+
+	/// Get output height from index.
+	pub fn get_output_height(&self, commit: &Commitment) -> Result<u64, Error> {
+		let res: Result<Option<(u64, u64)>, Error> = self.db.get_ser(&to_key(
+			COMMIT_POS_HGT_PREFIX,
+			&mut commit.as_ref().to_vec(),
+		));
+		match res {
+			Ok(None) => Err(Error::NotFoundErr(format!(
+				"Output height for: {:?}",
+				commit
+			))),
+			Ok(Some((_pos, height))) => Ok(height),
 			Err(e) => Err(e),
 		}
 	}

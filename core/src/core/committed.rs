@@ -72,7 +72,7 @@ pub trait Committed {
 	fn sum_commitments(&self) -> Result<Commitment, Error> {
 		// gather the commitments
 		let input_commits = self.inputs_committed();
-		let output_commits = self.outputs_i_committed();
+		let output_commits = self.outputs_committed();
 
 		sum_commits(output_commits, input_commits)
 	}
@@ -81,7 +81,7 @@ pub trait Committed {
 	fn inputs_committed(&self) -> Vec<Commitment>;
 
 	/// Vector of output commitments to verify.
-	fn outputs_i_committed(&self) -> Vec<Commitment>;
+	fn outputs_committed(&self) -> Vec<Commitment>;
 
 	/// Vector of kernel excesses to verify.
 	fn kernels_committed(&self) -> Vec<Commitment>;
