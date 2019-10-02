@@ -298,7 +298,8 @@ impl Readable for BlockHeader {
 		let output_i_root = Hash::read(reader)?;
 		let output_ii_root = Hash::read(reader)?;
 		let kernel_root = Hash::read(reader)?;
-		let (output_i_mmr_size, output_ii_mmr_size, kernel_mmr_size) = ser_multiread!(reader, read_u64, read_u64, read_u64);
+		let (output_i_mmr_size, output_ii_mmr_size, kernel_mmr_size) =
+			ser_multiread!(reader, read_u64, read_u64, read_u64);
 		let pow = ProofOfWork::read(reader)?;
 
 		if timestamp > MAX_DATE.and_hms(0, 0, 0).timestamp()

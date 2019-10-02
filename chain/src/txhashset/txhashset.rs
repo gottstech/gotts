@@ -21,8 +21,8 @@ use crate::core::core::hash::{Hash, Hashed};
 use crate::core::core::merkle_proof::MerkleProof;
 use crate::core::core::pmmr::{self, Backend, ReadonlyPMMR, RewindablePMMR, PMMR};
 use crate::core::core::{
-	Block, BlockHeader, Input, Output, OutputFeatures, OutputI, OutputII, OutputIdentifier, TxKernel,
-	TxKernelEntry,
+	Block, BlockHeader, Input, Output, OutputFeatures, OutputI, OutputII, OutputIdentifier,
+	TxKernel, TxKernelEntry,
 };
 use crate::core::ser::{PMMRIndexHashable, PMMRable};
 use crate::error::{Error, ErrorKind};
@@ -172,7 +172,7 @@ impl TxHashSet {
 					OutputFeatures::SigLocked => {
 						let output_pmmr: ReadonlyPMMR<'_, OutputII, _> = ReadonlyPMMR::at(
 							&self.output_ii_pmmr_h.backend,
-							self.output_ii_pmmr_h.last_pos
+							self.output_ii_pmmr_h.last_pos,
 						);
 						if let Some(output) = output_pmmr.get_data(pos) {
 							(output_pmmr.get_hash(pos), output.into_output())
@@ -182,8 +182,7 @@ impl TxHashSet {
 					}
 				};
 				if let Some(hash) = hash {
-					if hash == output.hash_with_index(pos - 1)
-						&& output_id.commit == output.commit
+					if hash == output.hash_with_index(pos - 1) && output_id.commit == output.commit
 					{
 						Ok(OutputMMRPosition {
 							output_mmr_hash: hash,
@@ -211,8 +210,11 @@ impl TxHashSet {
 
 	/// as above, for OutputII
 	pub fn last_n_output_ii(&self, distance: u64) -> Vec<(Hash, OutputII)> {
-		ReadonlyPMMR::at(&self.output_ii_pmmr_h.backend, self.output_ii_pmmr_h.last_pos)
-			.get_last_n_insertions(distance)
+		ReadonlyPMMR::at(
+			&self.output_ii_pmmr_h.backend,
+			self.output_ii_pmmr_h.last_pos,
+		)
+		.get_last_n_insertions(distance)
 	}
 
 	/// as above, for kernels
@@ -244,8 +246,11 @@ impl TxHashSet {
 		start_index: u64,
 		max_count: u64,
 	) -> (u64, Vec<OutputII>) {
-		ReadonlyPMMR::at(&self.output_ii_pmmr_h.backend, self.output_ii_pmmr_h.last_pos)
-			.elements_from_insertion_index(start_index, max_count)
+		ReadonlyPMMR::at(
+			&self.output_ii_pmmr_h.backend,
+			self.output_ii_pmmr_h.last_pos,
+		)
+		.elements_from_insertion_index(start_index, max_count)
 	}
 
 	/// returns output from the given mmr position
@@ -256,8 +261,11 @@ impl TxHashSet {
 
 	/// returns output from the given mmr position
 	pub fn output_ii_by_position(&self, position: u64) -> Option<OutputII> {
-		ReadonlyPMMR::at(&self.output_ii_pmmr_h.backend, self.output_ii_pmmr_h.last_pos)
-			.get_data(position)
+		ReadonlyPMMR::at(
+			&self.output_ii_pmmr_h.backend,
+			self.output_ii_pmmr_h.last_pos,
+		)
+		.get_data(position)
 	}
 
 	/// highest output insertion index available
@@ -304,8 +312,10 @@ impl TxHashSet {
 		// 	ReadonlyPMMR::at(&self.header_pmmr_h.backend, self.header_pmmr_h.last_pos);
 		let output_i_pmmr =
 			ReadonlyPMMR::at(&self.output_i_pmmr_h.backend, self.output_i_pmmr_h.last_pos);
-		let output_ii_pmmr =
-			ReadonlyPMMR::at(&self.output_ii_pmmr_h.backend, self.output_ii_pmmr_h.last_pos);
+		let output_ii_pmmr = ReadonlyPMMR::at(
+			&self.output_ii_pmmr_h.backend,
+			self.output_ii_pmmr_h.last_pos,
+		);
 		let kernel_pmmr =
 			ReadonlyPMMR::at(&self.kernel_pmmr_h.backend, self.kernel_pmmr_h.last_pos);
 
@@ -331,14 +341,12 @@ impl TxHashSet {
 			)
 			.merkle_proof(pos)
 			.map_err(|_| ErrorKind::MerkleProof.into()),
-			OutputFeatures::SigLocked => {
-				PMMR::at(
-					&mut self.output_ii_pmmr_h.backend,
-					self.output_ii_pmmr_h.last_pos,
-				)
-				.merkle_proof(pos)
-				.map_err(|_| ErrorKind::MerkleProof.into())
-			}
+			OutputFeatures::SigLocked => PMMR::at(
+				&mut self.output_ii_pmmr_h.backend,
+				self.output_ii_pmmr_h.last_pos,
+			)
+			.merkle_proof(pos)
+			.map_err(|_| ErrorKind::MerkleProof.into()),
 		}
 	}
 
@@ -380,8 +388,10 @@ impl TxHashSet {
 
 		let output_i_pmmr =
 			ReadonlyPMMR::at(&self.output_i_pmmr_h.backend, self.output_i_pmmr_h.last_pos);
-		let output_ii_pmmr =
-			ReadonlyPMMR::at(&self.output_ii_pmmr_h.backend, self.output_ii_pmmr_h.last_pos);
+		let output_ii_pmmr = ReadonlyPMMR::at(
+			&self.output_ii_pmmr_h.backend,
+			self.output_ii_pmmr_h.last_pos,
+		);
 
 		// clear it before rebuilding
 		batch.clear_output_pos_height()?;
@@ -417,12 +427,16 @@ impl TxHashSet {
 			while i < total_outputs {
 				let (id, pos) = outputs_pos[i].clone();
 				match id.features {
-					OutputFeatures::Plain | OutputFeatures::Coinbase  => if pos > h.output_i_mmr_size {
-						break;
-					},
-					OutputFeatures::SigLocked => if pos > h.output_ii_mmr_size {
-						break;
-					},
+					OutputFeatures::Plain | OutputFeatures::Coinbase => {
+						if pos > h.output_i_mmr_size {
+							break;
+						}
+					}
+					OutputFeatures::SigLocked => {
+						if pos > h.output_ii_mmr_size {
+							break;
+						}
+					}
 				}
 				let height = if pos == 1 {
 					// Special care about the unspent Genesis output
@@ -509,7 +523,7 @@ where
 		);
 		let output_ii_pmmr = ReadonlyPMMR::at(
 			&trees.output_ii_pmmr_h.backend,
-			trees.output_ii_pmmr_h.last_pos
+			trees.output_ii_pmmr_h.last_pos,
 		);
 		let header_pmmr = ReadonlyPMMR::at(&handle.backend, handle.last_pos);
 
@@ -1000,7 +1014,7 @@ impl<'a> Extension<'a> {
 			OutputFeatures::Plain | OutputFeatures::Coinbase => self
 				.output_i_pmmr
 				.push(&OutputI::from_output(out)?)
-					.map_err(&ErrorKind::TxHashSetErr)?,
+				.map_err(&ErrorKind::TxHashSetErr)?,
 			OutputFeatures::SigLocked => self
 				.output_ii_pmmr
 				.push(&OutputII::from_output(out)?)
@@ -1150,7 +1164,12 @@ impl<'a> Extension<'a> {
 			return Ok(());
 		}
 		let head_header = self.batch.get_block_header(&self.head.last_block_h)?;
-		if (head_header.output_i_mmr_size, head_header.output_ii_mmr_size, head_header.kernel_mmr_size) != self.sizes() {
+		if (
+			head_header.output_i_mmr_size,
+			head_header.output_ii_mmr_size,
+			head_header.kernel_mmr_size,
+		) != self.sizes()
+		{
 			Err(ErrorKind::InvalidMMRSize.into())
 		} else {
 			Ok(())
