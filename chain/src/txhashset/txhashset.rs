@@ -184,7 +184,8 @@ impl TxHashSet {
 					}
 				};
 				if let Some(hash) = hash {
-					if hash == output.hash_with_index(ofph.position - 1) && output_id.commit == output.commit
+					if hash == output.hash_with_index(ofph.position - 1)
+						&& output_id.commit == output.commit
 					{
 						Ok(OutputMMRPosition {
 							output_mmr_hash: hash,
@@ -449,13 +450,18 @@ impl TxHashSet {
 				} else {
 					h.height
 				};
-				batch.save_output_pos_height(&id.commit,
-                                             OutputFeaturePosHeight {
-                                                 features: id.features,
-                                                 position,
-                                                 height,
-                                             })?;
-				trace!("rebuild_height_pos_index: {:?}", (id.commit, position, height));
+				batch.save_output_pos_height(
+					&id.commit,
+					OutputFeaturePosHeight {
+						features: id.features,
+						position,
+						height,
+					},
+				)?;
+				trace!(
+					"rebuild_height_pos_index: {:?}",
+					(id.commit, position, height)
+				);
 				i += 1;
 			}
 		}
@@ -930,13 +936,14 @@ impl<'a> Extension<'a> {
 		for out in b.outputs() {
 			let position = self.apply_output(out)?;
 			// Update the (output_pos,height) index for the new output.
-			self.batch
-				.save_output_pos_height(&out.commitment(),
-                                        OutputFeaturePosHeight{
-                                            features: out.features.as_flag(),
-                                            position,
-                                            height:b.header.height,
-                                        })?;
+			self.batch.save_output_pos_height(
+				&out.commitment(),
+				OutputFeaturePosHeight {
+					features: out.features.as_flag(),
+					position,
+					height: b.header.height,
+				},
+			)?;
 		}
 
 		for input in b.inputs() {
@@ -998,7 +1005,9 @@ impl<'a> Extension<'a> {
 			// Input is not valid if we cannot prune successfully (to spend an unspent
 			// output).
 			let prune_res = match ofph.features {
-				OutputFeatures::Plain | OutputFeatures::Coinbase => self.output_i_pmmr.prune(ofph.position),
+				OutputFeatures::Plain | OutputFeatures::Coinbase => {
+					self.output_i_pmmr.prune(ofph.position)
+				}
 				OutputFeatures::SigLocked => self.output_ii_pmmr.prune(ofph.position),
 			};
 			match prune_res {

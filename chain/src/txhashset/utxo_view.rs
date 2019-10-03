@@ -17,7 +17,9 @@
 
 use crate::core::core::hash::{Hash, Hashed};
 use crate::core::core::pmmr::{self, ReadonlyPMMR};
-use crate::core::core::{Block, BlockHeader, Input, Output, OutputFeatures, OutputI, OutputII, Transaction};
+use crate::core::core::{
+	Block, BlockHeader, Input, Output, OutputFeatures, OutputI, OutputII, Transaction,
+};
 use crate::core::global;
 use crate::core::ser::PMMRIndexHashable;
 use crate::error::{Error, ErrorKind};
@@ -92,20 +94,22 @@ impl<'a> UTXOView<'a> {
 		for input in inputs {
 			if let Ok(ofph) = self.batch.get_output_pos_height(&input.commitment()) {
 				match ofph.features {
-					OutputFeatures::Plain | OutputFeatures::Coinbase =>
+					OutputFeatures::Plain | OutputFeatures::Coinbase => {
 						if let Some(output) = self.output_i_pmmr.get_data(ofph.position) {
 							if output.id.commit == input.commit {
 								outputs.push(output.into_output());
 								continue;
 							}
-						},
-					OutputFeatures::SigLocked =>
+						}
+					}
+					OutputFeatures::SigLocked => {
 						if let Some(output) = self.output_ii_pmmr.get_data(ofph.position) {
 							if output.id.commit == input.commit {
 								outputs.push(output.into_output());
 								continue;
 							}
-						},
+						}
+					}
 				}
 			}
 			return Err(ErrorKind::AlreadySpent(input.commitment()).into());
@@ -119,22 +123,28 @@ impl<'a> UTXOView<'a> {
 	fn validate_input(&self, input: &Input) -> Result<u64, Error> {
 		if let Ok(ofph) = self.batch.get_output_pos_height(&input.commitment()) {
 			match ofph.features {
-				OutputFeatures::Plain | OutputFeatures::Coinbase =>
+				OutputFeatures::Plain | OutputFeatures::Coinbase => {
 					if let Some(hash) = self.output_i_pmmr.get_hash(ofph.position) {
 						if let Some(output) = self.output_i_pmmr.get_data(ofph.position) {
-							if hash == output.hash_with_index(ofph.position - 1) && output.id.commit == input.commit {
+							if hash == output.hash_with_index(ofph.position - 1)
+								&& output.id.commit == input.commit
+							{
 								return Ok(output.value);
 							}
 						}
-					},
-				OutputFeatures::SigLocked =>
+					}
+				}
+				OutputFeatures::SigLocked => {
 					if let Some(hash) = self.output_ii_pmmr.get_hash(ofph.position) {
 						if let Some(output) = self.output_ii_pmmr.get_data(ofph.position) {
-							if hash == output.hash_with_index(ofph.position - 1) && output.id.commit == input.commit {
+							if hash == output.hash_with_index(ofph.position - 1)
+								&& output.id.commit == input.commit
+							{
 								return Ok(output.value);
 							}
 						}
-					},
+					}
+				}
 			};
 		}
 		Err(ErrorKind::AlreadySpent(input.commitment()).into())
@@ -144,18 +154,20 @@ impl<'a> UTXOView<'a> {
 	fn validate_output(&self, output: &Output) -> Result<(), Error> {
 		if let Ok(ofph) = self.batch.get_output_pos_height(&output.commitment()) {
 			match ofph.features {
-				OutputFeatures::Plain | OutputFeatures::Coinbase =>
+				OutputFeatures::Plain | OutputFeatures::Coinbase => {
 					if let Some(out_mmr) = self.output_i_pmmr.get_data(ofph.position) {
 						if out_mmr.id.commitment() == output.commitment() {
 							return Err(ErrorKind::DuplicateCommitment(output.commitment()).into());
 						}
 					}
-				OutputFeatures::SigLocked =>
+				}
+				OutputFeatures::SigLocked => {
 					if let Some(out_mmr) = self.output_ii_pmmr.get_data(ofph.position) {
 						if out_mmr.id.commitment() == output.commitment() {
 							return Err(ErrorKind::DuplicateCommitment(output.commitment()).into());
 						}
 					}
+				}
 			}
 		}
 		Ok(())

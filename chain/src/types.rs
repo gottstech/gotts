@@ -241,35 +241,35 @@ pub struct OutputFeaturePosHeight {
 }
 
 impl Writeable for OutputFeaturePosHeight {
-    fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
-        writer.write_u8(self.features as u8)?;
-        writer.write_u64(self.position)?;
-        writer.write_u64(self.height)?;
-        Ok(())
-    }
+	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
+		writer.write_u8(self.features as u8)?;
+		writer.write_u64(self.position)?;
+		writer.write_u64(self.height)?;
+		Ok(())
+	}
 }
 
 impl Readable for OutputFeaturePosHeight {
-    fn read(reader: &mut dyn Reader) -> Result<OutputFeaturePosHeight, ser::Error> {
-        let features = OutputFeatures::read(reader)?;
-        let position = reader.read_u64()?;
-        let height = reader.read_u64()?;
-        Ok(OutputFeaturePosHeight{
-            features,
-            position,
-            height,
-        })
-    }
+	fn read(reader: &mut dyn Reader) -> Result<OutputFeaturePosHeight, ser::Error> {
+		let features = OutputFeatures::read(reader)?;
+		let position = reader.read_u64()?;
+		let height = reader.read_u64()?;
+		Ok(OutputFeaturePosHeight {
+			features,
+			position,
+			height,
+		})
+	}
 }
 
 impl Default for OutputFeaturePosHeight {
-    fn default() -> Self {
-        OutputFeaturePosHeight {
-            features: OutputFeatures::Plain,
-            position: 0,
-            height: 0,
-        }
-    }
+	fn default() -> Self {
+		OutputFeaturePosHeight {
+			features: OutputFeatures::Plain,
+			position: 0,
+			height: 0,
+		}
+	}
 }
 
 /// The tip of a fork. A handle to the fork ancestry from its leaf in the

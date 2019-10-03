@@ -134,7 +134,10 @@ impl ChainStore {
 	}
 
 	/// Get PMMR pos and block height for the given output commitment.
-	pub fn get_output_pos_height(&self, commit: &Commitment) -> Result<OutputFeaturePosHeight, Error> {
+	pub fn get_output_pos_height(
+		&self,
+		commit: &Commitment,
+	) -> Result<OutputFeaturePosHeight, Error> {
 		option_to_not_found(
 			self.db.get_ser(&to_key(
 				COMMIT_POS_HGT_PREFIX,
@@ -327,7 +330,10 @@ impl<'a> Batch<'a> {
 	}
 
 	/// Get output_pos and block height from index.
-	pub fn get_output_pos_height(&self, commit: &Commitment) -> Result<OutputFeaturePosHeight, Error> {
+	pub fn get_output_pos_height(
+		&self,
+		commit: &Commitment,
+	) -> Result<OutputFeaturePosHeight, Error> {
 		option_to_not_found(
 			self.db.get_ser(&to_key(
 				COMMIT_POS_HGT_PREFIX,
