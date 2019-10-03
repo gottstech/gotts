@@ -16,6 +16,7 @@
 use std::sync::Arc;
 
 use crate::chain;
+use crate::chain::types::OutputFeaturePosHeight;
 use crate::core::core::hash::Hashed;
 use crate::core::core::merkle_proof::MerkleProof;
 use crate::core::core::{KernelFeatures, TxKernel};
@@ -187,16 +188,16 @@ impl OutputPrintable {
 			}
 		};
 
-		let output_pos_height = chain
+		let ofph = chain
 			.get_output_pos_height(&output.commit)
-			.unwrap_or((0, 0));
+			.unwrap_or(OutputFeaturePosHeight::default());
 		Ok(OutputPrintable {
 			output: output.clone(),
 			output_type,
 			spent,
 			block_height,
 			merkle_proof,
-			mmr_index: output_pos_height.0,
+			mmr_index: ofph.position,
 		})
 	}
 

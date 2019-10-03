@@ -32,7 +32,7 @@ use crate::store;
 use crate::txhashset;
 use crate::txhashset::{PMMRHandle, TxHashSet};
 use crate::types::{
-	BlockStatus, ChainAdapter, NoStatus, Options, OutputMMRPosition, Tip, TxHashSetRoots,
+	BlockStatus, ChainAdapter, NoStatus, Options, OutputMMRPosition, OutputFeaturePosHeight, Tip, TxHashSetRoots,
 	TxHashsetWriteStatus,
 };
 use crate::util::secp::pedersen::Commitment;
@@ -1152,7 +1152,7 @@ impl Chain {
 	}
 
 	/// Get the output mmr position and block height
-	pub fn get_output_pos_height(&self, commit: &Commitment) -> Result<(u64, u64), Error> {
+	pub fn get_output_pos_height(&self, commit: &Commitment) -> Result<OutputFeaturePosHeight, Error> {
 		Ok(self.txhashset.read().get_output_pos_height(commit)?)
 	}
 
@@ -1347,7 +1347,12 @@ impl Chain {
 		let txhashset = self.txhashset.read();
 		if let Some(out) = txhashset.output_i_by_position(1) {
 			let batch = self.store.batch()?;
-			batch.save_output_pos_height(&out.id.commit, 1, 0)?;
+			batch.save_output_pos_height(&out.id.commit,
+                                         OutputFeaturePosHeight {
+                                             features: out.id.features,
+                                             position: 1,
+                                             height: 0,
+                                         })?;
 			batch.commit()?;
 		}
 		Ok(())

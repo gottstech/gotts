@@ -17,7 +17,7 @@
 
 use crate::core::core::hash::{Hash, Hashed};
 use crate::core::core::pmmr::{self, ReadonlyPMMR};
-use crate::core::core::{Block, BlockHeader, Input, Output, OutputI, OutputII, Transaction};
+use crate::core::core::{Block, BlockHeader, Input, Output, OutputFeatures, OutputI, OutputII, Transaction};
 use crate::core::global;
 use crate::core::ser::PMMRIndexHashable;
 use crate::error::{Error, ErrorKind};
@@ -26,6 +26,7 @@ use gotts_store::pmmr::PMMRBackend;
 
 /// Readonly view of the UTXO set (based on output MMR).
 pub struct UTXOView<'a> {
+	//todo: make output_i_pmmr and output_ii_pmmr as a generic type
 	output_i_pmmr: ReadonlyPMMR<'a, OutputI, PMMRBackend<OutputI>>,
 	output_ii_pmmr: ReadonlyPMMR<'a, OutputII, PMMRBackend<OutputII>>,
 	header_pmmr: ReadonlyPMMR<'a, BlockHeader, PMMRBackend<BlockHeader>>,
@@ -89,12 +90,22 @@ impl<'a> UTXOView<'a> {
 	pub fn inputs_body(&self, inputs: &Vec<Input>) -> Result<Vec<Output>, Error> {
 		let mut outputs: Vec<Output> = Vec::with_capacity(inputs.len());
 		for input in inputs {
-			if let Ok(pos) = self.batch.get_output_pos(&input.commitment()) {
-				if let Some(output) = self.output_i_pmmr.get_data(pos) {
-					if output.id.commit == input.commit {
-						outputs.push(output.into_output());
-						continue;
-					}
+			if let Ok(ofph) = self.batch.get_output_pos_height(&input.commitment()) {
+				match ofph.features {
+					OutputFeatures::Plain | OutputFeatures::Coinbase =>
+						if let Some(output) = self.output_i_pmmr.get_data(ofph.position) {
+							if output.id.commit == input.commit {
+								outputs.push(output.into_output());
+								continue;
+							}
+						},
+					OutputFeatures::SigLocked =>
+						if let Some(output) = self.output_ii_pmmr.get_data(ofph.position) {
+							if output.id.commit == input.commit {
+								outputs.push(output.into_output());
+								continue;
+							}
+						},
 				}
 			}
 			return Err(ErrorKind::AlreadySpent(input.commitment()).into());
@@ -106,36 +117,45 @@ impl<'a> UTXOView<'a> {
 	// that currently exists in the output MMR.
 	// Compare the hash in the output MMR at the expected pos.
 	fn validate_input(&self, input: &Input) -> Result<u64, Error> {
-		if let Ok(pos) = self.batch.get_output_pos(&input.commitment()) {
-			if let Some(hash) = self.output_i_pmmr.get_hash(pos) {
-				if let Some(output) = self.output_i_pmmr.get_data(pos) {
-					if hash == output.hash_with_index(pos - 1) && output.id.commit == input.commit {
-						return Ok(output.value);
-					}
-				} else {
-					error!(
-						"validate_input: corrupted storage? pmmr hash and data mismatch at pos: {}",
-						pos
-					);
-				}
-			}
+		if let Ok(ofph) = self.batch.get_output_pos_height(&input.commitment()) {
+			match ofph.features {
+				OutputFeatures::Plain | OutputFeatures::Coinbase =>
+					if let Some(hash) = self.output_i_pmmr.get_hash(ofph.position) {
+						if let Some(output) = self.output_i_pmmr.get_data(ofph.position) {
+							if hash == output.hash_with_index(ofph.position - 1) && output.id.commit == input.commit {
+								return Ok(output.value);
+							}
+						}
+					},
+				OutputFeatures::SigLocked =>
+					if let Some(hash) = self.output_ii_pmmr.get_hash(ofph.position) {
+						if let Some(output) = self.output_ii_pmmr.get_data(ofph.position) {
+							if hash == output.hash_with_index(ofph.position - 1) && output.id.commit == input.commit {
+								return Ok(output.value);
+							}
+						}
+					},
+			};
 		}
 		Err(ErrorKind::AlreadySpent(input.commitment()).into())
 	}
 
 	// Output is valid if it would not result in a duplicate commitment in the output MMR.
 	fn validate_output(&self, output: &Output) -> Result<(), Error> {
-		if let Ok(pos) = self.batch.get_output_pos(&output.commitment()) {
-			//todo: `get_output_pos` should also give the output features
-			if let Some(out_mmr) = self.output_i_pmmr.get_data(pos) {
-				if out_mmr.id.commitment() == output.commitment() {
-					return Err(ErrorKind::DuplicateCommitment(output.commitment()).into());
-				}
-			}
-			if let Some(out_mmr) = self.output_ii_pmmr.get_data(pos) {
-				if out_mmr.id.commitment() == output.commitment() {
-					return Err(ErrorKind::DuplicateCommitment(output.commitment()).into());
-				}
+		if let Ok(ofph) = self.batch.get_output_pos_height(&output.commitment()) {
+			match ofph.features {
+				OutputFeatures::Plain | OutputFeatures::Coinbase =>
+					if let Some(out_mmr) = self.output_i_pmmr.get_data(ofph.position) {
+						if out_mmr.id.commitment() == output.commitment() {
+							return Err(ErrorKind::DuplicateCommitment(output.commitment()).into());
+						}
+					}
+				OutputFeatures::SigLocked =>
+					if let Some(out_mmr) = self.output_ii_pmmr.get_data(ofph.position) {
+						if out_mmr.id.commitment() == output.commitment() {
+							return Err(ErrorKind::DuplicateCommitment(output.commitment()).into());
+						}
+					}
 			}
 		}
 		Ok(())

@@ -19,7 +19,7 @@ use crate::core::consensus::HeaderInfo;
 use crate::core::core::hash::{Hash, Hashed};
 use crate::core::core::{Block, BlockHeader, BlockSums};
 use crate::core::pow::Difficulty;
-use crate::types::Tip;
+use crate::types::{OutputFeaturePosHeight, Tip};
 use crate::util::secp::pedersen::Commitment;
 use croaring::Bitmap;
 use gotts_store as store;
@@ -118,11 +118,8 @@ impl ChainStore {
 	}
 
 	/// Get PMMR pos for the given output commitment.
-	/// Note:
-	/// 	- Original prefix 'COMMIT_POS_PREFIX' is not used anymore for normal case, refer to #2889 for detail.
-	///		- To be compatible with the old callers, let's keep this function name but replace with new prefix 'COMMIT_POS_HGT_PREFIX'
 	pub fn get_output_pos(&self, commit: &Commitment) -> Result<u64, Error> {
-		let res: Result<Option<(u64, u64)>, Error> = self.db.get_ser(&to_key(
+		let res: Result<Option<OutputFeaturePosHeight>, Error> = self.db.get_ser(&to_key(
 			COMMIT_POS_HGT_PREFIX,
 			&mut commit.as_ref().to_vec(),
 		));
@@ -131,13 +128,13 @@ impl ChainStore {
 				"Output position for: {:?}",
 				commit
 			))),
-			Ok(Some((pos, _height))) => Ok(pos),
+			Ok(Some(f)) => Ok(f.position),
 			Err(e) => Err(e),
 		}
 	}
 
 	/// Get PMMR pos and block height for the given output commitment.
-	pub fn get_output_pos_height(&self, commit: &Commitment) -> Result<(u64, u64), Error> {
+	pub fn get_output_pos_height(&self, commit: &Commitment) -> Result<OutputFeaturePosHeight, Error> {
 		option_to_not_found(
 			self.db.get_ser(&to_key(
 				COMMIT_POS_HGT_PREFIX,
@@ -289,18 +286,17 @@ impl<'a> Batch<'a> {
 	pub fn save_output_pos_height(
 		&self,
 		commit: &Commitment,
-		pos: u64,
-		height: u64,
+		ofph: OutputFeaturePosHeight,
 	) -> Result<(), Error> {
 		self.db.put_ser(
 			&to_key(COMMIT_POS_HGT_PREFIX, &mut commit.as_ref().to_vec())[..],
-			&(pos, height),
+			&ofph,
 		)
 	}
 
 	/// Get output_pos from index.
 	pub fn get_output_pos(&self, commit: &Commitment) -> Result<u64, Error> {
-		let res: Result<Option<(u64, u64)>, Error> = self.db.get_ser(&to_key(
+		let res: Result<Option<OutputFeaturePosHeight>, Error> = self.db.get_ser(&to_key(
 			COMMIT_POS_HGT_PREFIX,
 			&mut commit.as_ref().to_vec(),
 		));
@@ -309,14 +305,14 @@ impl<'a> Batch<'a> {
 				"Output position for: {:?}",
 				commit
 			))),
-			Ok(Some((pos, _height))) => Ok(pos),
+			Ok(Some(ofph)) => Ok(ofph.position),
 			Err(e) => Err(e),
 		}
 	}
 
 	/// Get output height from index.
 	pub fn get_output_height(&self, commit: &Commitment) -> Result<u64, Error> {
-		let res: Result<Option<(u64, u64)>, Error> = self.db.get_ser(&to_key(
+		let res: Result<Option<OutputFeaturePosHeight>, Error> = self.db.get_ser(&to_key(
 			COMMIT_POS_HGT_PREFIX,
 			&mut commit.as_ref().to_vec(),
 		));
@@ -325,13 +321,13 @@ impl<'a> Batch<'a> {
 				"Output height for: {:?}",
 				commit
 			))),
-			Ok(Some((_pos, height))) => Ok(height),
+			Ok(Some(ofph)) => Ok(ofph.height),
 			Err(e) => Err(e),
 		}
 	}
 
 	/// Get output_pos and block height from index.
-	pub fn get_output_pos_height(&self, commit: &Commitment) -> Result<(u64, u64), Error> {
+	pub fn get_output_pos_height(&self, commit: &Commitment) -> Result<OutputFeaturePosHeight, Error> {
 		option_to_not_found(
 			self.db.get_ser(&to_key(
 				COMMIT_POS_HGT_PREFIX,
@@ -344,7 +340,7 @@ impl<'a> Batch<'a> {
 	/// Clear all entries from the (output_pos,height) index (must be rebuilt after).
 	pub fn clear_output_pos_height(&self) -> Result<(), Error> {
 		let key = to_key(COMMIT_POS_HGT_PREFIX, &mut "".to_string().into_bytes());
-		for (k, _) in self.db.iter::<(u64, u64)>(&key)? {
+		for (k, _) in self.db.iter::<OutputFeaturePosHeight>(&key)? {
 			self.db.delete(&k)?;
 		}
 		Ok(())

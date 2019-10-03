@@ -28,7 +28,9 @@ use crate::core::ser::{PMMRIndexHashable, PMMRable};
 use crate::error::{Error, ErrorKind};
 use crate::store::{Batch, ChainStore};
 use crate::txhashset::{RewindableKernelView, UTXOView};
-use crate::types::{OutputMMRPosition, Tip, TxHashSetRoots, TxHashsetWriteStatus};
+use crate::types::{
+	OutputFeaturePosHeight, OutputMMRPosition, Tip, TxHashSetRoots, TxHashsetWriteStatus,
+};
 use crate::util::secp::pedersen::Commitment;
 use crate::util::{file, secp_static, zip};
 use croaring::Bitmap;
@@ -156,15 +158,15 @@ impl TxHashSet {
 	/// Then we check the entry in the output MMR and confirm the hash matches.
 	pub fn is_unspent(&self, output_id: &OutputIdentifier) -> Result<OutputMMRPosition, Error> {
 		match self.commit_index.get_output_pos_height(&output_id.commit) {
-			Ok((pos, block_height)) => {
+			Ok(ofph) => {
 				let (hash, output) = match output_id.features {
 					OutputFeatures::Plain | OutputFeatures::Coinbase => {
 						let output_pmmr: ReadonlyPMMR<'_, OutputI, _> = ReadonlyPMMR::at(
 							&self.output_i_pmmr_h.backend,
 							self.output_i_pmmr_h.last_pos,
 						);
-						if let Some(output) = output_pmmr.get_data(pos) {
-							(output_pmmr.get_hash(pos), output.into_output())
+						if let Some(output) = output_pmmr.get_data(ofph.position) {
+							(output_pmmr.get_hash(ofph.position), output.into_output())
 						} else {
 							return Err(ErrorKind::OutputNotFound.into());
 						}
@@ -174,20 +176,20 @@ impl TxHashSet {
 							&self.output_ii_pmmr_h.backend,
 							self.output_ii_pmmr_h.last_pos,
 						);
-						if let Some(output) = output_pmmr.get_data(pos) {
-							(output_pmmr.get_hash(pos), output.into_output())
+						if let Some(output) = output_pmmr.get_data(ofph.position) {
+							(output_pmmr.get_hash(ofph.position), output.into_output())
 						} else {
 							return Err(ErrorKind::OutputNotFound.into());
 						}
 					}
 				};
 				if let Some(hash) = hash {
-					if hash == output.hash_with_index(pos - 1) && output_id.commit == output.commit
+					if hash == output.hash_with_index(ofph.position - 1) && output_id.commit == output.commit
 					{
 						Ok(OutputMMRPosition {
 							output_mmr_hash: hash,
-							position: pos,
-							height: block_height,
+							position: ofph.position,
+							height: ofph.height,
 						})
 					} else {
 						Err(ErrorKind::TxHashSetErr(format!("txhashset hash mismatch")).into())
@@ -327,7 +329,10 @@ impl TxHashSet {
 	}
 
 	/// Return Commit's MMR position and block height
-	pub fn get_output_pos_height(&self, commit: &Commitment) -> Result<(u64, u64), Error> {
+	pub fn get_output_pos_height(
+		&self,
+		commit: &Commitment,
+	) -> Result<OutputFeaturePosHeight, Error> {
 		Ok(self.commit_index.get_output_pos_height(&commit)?)
 	}
 
@@ -425,27 +430,32 @@ impl TxHashSet {
 			let hash = header_pmmr.get_header_hash_by_height(search_height + 1)?;
 			let h = batch.get_block_header(&hash)?;
 			while i < total_outputs {
-				let (id, pos) = outputs_pos[i].clone();
+				let (id, position) = outputs_pos[i].clone();
 				match id.features {
 					OutputFeatures::Plain | OutputFeatures::Coinbase => {
-						if pos > h.output_i_mmr_size {
+						if position > h.output_i_mmr_size {
 							break;
 						}
 					}
 					OutputFeatures::SigLocked => {
-						if pos > h.output_ii_mmr_size {
+						if position > h.output_ii_mmr_size {
 							break;
 						}
 					}
 				}
-				let height = if pos == 1 {
+				let height = if position == 1 {
 					// Special care about the unspent Genesis output
 					0
 				} else {
 					h.height
 				};
-				batch.save_output_pos_height(&id.commit, pos, height)?;
-				trace!("rebuild_height_pos_index: {:?}", (id.commit, pos, h.height));
+				batch.save_output_pos_height(&id.commit,
+                                             OutputFeaturePosHeight {
+                                                 features: id.features,
+                                                 position,
+                                                 height,
+                                             })?;
+				trace!("rebuild_height_pos_index: {:?}", (id.commit, position, height));
 				i += 1;
 			}
 		}
@@ -918,10 +928,15 @@ impl<'a> Extension<'a> {
 	/// Apply a new block to the current txhashet extension (output, rangeproof, kernel MMRs).
 	pub fn apply_block(&mut self, b: &Block) -> Result<(), Error> {
 		for out in b.outputs() {
-			let pos = self.apply_output(out)?;
+			let position = self.apply_output(out)?;
 			// Update the (output_pos,height) index for the new output.
 			self.batch
-				.save_output_pos_height(&out.commitment(), pos, b.header.height)?;
+				.save_output_pos_height(&out.commitment(),
+                                        OutputFeaturePosHeight{
+                                            features: out.features.as_flag(),
+                                            position,
+                                            height:b.header.height,
+                                        })?;
 		}
 
 		for input in b.inputs() {
@@ -929,9 +944,9 @@ impl<'a> Extension<'a> {
 		}
 
 		for kernel in b.kernels() {
-			let pos = self.apply_kernel(kernel)?;
+			let position = self.apply_kernel(kernel)?;
 			self.batch
-				.save_txkernel_pos_height(&kernel.excess, pos, b.header.height)?;
+				.save_txkernel_pos_height(&kernel.excess, position, b.header.height)?;
 		}
 
 		// Update the head of the extension to reflect the block we just applied.
@@ -942,38 +957,39 @@ impl<'a> Extension<'a> {
 
 	fn apply_input(&mut self, input: &Input) -> Result<(), Error> {
 		let commit = input.commitment();
-		//todo: features
-		let pos_res = self.batch.get_output_pos(&commit);
-		if let Ok(pos) = pos_res {
+		let ofph_res = self.batch.get_output_pos_height(&commit);
+		if let Ok(ofph) = ofph_res {
 			// First check this input corresponds to an existing entry in the output MMR.
-			if let Some(hash) = self.output_i_pmmr.get_hash(pos) {
-				if let Some(output) = self.output_i_pmmr.get_data(pos) {
-					if hash != output.hash_with_index(pos - 1) || input.commit != output.id.commit {
-						return Err(ErrorKind::TxHashSetErr(format!(
-							"output pmmr hash mismatch at pos {}",
-							pos
-						))
-						.into());
+			let mut is_ok = false;
+			match ofph.features {
+				OutputFeatures::Plain | OutputFeatures::Coinbase => {
+					if let Some(hash) = self.output_i_pmmr.get_hash(ofph.position) {
+						if let Some(output) = self.output_i_pmmr.get_data(ofph.position) {
+							if hash == output.hash_with_index(ofph.position - 1)
+								&& input.commit == output.id.commit
+							{
+								is_ok = true;
+							}
+						}
 					}
-				} else {
-					error!(
-						"apply_input: corrupted storage? pmmr hash and data mismatch at pos: {}",
-						pos
-					);
-					return Err(ErrorKind::TxHashSetErr(format!(
-						"output pmmr hash and data mismatch at pos {}",
-						pos
-					))
-					.into());
 				}
-			} else {
-				error!(
-					"apply_input: corrupted storage? pmmr hash and data mismatch at pos: {}",
-					pos
-				);
+				OutputFeatures::SigLocked => {
+					if let Some(hash) = self.output_ii_pmmr.get_hash(ofph.position) {
+						if let Some(output) = self.output_ii_pmmr.get_data(ofph.position) {
+							if hash == output.hash_with_index(ofph.position - 1)
+								&& input.commit == output.id.commit
+							{
+								is_ok = true;
+							}
+						}
+					}
+				}
+			}
+
+			if !is_ok {
 				return Err(ErrorKind::TxHashSetErr(format!(
-					"output pmmr hash not found at pos {}",
-					pos
+					"output pmmr hash not found or mismatch at pos {} for {:?}",
+					ofph.position, commit,
 				))
 				.into());
 			}
@@ -981,7 +997,11 @@ impl<'a> Extension<'a> {
 			// Now prune the output_pmmr and their storage.
 			// Input is not valid if we cannot prune successfully (to spend an unspent
 			// output).
-			match self.output_i_pmmr.prune(pos) {
+			let prune_res = match ofph.features {
+				OutputFeatures::Plain | OutputFeatures::Coinbase => self.output_i_pmmr.prune(ofph.position),
+				OutputFeatures::SigLocked => self.output_ii_pmmr.prune(ofph.position),
+			};
+			match prune_res {
 				Ok(true) => {
 					return Ok(());
 				}
@@ -996,16 +1016,22 @@ impl<'a> Extension<'a> {
 	fn apply_output(&mut self, out: &Output) -> Result<(u64), Error> {
 		let commit = out.commitment();
 
-		//todo: get features also
-		if let Ok(pos) = self.batch.get_output_pos(&commit) {
-			if let Some(out_mmr) = self.output_i_pmmr.get_data(pos) {
-				if out_mmr.id.commitment() == commit {
-					return Err(ErrorKind::DuplicateCommitment(commit).into());
+		//todo: think again, can this ensure the commitment unique?
+		if let Ok(ofph) = self.batch.get_output_pos_height(&commit) {
+			match ofph.features {
+				OutputFeatures::Plain | OutputFeatures::Coinbase => {
+					if let Some(out_mmr) = self.output_i_pmmr.get_data(ofph.position) {
+						if out_mmr.id.commitment() == commit {
+							return Err(ErrorKind::DuplicateCommitment(commit).into());
+						}
+					}
 				}
-			}
-			if let Some(out_mmr) = self.output_ii_pmmr.get_data(pos) {
-				if out_mmr.id.commitment() == commit {
-					return Err(ErrorKind::DuplicateCommitment(commit).into());
+				OutputFeatures::SigLocked => {
+					if let Some(out_mmr) = self.output_ii_pmmr.get_data(ofph.position) {
+						if out_mmr.id.commitment() == commit {
+							return Err(ErrorKind::DuplicateCommitment(commit).into());
+						}
+					}
 				}
 			}
 		}
@@ -1041,12 +1067,17 @@ impl<'a> Extension<'a> {
 	pub fn merkle_proof(&self, output: &OutputIdentifier) -> Result<MerkleProof, Error> {
 		debug!("txhashset: merkle_proof: output: {:?}", output.commit,);
 		// then calculate the Merkle Proof based on the known pos
-		let pos = self.batch.get_output_pos(&output.commit)?;
-		//todo: OutputII
-		let merkle_proof = self
-			.output_i_pmmr
-			.merkle_proof(pos)
-			.map_err(&ErrorKind::TxHashSetErr)?;
+		let ofph = self.batch.get_output_pos_height(&output.commit)?;
+		let merkle_proof = match ofph.features {
+			OutputFeatures::Plain | OutputFeatures::Coinbase => self
+				.output_i_pmmr
+				.merkle_proof(ofph.position)
+				.map_err(&ErrorKind::TxHashSetErr)?,
+			OutputFeatures::SigLocked => self
+				.output_ii_pmmr
+				.merkle_proof(ofph.position)
+				.map_err(&ErrorKind::TxHashSetErr)?,
+		};
 
 		Ok(merkle_proof)
 	}
