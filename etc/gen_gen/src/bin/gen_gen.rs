@@ -180,17 +180,17 @@ fn update_genesis_rs(gen: &core::core::Block) {
 		),
 	));
 	replacements.push((
-		"output_root".to_string(),
+		"output_i_root".to_string(),
 		format!(
 			"Hash::from_hex(\"{}\").unwrap()",
-			gen.header.output_root.to_hex()
+			gen.header.output_i_root.to_hex()
 		),
 	));
 	replacements.push((
-		"range_proof_root".to_string(),
+		"output_ii_root".to_string(),
 		format!(
 			"Hash::from_hex(\"{}\").unwrap()",
-			gen.header.range_proof_root.to_hex()
+			gen.header.output_ii_root.to_hex()
 		),
 	));
 	replacements.push((
