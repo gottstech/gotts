@@ -41,6 +41,7 @@ extern crate zeroize;
 #[macro_use]
 pub mod macros;
 
+pub mod address;
 pub mod consensus;
 pub mod core;
 pub mod genesis;

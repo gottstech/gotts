@@ -226,6 +226,12 @@ pub trait Writeable {
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), Error>;
 }
 
+/// Trait for Hash160 serialization.
+pub trait Hash160Writeable {
+	/// Write the data held by this Writeable to the provided writer
+	fn write_into<W: io::Write>(&self, writer: W) -> Result<(), Error>;
+}
+
 /// Reader that exposes an Iterator interface.
 pub struct IteratingReader<'a, T> {
 	count: u64,
@@ -658,6 +664,15 @@ impl Writeable for PublicKey {
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), Error> {
 		let secp = Secp256k1::with_caps(ContextFlag::None);
 		writer.write_fixed_bytes(&self.serialize_vec(&secp, true).as_ref())?;
+		Ok(())
+	}
+}
+
+impl Hash160Writeable for PublicKey {
+	// Write the public key in compressed form
+	fn write_into<W: io::Write>(&self, mut writer: W) -> Result<(), Error> {
+		let secp = Secp256k1::with_caps(ContextFlag::None);
+		writer.write_all(&self.serialize_vec(&secp, true).as_ref())?;
 		Ok(())
 	}
 }
