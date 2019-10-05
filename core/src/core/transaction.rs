@@ -15,6 +15,7 @@
 
 //! Transactions
 
+use crate::address::Address;
 use crate::blake2::blake2b::blake2b;
 use crate::core::hash::{DefaultHashable, Hash, Hashed};
 use crate::core::verifier_cache::VerifierCache;
@@ -35,6 +36,7 @@ use crate::util::static_secp_instance;
 use crate::util::RwLock;
 use crate::{consensus, global};
 
+use bitcoin_hashes::{self, hash160};
 use chrono::naive::{MAX_DATE, MIN_DATE};
 use chrono::prelude::{DateTime, NaiveDateTime, Utc};
 use enum_primitive::FromPrimitive;
@@ -1488,7 +1490,7 @@ impl InputsUnlocking {
 
 		let secp = static_secp_instance();
 		let secp = secp.lock();
-		let p2pkh = self.unlocker.pub_key.serialize_vec(&secp, true).hash();
+		let p2pkh = Address::pkh(&self.unlocker.pub_key);
 		let mut msg_to_sign: Vec<u8> = Vec::with_capacity(outputs_to_spent.len() * SINGLE_MSG_SIZE);
 
 		for output_ex in outputs_to_spent {
@@ -1811,7 +1813,7 @@ impl Output {
 	}
 
 	/// PublicKeyHash which this output has been locked on
-	pub fn pkh_locked(&self) -> Result<Hash, Error> {
+	pub fn pkh_locked(&self) -> Result<hash160::Hash, Error> {
 		match self.features {
 			OutputFeaturesEx::Plain { .. } | OutputFeaturesEx::Coinbase { .. } => {
 				Err(Error::OutputLocker("output w/o locker".to_owned()))

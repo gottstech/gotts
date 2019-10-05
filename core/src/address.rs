@@ -129,6 +129,14 @@ impl Address {
 		}
 	}
 
+	/// Calculate Public-Key-Hash, i.e. RIPEMD160(SHA256(PublicKey)).
+	pub fn pkh(pk: &PublicKey) -> hash160::Hash {
+		let mut hash_engine = hash160::Hash::engine();
+		pk.write_into(&mut hash_engine).unwrap();
+
+		hash160::Hash::from_engine(hash_engine)
+	}
+
 	/// Create an address from a public key hash
 	pub fn from_pubkeyhash(pubkey_hash: hash160::Hash, network: ChainTypes) -> Address {
 		Address {
