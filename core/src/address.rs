@@ -30,7 +30,7 @@
 //!     // Generate random key pair
 //!     let secp = Secp256k1::with_caps(ContextFlag::Full);
 //!
-//!     let private_key = SecretKey::new(&secp, &mut thread_rng());
+//!     let private_key = SecretKey::new(&mut thread_rng());
 //!     let public_key = PublicKey::from_secret_key(&secp, &private_key).unwrap();
 //!
 //!     // Generate pay-to-pubkey-hash address
@@ -220,7 +220,6 @@ mod tests {
 
 	use crate::util;
 	use crate::util::secp::key::PublicKey;
-	use crate::util::secp::{ContextFlag, Secp256k1};
 	use bitcoin_hashes::{self, hash160, hex::ToHex, Hash};
 
 	fn round_trips(addr: &Address) {
@@ -233,15 +232,11 @@ mod tests {
 
 	#[test]
 	fn test_p2pkh_from_key() {
-		let secp = Secp256k1::with_caps(ContextFlag::None);
-
 		// get address from a public key
 		let pubkey = PublicKey::from_slice(
-			&secp,
 			&util::from_hex(
-				r##"04
-				8d5141948c1702e8c95f438815794b87f706a8d4cd2bffad1dc1570971032c9b
-                6042a0431ded2478b5c9cf2d81c124a5e57347a3c63ef0e7716cf54d613ba183"##
+				"048d5141948c1702e8c95f438815794b87f706a8d4cd2bffad1dc1570971032c9b\
+				 6042a0431ded2478b5c9cf2d81c124a5e57347a3c63ef0e7716cf54d613ba183"
 					.to_string(),
 			)
 			.unwrap(),
@@ -255,7 +250,6 @@ mod tests {
 
 		// same public key as above but in compressed form
 		let pubkey = PublicKey::from_slice(
-			&secp,
 			&util::from_hex(
 				"038d5141948c1702e8c95f438815794b87f706a8d4cd2bffad1dc1570971032c9b".to_string(),
 			)
@@ -270,7 +264,6 @@ mod tests {
 
 		// another address
 		let pubkey = PublicKey::from_slice(
-			&secp,
 			&util::from_hex(
 				"03df154ebfcf29d29cc10d5c2565018bce2d9edbab267c31d2caf44a63056cf99f".to_string(),
 			)
@@ -285,7 +278,6 @@ mod tests {
 
 		// from Bitcoin transaction: b3c8c2b6cfc335abbcb2c7823a8453f55d64b2b5125a9a61e8737230cdb8ce20
 		let pubkey = PublicKey::from_slice(
-			&secp,
 			&util::from_hex(
 				"033bc8c83c52df5712229a2f72206d90192366c36428cb0c12b6af98324d97bfbc".to_string(),
 			)
@@ -295,7 +287,7 @@ mod tests {
 		let addr = Address::from_pubkey(&pubkey, ChainTypes::Mainnet);
 		assert_eq!(
 			&addr.to_string(),
-			"gs1qvzvkjn4q3nszqxrv3nraga2r822xjty3ykvkuw"
+			"gs1qvzvkjn4q3nszqxrv3nraga2r822xjty36fs0jv"
 		);
 
 		round_trips(&addr);

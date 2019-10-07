@@ -31,7 +31,6 @@ use crate::util::secp::constants::{
 use crate::util::secp::key::PublicKey;
 use crate::util::secp::pedersen::{Commitment, RangeProof};
 use crate::util::secp::Signature;
-use crate::util::secp::{ContextFlag, Secp256k1};
 use bitcoin_hashes::{self, hash160};
 use byteorder::{BigEndian, ByteOrder, ReadBytesExt};
 use std::fmt::{self, Debug};
@@ -663,8 +662,7 @@ impl FixedLength for PublicKey {
 impl Writeable for PublicKey {
 	// Write the public key in compressed form
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), Error> {
-		let secp = Secp256k1::with_caps(ContextFlag::None);
-		writer.write_fixed_bytes(&self.serialize_vec(&secp, true).as_ref())?;
+		writer.write_fixed_bytes(&self.serialize_vec(true).as_ref())?;
 		Ok(())
 	}
 }
@@ -672,8 +670,7 @@ impl Writeable for PublicKey {
 impl Hash160Writeable for PublicKey {
 	// Write the public key in compressed form
 	fn write_into<W: io::Write>(&self, mut writer: W) -> Result<(), Error> {
-		let secp = Secp256k1::with_caps(ContextFlag::None);
-		writer.write_all(&self.serialize_vec(&secp, true).as_ref())?;
+		writer.write_all(&self.serialize_vec(true).as_ref())?;
 		Ok(())
 	}
 }
@@ -682,8 +679,7 @@ impl Readable for PublicKey {
 	// Read the public key in compressed form
 	fn read(reader: &mut dyn Reader) -> Result<Self, Error> {
 		let buf = reader.read_fixed_bytes(PublicKey::LEN)?;
-		let secp = Secp256k1::with_caps(ContextFlag::None);
-		let pk = PublicKey::from_slice(&secp, &buf).map_err(|_| Error::CorruptedData)?;
+		let pk = PublicKey::from_slice(&buf).map_err(|_| Error::CorruptedData)?;
 		Ok(pk)
 	}
 }

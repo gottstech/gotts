@@ -125,8 +125,8 @@ pub fn sum_kernel_offsets(
 ) -> Result<BlindingFactor, Error> {
 	let secp = static_secp_instance();
 	let secp = secp.lock();
-	let positive = to_secrets(positive, &secp);
-	let negative = to_secrets(negative, &secp);
+	let positive = to_secrets(positive);
+	let negative = to_secrets(negative);
 
 	if positive.is_empty() {
 		Ok(BlindingFactor::zero())
@@ -136,9 +136,9 @@ pub fn sum_kernel_offsets(
 	}
 }
 
-fn to_secrets(bf: Vec<BlindingFactor>, secp: &secp::Secp256k1) -> Vec<SecretKey> {
+fn to_secrets(bf: Vec<BlindingFactor>) -> Vec<SecretKey> {
 	bf.into_iter()
 		.filter(|x| *x != BlindingFactor::zero())
-		.filter_map(|x| x.secret_key(&secp).ok())
+		.filter_map(|x| x.secret_key().ok())
 		.collect::<Vec<_>>()
 }

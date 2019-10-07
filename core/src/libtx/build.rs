@@ -247,7 +247,7 @@ where
 	let msg = kern.msg_to_sign()?;
 
 	// Generate kernel excess and excess_sig using the split key k1.
-	let skey = blind_sum.secret_key(&keychain.secp())?;
+	let skey = blind_sum.secret_key()?;
 	kern.excess = ctx.keychain.secp().commit_i(0i64, skey)?;
 	let pubkey = &kern.excess.to_pubkey(&keychain.secp())?;
 	kern.excess_sig =

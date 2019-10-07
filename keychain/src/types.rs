@@ -177,8 +177,8 @@ impl Identifier {
 		self.0.clone()
 	}
 
-	pub fn from_pubkey(secp: &Secp256k1, pubkey: &PublicKey) -> Identifier {
-		let bytes = pubkey.serialize_vec(secp, true);
+	pub fn from_pubkey(pubkey: &PublicKey) -> Identifier {
+		let bytes = pubkey.serialize_vec(true);
 		let identifier = blake2b(IDENTIFIER_SIZE, &[], &bytes[..]);
 		Identifier::from_bytes(&identifier.as_bytes())
 	}
@@ -188,7 +188,7 @@ impl Identifier {
 	/// corresponding to the secret key provided.
 	pub fn from_secret_key(secp: &Secp256k1, key: &SecretKey) -> Result<Identifier, Error> {
 		let key_id = PublicKey::from_secret_key(secp, key)?;
-		Ok(Identifier::from_pubkey(secp, &key_id))
+		Ok(Identifier::from_pubkey(&key_id))
 	}
 
 	pub fn from_hex(hex: &str) -> Result<Identifier, Error> {
@@ -261,7 +261,7 @@ impl Add for BlindingFactor {
 		let keys = vec![self, other]
 			.into_iter()
 			.filter(|x| *x != BlindingFactor::zero())
-			.filter_map(|x| x.secret_key(&secp).ok())
+			.filter_map(|x| x.secret_key().ok())
 			.collect::<Vec<_>>();
 
 		if keys.is_empty() {
@@ -299,14 +299,14 @@ impl BlindingFactor {
 		Ok(BlindingFactor::from_slice(&bytes))
 	}
 
-	pub fn secret_key(&self, secp: &Secp256k1) -> Result<secp::key::SecretKey, Error> {
+	pub fn secret_key(&self) -> Result<secp::key::SecretKey, Error> {
 		if *self == BlindingFactor::zero() {
 			// TODO - need this currently for tx tests
 			// the "zero" secret key is not actually a valid secret_key
 			// and secp lib checks this
 			Ok(secp::key::ZERO_KEY)
 		} else {
-			secp::key::SecretKey::from_slice(secp, &self.0).map_err(|e| Error::Secp(e))
+			secp::key::SecretKey::from_slice(&self.0).map_err(|e| Error::Secp(e))
 		}
 	}
 
@@ -317,10 +317,10 @@ impl BlindingFactor {
 	/// and kernels from a block to identify and reconstruct a particular tx
 	/// from a block. You would need both k1, k2 to do this.
 	pub fn split(&self, secp: &Secp256k1) -> Result<SplitBlindingFactor, Error> {
-		let skey_1 = secp::key::SecretKey::new(secp, &mut thread_rng());
+		let skey_1 = secp::key::SecretKey::new(&mut thread_rng());
 
 		// use blind_sum to subtract skey_1 from our key (to give k = k1 + k2)
-		let skey = self.secret_key(secp)?;
+		let skey = self.secret_key()?;
 		let skey_2 = secp.blind_sum(vec![skey], vec![skey_1.clone()])?;
 
 		let blind_1 = BlindingFactor::from_secret_key(skey_1);
@@ -525,14 +525,14 @@ mod test {
 	#[test]
 	fn split_blinding_factor() {
 		let secp = Secp256k1::new();
-		let skey_in = SecretKey::new(&secp, &mut thread_rng());
+		let skey_in = SecretKey::new(&mut thread_rng());
 		let blind = BlindingFactor::from_secret_key(skey_in.clone());
 		let split = blind.split(&secp).unwrap();
 
 		// split a key, sum the split keys and confirm the sum matches the original key
-		let mut skey_sum = split.blind_1.secret_key(&secp).unwrap();
-		let skey_2 = split.blind_2.secret_key(&secp).unwrap();
-		let _ = skey_sum.add_assign(&secp, &skey_2).unwrap();
+		let mut skey_sum = split.blind_1.secret_key().unwrap();
+		let skey_2 = split.blind_2.secret_key().unwrap();
+		let _ = skey_sum.add_assign(&skey_2).unwrap();
 		assert_eq!(skey_in, skey_sum);
 	}
 
@@ -540,12 +540,11 @@ mod test {
 	// the same key that we started with (k + 0 = k)
 	#[test]
 	fn zero_key_addition() {
-		let secp = Secp256k1::new();
-		let skey_in = SecretKey::new(&secp, &mut thread_rng());
+		let skey_in = SecretKey::new(&mut thread_rng());
 		let skey_zero = ZERO_KEY;
 
 		let mut skey_out = skey_in.clone();
-		let _ = skey_out.add_assign(&secp, &skey_zero).unwrap();
+		let _ = skey_out.add_assign(&skey_zero).unwrap();
 
 		assert_eq!(skey_in, skey_out);
 	}

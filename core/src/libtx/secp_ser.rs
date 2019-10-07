@@ -223,7 +223,7 @@ mod test {
 		pub fn random() -> SerTest {
 			let static_secp = static_secp_instance();
 			let secp = static_secp.lock();
-			let sk = SecretKey::new(&secp, &mut thread_rng());
+			let sk = SecretKey::new(&mut thread_rng());
 			let mut msg = [0u8; 32];
 			thread_rng().fill(&mut msg);
 			let msg = Message::from_slice(&msg).unwrap();

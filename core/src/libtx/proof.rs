@@ -93,14 +93,14 @@ where
 	K: Keychain,
 {
 	let secp = k.secp();
-	let private_nonce = SecretKey::new(&secp, &mut thread_rng());
+	let private_nonce = SecretKey::new(&mut thread_rng());
 	let pub_nonce = PublicKey::from_secret_key(&secp, &private_nonce)?;
 
 	// The ephemeral key: `q = Hash(secured_w || k*P)`
 	let mut tmp = recipient_pubkey.clone();
 	tmp.mul_assign(&secp, &private_nonce)?;
 	let hash = (secured_w, tmp).hash();
-	let ephemeral_key_q = SecretKey::from_slice(&secp, hash.as_bytes())?;
+	let ephemeral_key_q = SecretKey::from_slice(hash.as_bytes())?;
 
 	// The real 'w' is calculated by: `w = secured_w XOR q[0..8]`.
 	let mut buf = &ephemeral_key_q.0[0..8];
@@ -301,9 +301,7 @@ where
 {
 	/// Creates a new instance of this proof builder
 	pub fn new(keychain: &'a K) -> Self {
-		let public_root_key = keychain
-			.public_root_key()
-			.serialize_vec(keychain.secp(), true);
+		let public_root_key = keychain.public_root_key().serialize_vec(true);
 		let rewind_hash = Hash::from_vec(blake2b(32, &[], &public_root_key[..]).as_bytes());
 
 		Self {

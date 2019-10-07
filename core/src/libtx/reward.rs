@@ -59,7 +59,7 @@ where
 	let msg = features.kernel_sig_msg()?;
 	let sig = match test_mode {
 		true => {
-			let test_nonce = secp::key::SecretKey::from_slice(&secp, &[1; 32])?;
+			let test_nonce = secp::key::SecretKey::from_slice(&[1; 32])?;
 			aggsig::sign_from_key_id(
 				&secp,
 				keychain,
