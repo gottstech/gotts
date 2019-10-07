@@ -16,7 +16,6 @@
 //! Rangeproof library functions
 
 use super::secp_ser::pubkey_serde;
-use crate::address::Address;
 use crate::blake2::blake2b::blake2b;
 use crate::core::hash::{Hash, Hashed};
 use crate::keychain::{Identifier, Keychain};
@@ -28,7 +27,6 @@ use crate::util::secp::pedersen::Commitment;
 use crate::util::secp::{self, Secp256k1};
 use crate::zeroize::Zeroize;
 
-use bitcoin_hashes::{self, hash160};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use rand::thread_rng;
 use std::cmp::min;
@@ -44,8 +42,8 @@ pub const OUTPUT_LOCKER_SIZE: usize = 32 + secp::COMPRESSED_PUBLIC_KEY_SIZE + 8 
 /// A locker to limit an output only spendable to someone who owns the private key of 'p2pkh'.
 #[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OutputLocker {
-	/// The hash160 hash of 'Pay-to-Public-Key-Hash'.
-	pub p2pkh: hash160::Hash,
+	/// The Blake2b hash of 'Pay-to-Public-Key-Hash'.
+	pub p2pkh: Hash,
 	/// The 'R' for ephemeral key: `q = Hash(secured_w || p*R)`.
 	#[serde(with = "pubkey_serde")]
 	pub pub_nonce: PublicKey,
@@ -68,7 +66,7 @@ impl Writeable for OutputLocker {
 
 impl Readable for OutputLocker {
 	fn read(reader: &mut dyn Reader) -> Result<OutputLocker, ser::Error> {
-		let p2pkh = hash160::Hash::read(reader)?;
+		let p2pkh = Hash::read(reader)?;
 		let pub_nonce = PublicKey::read(reader)?;
 		let secured_w = reader.read_i64()?;
 		let relative_lock_height = reader.read_u32()?;
@@ -113,7 +111,7 @@ where
 	Ok((
 		commit,
 		OutputLocker {
-			p2pkh: Address::pkh(recipient_pubkey),
+			p2pkh: recipient_pubkey.serialize_vec(true).hash(),
 			pub_nonce,
 			secured_w,
 			relative_lock_height,
