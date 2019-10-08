@@ -20,7 +20,9 @@ use crate::keychain::BlindingFactor;
 use crate::serde::{Deserialize, Deserializer, Serializer};
 use crate::util::to_hex;
 
-pub use crate::util::secp::{hex_to_key, option_sig_serde, pubkey_serde, sig_serde, u8_to_hex};
+pub use crate::util::secp::{
+	hex_to_key, option_pubkey_serde, option_sig_serde, pubkey_serde, sig_serde, u8_to_hex,
+};
 
 /// Creates a SecuredPath from a hex string
 pub fn securedpath_from_hex<'de, D>(deserializer: D) -> Result<SecuredPath, D::Error>
