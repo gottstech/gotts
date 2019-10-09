@@ -83,30 +83,35 @@ impl Readable for OutputLocker {
 pub fn create_output_locker<K>(
 	k: &K,
 	recipient_pubkey: &PublicKey,
-	secured_w: i64,
+	w: i64,
 	relative_lock_height: u32,
 	key_id: &Identifier,
+	use_test_rng: bool,
 ) -> Result<(Commitment, OutputLocker), Error>
 where
 	K: Keychain,
 {
 	let secp = k.secp();
-	let private_nonce = SecretKey::new(&mut thread_rng());
+	let private_nonce = if !use_test_rng {
+		SecretKey::new(&mut thread_rng())
+	} else {
+		SecretKey::from_slice(&[1; 32]).unwrap()
+	};
 	let pub_nonce = PublicKey::from_secret_key(&secp, &private_nonce)?;
-
-	// The ephemeral key: `q = Hash(secured_w || k*P)`
-	let mut tmp = recipient_pubkey.clone();
-	tmp.mul_assign(&secp, &private_nonce)?;
-	let hash = (secured_w, tmp).hash();
-	let ephemeral_key_q = SecretKey::from_slice(hash.as_bytes())?;
-
-	// The real 'w' is calculated by: `w = secured_w XOR q[0..8]`.
-	let mut buf = &ephemeral_key_q.0[0..8];
-	let num = buf.read_i64::<LittleEndian>().unwrap();
-	let w = secured_w ^ num;
 
 	// The Pedersen commitment: `C = q*G + w*H`.
 	let commit = k.commit(w, key_id)?;
+
+	// The ephemeral key: `q = Hash(commit || k*P)`
+	let mut tmp = recipient_pubkey.clone();
+	tmp.mul_assign(&secp, &private_nonce)?;
+	let hash = (commit.as_ref().to_vec(), tmp.serialize_vec(true)).hash();
+	let ephemeral_key_q = SecretKey::from_slice(hash.as_bytes())?;
+
+	// The secured_w is calculated by: `secured_w = w XOR q[0..8]`.
+	let mut buf = &ephemeral_key_q.0[0..8];
+	let num = buf.read_i64::<LittleEndian>().unwrap();
+	let secured_w = w ^ num;
 
 	Ok((
 		commit,
@@ -118,6 +123,43 @@ where
 		},
 	))
 }
+
+//todo: Rewind a OutputLocker to retrieve the PathMessage
+//pub fn rewind_outputlocker<K, B>(
+//	k: &K,
+//	b: &B,
+//	commit: &Commitment,
+//	locker: &OutputLocker,
+//) -> Result<PathMessage, Error>
+//where
+//	K: Keychain,
+//	B: ProofBuild,
+//{
+//	let secp = k.secp();
+//
+//	let recipient_prikey_id = k.derive_key_id(4, 0, 1, 0, path);
+//	let recipient_prikey = k.derive_key(&recipient_prikey_id).unwrap();
+//
+//	// The ephemeral key: `q = Hash(commit || p*R)`
+//	let mut tmp = locker.pub_nonce.clone();
+//	tmp.mul_assign(&secp, &recipient_prikey)?;
+//	let hash = (commit.as_ref().to_vec(), tmp.serialize_vec(true)).hash();
+//	let ephemeral_key_q = SecretKey::from_slice(hash.as_bytes())?;
+//
+//	// The secured_w is calculated by: `secured_w = w XOR q[0..8]`.
+//	let mut buf = &ephemeral_key_q.0[0..8];
+//	let num = buf.read_i64::<LittleEndian>().unwrap();
+//	let w = locker.secured_w ^ num;
+//
+//	// Check output
+//	let commit_exp = k.commit_raw(w, &ephemeral_key_q)?;
+//	match commit == &commit_exp {
+//		true => Ok(message.key_id.clone()),
+//		false => Err(ErrorKind::OutputLocker("check NOK".to_owned()).into()),
+//	}
+//
+//	Ok(info)
+//}
 
 /// A secured path message which hide the key identifier and the random w of commitment
 #[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]

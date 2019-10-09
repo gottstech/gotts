@@ -46,8 +46,11 @@ pub enum ErrorKind {
 	#[fail(display = "Rangeproof Error")]
 	RangeProof(String),
 	/// PathMessage error
-	#[fail(display = "PathMessage Error")]
+	#[fail(display = "PathMessage Error: {}", 0)]
 	PathMessage(String),
+	/// OutputLocker error
+	#[fail(display = "OutputLocker Error: {}", 0)]
+	OutputLocker(String),
 }
 
 impl Fail for Error {

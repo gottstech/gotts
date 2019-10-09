@@ -26,6 +26,7 @@
 //! build::transaction(vec![input_rand(75), output_rand(42), output_rand(32),
 //!   with_fee(1)])
 
+use crate::address::Address;
 use crate::core::{Input, Output, OutputFeatures, OutputFeaturesEx, Transaction, TxKernel};
 use crate::keychain::{BlindSum, BlindingFactor, Identifier, Keychain};
 use crate::libtx::proof::ProofBuild;
@@ -100,8 +101,7 @@ where
 	build_input(value, 0i64, OutputFeatures::Coinbase, key_id)
 }
 
-/// Adds an output with the provided value and key identifier from the
-/// keychain.
+/// Adds an output with the provided value and key identifier from the keychain.
 pub fn output<K, B>(value: u64, w: Option<i64>, key_id: Identifier) -> Box<Append<K, B>>
 where
 	K: Keychain,
@@ -124,6 +124,53 @@ where
 			(
 				tx.with_output(Output {
 					features: OutputFeaturesEx::Plain { spath },
+					commit,
+					value,
+				}),
+				kern,
+				sum.add_key_id(key_id.to_value_path(value, w)),
+			)
+		},
+	)
+}
+
+/// Adds a non-interactive transaction output with the provided value and key identifier from the keychain.
+pub fn non_interactive_output<K, B>(
+	value: u64,
+	w: Option<i64>,
+	key_id: Identifier,
+	recipient_address: Address,
+	use_test_rng: bool,
+) -> Box<Append<K, B>>
+where
+	K: Keychain,
+	B: ProofBuild,
+{
+	Box::new(
+		move |build, (tx, kern, sum)| -> (Transaction, TxKernel, BlindSum) {
+			let w: i64 = if let Some(w) = w {
+				w
+			} else {
+				thread_rng().gen()
+			};
+
+			let (commit, locker) = proof::create_output_locker(
+				build.keychain,
+				&recipient_address.get_inner_pubkey().unwrap(),
+				w,
+				1,
+				&key_id,
+				use_test_rng,
+			)
+			.unwrap();
+			debug!(
+				"Building non-interactive tx output: {}, {:?}",
+				value, commit
+			);
+
+			(
+				tx.with_output(Output {
+					features: OutputFeaturesEx::SigLocked { locker },
 					commit,
 					value,
 				}),

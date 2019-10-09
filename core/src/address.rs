@@ -55,7 +55,7 @@ use super::ser::Hash160Writeable;
 use crate::util::secp::{self, key::PublicKey};
 
 /// Address error.
-#[derive(Clone, Debug, Fail, PartialEq)]
+#[derive(Clone, PartialEq, Debug, Fail)]
 pub enum Error {
 	/// HRP(Human Readable Part) error
 	#[fail(display = "HRP Error")]

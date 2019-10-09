@@ -1159,20 +1159,35 @@ impl Chain {
 		Ok(self.txhashset.read().get_output_pos_height(commit)?)
 	}
 
-	/// outputs by insertion index
+	/// outputs by insertion index.
+	/// Only used by transaction API for traversal of utxo set.
 	pub fn unspent_outputs_by_insertion_index(
 		&self,
 		start_index: u64,
 		max: u64,
 	) -> Result<(u64, u64, Vec<Output>), Error> {
-		let txhashset = self.txhashset.read();
-		let max_index = txhashset.highest_output_i_insertion_index();
-		let outputs = txhashset.outputs_i_by_insertion_index(start_index, max);
 		let mut output_vec: Vec<Output> = vec![];
-		for x in outputs.1 {
-			output_vec.push(x.into_output());
+		let txhashset = self.txhashset.read();
+		let max_i_index = txhashset.highest_output_i_insertion_index();
+		let max_ii_index = txhashset.highest_output_ii_insertion_index();
+		// Traversal OutputI firstly, then OutputII.
+		if start_index <= max_i_index {
+			let outputs = txhashset.outputs_i_by_insertion_index(start_index, max);
+			for x in outputs.1 {
+				output_vec.push(x.into_output());
+			}
+			Ok((outputs.0, max_i_index + max_ii_index, output_vec))
+		} else {
+			let outputs = txhashset.outputs_ii_by_insertion_index(start_index - max_i_index, max);
+			for x in outputs.1 {
+				output_vec.push(x.into_output());
+			}
+			Ok((
+				outputs.0 + max_i_index,
+				max_i_index + max_ii_index,
+				output_vec,
+			))
 		}
-		Ok((outputs.0, max_index, output_vec))
 	}
 
 	/// output by mmr position
