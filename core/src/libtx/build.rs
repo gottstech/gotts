@@ -156,7 +156,7 @@ where
 
 			let (commit, locker) = proof::create_output_locker(
 				build.keychain,
-				&recipient_address.get_inner_pubkey().unwrap(),
+				&recipient_address.get_inner_pubkey(),
 				w,
 				1,
 				&key_id,

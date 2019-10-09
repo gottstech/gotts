@@ -22,8 +22,9 @@
 //! use gotts_util;
 //!	use gotts_util::secp::key::{SecretKey, PublicKey};
 //!	use gotts_util::secp::{ContextFlag, Secp256k1};
-//! use gotts_core::address::{pkh160, Address};
+//! use gotts_core::address::Address;
 //! use gotts_core::global::ChainTypes;
+//! use gotts_keychain::ExtKeychainPath;
 //! use rand::thread_rng;
 //!
 //! fn main() {
@@ -33,25 +34,23 @@
 //!     let private_key = SecretKey::new(&mut thread_rng());
 //!     let public_key = PublicKey::from_secret_key(&secp, &private_key).unwrap();
 //!
-//!     // Generate RIPEMD160(HASH256(PublicKey)) address
-//!     let address = Address::from_pubkeyhash(pkh160(&public_key), ChainTypes::Mainnet);
-//!     println!("new generated Hash160 address: {}", address);
-//!
 //!     // Generate PublicKey address
-//!     let address = Address::from_pubkey(&public_key, ChainTypes::Mainnet);
-//!     println!("new generated PublicKey address: {}", address);
+//! 	let key_id = ExtKeychainPath::new(4, 0, 0, 0, 100).to_identifier();
+//!     let address = Address::from_pubkey(&public_key, &key_id, ChainTypes::Mainnet);
+//!     println!("new generated address: {}", address);
 //! }
 //! ```
 
-use bech32::{self, ToBase32};
-use bitcoin_hashes::{self, hash160, Hash};
+use bech32::{self, FromBase32, ToBase32};
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use failure::Fail;
 use std::fmt;
+use std::io::Cursor;
 use std::str::FromStr;
 
 use super::core::{self, hash::Hashed};
 use super::global::ChainTypes;
-use super::ser::Hash160Writeable;
+use crate::keychain::{ExtKeychainPath, Identifier};
 use crate::util::secp::{self, key::PublicKey};
 
 /// Address error.
@@ -63,9 +62,6 @@ pub enum Error {
 	/// Bech32 encoding error
 	#[fail(display = "Bech32: {}", 0)]
 	Bech32(bech32::Error),
-	/// Hash160 error
-	#[fail(display = "Hash160: {}", 0)]
-	Hash160(bitcoin_hashes::Error),
 	/// Secp Error
 	#[fail(display = "Secp error")]
 	Secp(secp::Error),
@@ -78,7 +74,7 @@ pub enum Error {
 	/// Version must be 0 to 16 inclusive
 	#[fail(display = "Invalid Version {}", 0)]
 	InvalidVersion(u8),
-	/// A v0 address must be with a length of either 20 or 33
+	/// A v0 address must be with a length of 37-bytes
 	#[fail(display = "Invalid V0 Length {}", 0)]
 	InvalidV0Length(usize),
 	/// Bit conversion error
@@ -95,12 +91,6 @@ impl From<bech32::Error> for Error {
 	}
 }
 
-impl From<bitcoin_hashes::Error> for Error {
-	fn from(inner: bitcoin_hashes::Error) -> Error {
-		Error::Hash160(inner)
-	}
-}
-
 impl From<secp::Error> for Error {
 	fn from(inner: secp::Error) -> Error {
 		Error::Secp(inner)
@@ -110,15 +100,12 @@ impl From<secp::Error> for Error {
 /// Inner address data of Bech32Addr
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InnerAddr {
-	/// Address with RIPEMD160(HASH256(Public Key)), in 20-bytes.
-	Hash160Addr {
-		/// The public key hash
-		pubkey_hash: hash160::Hash,
-	},
-	/// Address with Public Key directly, in 33-bytes.
+	/// Address with Public Key and its key path, in 37-bytes total.
 	PubKeyAddr {
 		/// The public key
 		pubkey: PublicKey,
+		/// The key derivation path (d4 only)
+		keypath: u32,
 	},
 }
 
@@ -148,69 +135,74 @@ impl fmt::Display for Address {
 
 impl Address {
 	/// Create an address from a public key
-	pub fn from_pubkey(pk: &PublicKey, network: ChainTypes) -> Address {
+	pub fn from_pubkey(pk: &PublicKey, key_id: &Identifier, network: ChainTypes) -> Address {
+		let path = key_id.to_path();
+		let d4 = path.last_path_index();
 		Address {
 			bech32_addr: Bech32Addr {
 				version: bech32::u5::try_from_u8(0).expect("0<32"),
-				inner_addr: InnerAddr::PubKeyAddr { pubkey: pk.clone() },
+				inner_addr: InnerAddr::PubKeyAddr {
+					pubkey: pk.clone(),
+					keypath: d4,
+				},
 			},
 			network,
-		}
-	}
-
-	/// Create an address from a public key hash
-	pub fn from_pubkeyhash(pubkey_hash: hash160::Hash, network: ChainTypes) -> Address {
-		Address {
-			bech32_addr: Bech32Addr {
-				version: bech32::u5::try_from_u8(0).expect("0<32"),
-				inner_addr: InnerAddr::Hash160Addr { pubkey_hash },
-			},
-			network,
-		}
-	}
-
-	/// Get the inner public key hash of an address, if it's a Hash160Addr.
-	pub fn get_inner_hash160(&self) -> Result<hash160::Hash, Error> {
-		match self.bech32_addr.inner_addr {
-			InnerAddr::Hash160Addr { pubkey_hash } => Ok(pubkey_hash),
-			InnerAddr::PubKeyAddr { .. } => Err(Error::AddressTypeError),
-		}
-	}
-
-	/// Whether it is a public key address.
-	pub fn is_pubkey_addr(&self) -> bool {
-		match self.bech32_addr.inner_addr {
-			InnerAddr::Hash160Addr { .. } => false,
-			InnerAddr::PubKeyAddr { .. } => true,
 		}
 	}
 
 	/// Get the inner public key of an address, if it's a PubKeyAddr.
-	pub fn get_inner_pubkey(&self) -> Result<PublicKey, Error> {
+	pub fn get_inner_pubkey(&self) -> PublicKey {
 		match self.bech32_addr.inner_addr {
-			InnerAddr::Hash160Addr { .. } => Err(Error::AddressTypeError),
-			InnerAddr::PubKeyAddr { pubkey } => Ok(pubkey),
+			InnerAddr::PubKeyAddr { pubkey, .. } => pubkey,
+		}
+	}
+
+	/// Get the inner public key of an address, if it's a PubKeyAddr.
+	pub fn get_key_id(&self) -> Identifier {
+		match self.bech32_addr.inner_addr {
+			InnerAddr::PubKeyAddr { pubkey: _, keypath } => {
+				let path = ExtKeychainPath::new(4, 0, 0, 0, keypath);
+				path.to_identifier()
+			}
 		}
 	}
 
 	/// Get the public key hash of an address, if it's a PubKeyAddr.
 	/// The 'hash' here means Blake2b hash.
-	pub fn pkh(&self) -> Result<core::hash::Hash, Error> {
+	pub fn pkh(&self) -> core::hash::Hash {
 		match self.bech32_addr.inner_addr {
-			InnerAddr::Hash160Addr { .. } => Err(Error::AddressTypeError),
-			InnerAddr::PubKeyAddr { pubkey } => Ok(pubkey.serialize_vec(true).hash()),
+			InnerAddr::PubKeyAddr { pubkey, .. } => pubkey.serialize_vec(true).hash(),
 		}
+	}
+
+	/// Serialize to u8 vector: 33-bytes public key || 4-bytes keypath
+	pub fn to_vec(&self) -> Vec<u8> {
+		let mut wtr: Vec<u8> = Vec::with_capacity(37);
+		match self.bech32_addr.inner_addr {
+			InnerAddr::PubKeyAddr { pubkey, keypath } => {
+				wtr.extend_from_slice(&pubkey.serialize_vec(true));
+				wtr.write_u32::<BigEndian>(keypath).unwrap();
+			}
+		}
+		assert_eq!(wtr.len(), 37);
+		wtr
 	}
 
 	/// Get the address string
 	pub fn to_string(&self) -> String {
 		let mut data: Vec<bech32::u5> = vec![];
 		data.push(self.bech32_addr.version);
+		let mut raw = self.to_vec();
+		// XOR the path to avoid long zeros
+		if raw.len() == 37 {
+			raw[33] ^= raw[29];
+			raw[34] ^= raw[30];
+			raw[35] ^= raw[31];
+			raw[36] ^= raw[32];
+		}
+
 		// Convert 8-bit data into 5-bit
-		let d5 = match self.bech32_addr.inner_addr {
-			InnerAddr::Hash160Addr { pubkey_hash } => pubkey_hash.to_vec().to_base32(),
-			InnerAddr::PubKeyAddr { pubkey } => pubkey.serialize_vec(true).to_base32(),
-		};
+		let d5 = raw.to_base32();
 		data.extend_from_slice(&d5);
 		let hrp = match self.network {
 			ChainTypes::Mainnet => "gs",
@@ -238,9 +230,9 @@ impl FromStr for Address {
 		}
 
 		// Get the version and data (converted from 5-bit to 8-bit)
-		let (version, data): (bech32::u5, Vec<u8>) = {
+		let (version, mut data): (bech32::u5, Vec<u8>) = {
 			let (v, d5) = payload.split_at(1);
-			(v[0], bech32::FromBase32::from_base32(d5)?)
+			(v[0], FromBase32::from_base32(d5)?)
 		};
 
 		// Generic checks.
@@ -252,70 +244,65 @@ impl FromStr for Address {
 		}
 
 		// Specific v0 check.
-		if version.to_u8() == 0 && data.len() != 20 && data.len() != 33 {
+		if version.to_u8() == 0 && data.len() != 37 {
 			return Err(Error::InvalidV0Length(data.len()));
 		}
 
+		//println!("raw data: {}", crate::util::to_hex(data.clone()));
+
 		match data.len() {
-			20 => Ok(Address {
-				bech32_addr: Bech32Addr {
-					version,
-					inner_addr: InnerAddr::Hash160Addr {
-						pubkey_hash: hash160::Hash::from_slice(&data)?,
+			37 => {
+				// XOR the path to avoid long zeros
+				{
+					data[33] ^= data[29];
+					data[34] ^= data[30];
+					data[35] ^= data[31];
+					data[36] ^= data[32];
+				}
+				Ok(Address {
+					bech32_addr: Bech32Addr {
+						version,
+						inner_addr: InnerAddr::PubKeyAddr {
+							pubkey: PublicKey::from_slice(&data[0..33])?,
+							keypath: {
+								let mut rdr = Cursor::new(&data[33..37]);
+								rdr.read_u32::<BigEndian>().unwrap()
+							},
+						},
 					},
-				},
-				network,
-			}),
-			33 => Ok(Address {
-				bech32_addr: Bech32Addr {
-					version,
-					inner_addr: InnerAddr::PubKeyAddr {
-						pubkey: PublicKey::from_slice(&data)?,
-					},
-				},
-				network,
-			}),
+					network,
+				})
+			}
 			_ => Err(Error::InvalidV0Length(data.len())),
 		}
 	}
-}
-
-/// A util function to calculate Public-Key-Hash, i.e. RIPEMD160(SHA256(PublicKey)).
-pub fn pkh160(pk: &PublicKey) -> hash160::Hash {
-	let mut hash_engine = hash160::Hash::engine();
-	pk.write_into(&mut hash_engine).unwrap();
-
-	hash160::Hash::from_engine(hash_engine)
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 
+	use crate::keychain::ExtKeychainPath;
 	use crate::util;
 	use crate::util::secp::key::PublicKey;
-	use bitcoin_hashes::{self, hash160, hex::ToHex, Hash};
 
 	fn round_trips(addr: &Address) {
 		assert_eq!(Address::from_str(&addr.to_string()).unwrap(), *addr,);
-		if addr.is_pubkey_addr() {
-			assert_eq!(
-				&Address::from_pubkey(&addr.get_inner_pubkey().unwrap(), addr.network.clone()),
-				addr,
-			);
-		} else {
-			assert_eq!(
-				&Address::from_pubkeyhash(addr.get_inner_hash160().unwrap(), addr.network.clone()),
-				addr,
-			);
-		}
+		assert_eq!(
+			&Address::from_pubkey(
+				&addr.get_inner_pubkey(),
+				&addr.get_key_id(),
+				addr.network.clone()
+			),
+			addr,
+		);
 	}
 
 	#[test]
 	fn test_p2pkh_from_key() {
 		// get address from a public key
-		let addr_str_short = "gs1qps788lr4wqn8s7g0j9zxn200cnewqckpm4d088";
-		let addr_str_long = "gs1qqwx4zsv53sts96xftapcs9tefwrlwp4g6nxjhladrhq4wzt3qvkfku2nsce";
+		let addr_str = "gs1qqwx4zsv53sts96xftapcs9tefwrlwp4g6nxjhladrhq4wzt3qvkfkugr9nlsy5r2uv";
+		let key_id = ExtKeychainPath::new(4, 0, 0, 0, 100).to_identifier();
 		let pubkey = PublicKey::from_slice(
 			&util::from_hex(
 				"048d5141948c1702e8c95f438815794b87f706a8d4cd2bffad1dc1570971032c9b\
@@ -325,10 +312,10 @@ mod tests {
 			.unwrap(),
 		)
 		.unwrap();
-		let addr = Address::from_pubkeyhash(pkh160(&pubkey), ChainTypes::Mainnet);
-		assert_eq!(&addr.to_string(), addr_str_short);
-		let addr = Address::from_pubkey(&pubkey, ChainTypes::Mainnet);
-		assert_eq!(&addr.to_string(), addr_str_long);
+		let addr = Address::from_pubkey(&pubkey, &key_id, ChainTypes::Mainnet);
+		assert_eq!(&addr.to_string(), addr_str);
+		round_trips(&addr);
+		assert_eq!(addr.get_key_id(), key_id);
 
 		// same public key as above but in compressed form
 		let pubkey = PublicKey::from_slice(
@@ -338,26 +325,11 @@ mod tests {
 			.unwrap(),
 		)
 		.unwrap();
-		let addr = Address::from_pubkeyhash(pkh160(&pubkey), ChainTypes::Mainnet);
-		assert_eq!(&addr.to_string(), addr_str_short);
-		let addr = Address::from_pubkey(&pubkey, ChainTypes::Mainnet);
-		assert_eq!(&addr.to_string(), addr_str_long);
+		let addr = Address::from_pubkey(&pubkey, &key_id, ChainTypes::Mainnet);
+		assert_eq!(&addr.to_string(), addr_str);
+		round_trips(&addr);
 
-		// another address
-		let pubkey = PublicKey::from_slice(
-			&util::from_hex(
-				"03df154ebfcf29d29cc10d5c2565018bce2d9edbab267c31d2caf44a63056cf99f".to_string(),
-			)
-			.unwrap(),
-		)
-		.unwrap();
-		let addr = Address::from_pubkeyhash(pkh160(&pubkey), ChainTypes::Floonet);
-		assert_eq!(
-			&addr.to_string(),
-			"ts1qwp9grvnlqqek66c4p9vtwaqutqrm492qrtn27h"
-		);
-
-		// from Bitcoin transaction: b3c8c2b6cfc335abbcb2c7823a8453f55d64b2b5125a9a61e8737230cdb8ce20
+		// another public key
 		let pubkey = PublicKey::from_slice(
 			&util::from_hex(
 				"033bc8c83c52df5712229a2f72206d90192366c36428cb0c12b6af98324d97bfbc".to_string(),
@@ -365,40 +337,19 @@ mod tests {
 			.unwrap(),
 		)
 		.unwrap();
-		let addr = Address::from_pubkeyhash(pkh160(&pubkey), ChainTypes::Mainnet);
+		let key_id = ExtKeychainPath::new(4, 0, 0, 0, 200).to_identifier();
+		let addr = Address::from_pubkey(&pubkey, &key_id, ChainTypes::Mainnet);
 		assert_eq!(
 			&addr.to_string(),
-			"gs1qvzvkjn4q3nszqxrv3nraga2r822xjty36fs0jv"
+			"gs1qqvau3jpu2t04wy3znghhygrdjqvjxekrvs5vkrqjk6hesvjdj7lmcnvhha6qyyu8wa"
 		);
-
 		round_trips(&addr);
+		assert_eq!(addr.get_key_id(), key_id);
 	}
 
 	#[test]
-	fn test_non_existent_version() {
-		let version: u8 = 13;
-
-		// 20-byte hash160
-		let hash_str = "751e76e8199196d454941c45d1b3a323f1433bd6";
-		let pubkey_hash = util::from_hex(hash_str.to_string()).unwrap();
-		let mut addr = Address {
-			bech32_addr: Bech32Addr {
-				version: bech32::u5::try_from_u8(version).expect("13<32"),
-				inner_addr: InnerAddr::Hash160Addr {
-					pubkey_hash: hash160::Hash::from_slice(&pubkey_hash).unwrap(),
-				},
-			},
-			network: ChainTypes::Mainnet,
-		};
-		assert_eq!(Address::from_str(&addr.to_string()).unwrap(), addr,);
-
-		// restore as the version_0
-		addr.bech32_addr.version = bech32::u5::try_from_u8(0).expect("0<32");
-		println!("hash160: {}, mainnet address: {}", hash_str, addr);
-		addr.network = ChainTypes::Floonet;
-		println!("hash160: {}, floonet address: {}", hash_str, addr);
-
-		// 33-byte public key
+	fn test_default_display() {
+		let key_id = ExtKeychainPath::new(4, 0, 0, 0, 100).to_identifier();
 		let pubkey_str = "033bc8c83c52df5712229a2f72206d90192366c36428cb0c12b6af98324d97bfbc";
 		let pubkey_vec = util::from_hex(pubkey_str.to_string()).unwrap();
 		let mut addr = Address {
@@ -406,6 +357,7 @@ mod tests {
 				version: bech32::u5::try_from_u8(0).expect("0<32"),
 				inner_addr: InnerAddr::PubKeyAddr {
 					pubkey: PublicKey::from_slice(&pubkey_vec).unwrap(),
+					keypath: key_id.to_path().last_path_index(),
 				},
 			},
 			network: ChainTypes::Mainnet,
@@ -420,37 +372,17 @@ mod tests {
 	fn test_vectors() {
 		let valid_vectors = [
 			(
-				"GS1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KJC4G9H",
-				"751e76e8199196d454941c45d1b3a323f1433bd6",
-			),
-			(
-				"gs1qw508d6qejxtdg4y5r3zarvary0c5xw7kjc4g9h",
-				"751e76e8199196d454941c45d1b3a323f1433bd6",
-			),
-			(
-				"TS1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7K7TKY9D",
-				"751e76e8199196d454941c45d1b3a323f1433bd6",
-			),
-			(
-				"ts1qw508d6qejxtdg4y5r3zarvary0c5xw7k7tky9d",
-				"751e76e8199196d454941c45d1b3a323f1433bd6",
-			),
-			(
-				"gs1qqvau3jpu2t04wy3znghhygrdjqvjxekrvs5vkrqjk6hesvjdj7lmcwlwvtd",
+				"gs1qqvau3jpu2t04wy3znghhygrdjqvjxekrvs5vkrqjk6hesvjdj7lmcnvhhlvqdfrsjt",
 				"cef5ad3c9482d1e831ceacadbd53469198f33f10b3822cfef77f33a3dc9b9dd8",
 			),
 			(
-				"TS1QQVAU3JPU2T04WY3ZNGHHYGRDJQVJXEKRVS5VKRQJK6HESVJDJ7LMCQ4QSUP",
+				"TS1QQVAU3JPU2T04WY3ZNGHHYGRDJQVJXEKRVS5VKRQJK6HESVJDJ7LMCNVHHLVQ93U3FD",
 				"cef5ad3c9482d1e831ceacadbd53469198f33f10b3822cfef77f33a3dc9b9dd8",
 			),
 		];
 		for vector in &valid_vectors {
 			let addr = Address::from_str(vector.0).unwrap();
-			if addr.is_pubkey_addr() {
-				assert_eq!(&addr.pkh().unwrap().to_hex(), vector.1);
-			} else {
-				assert_eq!(&addr.get_inner_hash160().unwrap().to_hex(), vector.1);
-			}
+			assert_eq!(&addr.pkh().to_hex(), vector.1);
 			round_trips(&addr);
 		}
 
@@ -477,36 +409,20 @@ mod tests {
 	fn test_json_serialize() {
 		use serde_json;
 
-		// 'gs1' + 39-characters
-		let addr = Address::from_str("gs1qw508d6qejxtdg4y5r3zarvary0c5xw7kjc4g9h").unwrap();
-		let json = serde_json::to_value(&addr).unwrap();
-		assert_eq!(
-			json,
-			serde_json::Value::String("gs1qw508d6qejxtdg4y5r3zarvary0c5xw7kjc4g9h".to_owned())
-		);
-		let into: Address = serde_json::from_value(json).unwrap();
-		assert_eq!(addr.to_string(), into.to_string());
-		assert_eq!(
-			&addr.get_inner_hash160().to_hex(),
-			"751e76e8199196d454941c45d1b3a323f1433bd6"
-		);
-
-		// 'gs1' + 60-characters
-		let addr =
-			Address::from_str("gs1qqvau3jpu2t04wy3znghhygrdjqvjxekrvs5vkrqjk6hesvjdj7lmcwlwvtd")
-				.unwrap();
+		// 'gs1' + 67-characters
+		let addr = Address::from_str(
+			"gs1qqvau3jpu2t04wy3znghhygrdjqvjxekrvs5vkrqjk6hesvjdj7lmcnvhhlvqdfrsjt",
+		)
+		.unwrap();
 		let json = serde_json::to_value(&addr).unwrap();
 		assert_eq!(
 			json,
 			serde_json::Value::String(
-				"gs1qqvau3jpu2t04wy3znghhygrdjqvjxekrvs5vkrqjk6hesvjdj7lmcwlwvtd".to_owned()
+				"gs1qqvau3jpu2t04wy3znghhygrdjqvjxekrvs5vkrqjk6hesvjdj7lmcnvhhlvqdfrsjt".to_owned()
 			)
 		);
 		let into: Address = serde_json::from_value(json).unwrap();
 		assert_eq!(addr.to_string(), into.to_string());
-		assert_eq!(
-			&addr.pkh().unwrap().to_hex(),
-			"cef5ad3c9482d1e831ceacadbd53469198f33f10b3822cfef77f33a3dc9b9dd8"
-		);
+		round_trips(&into);
 	}
 }

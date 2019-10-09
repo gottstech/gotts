@@ -31,7 +31,6 @@ use crate::util::secp::constants::{
 use crate::util::secp::key::PublicKey;
 use crate::util::secp::pedersen::{Commitment, RangeProof};
 use crate::util::secp::Signature;
-use bitcoin_hashes::{self, hash160};
 use byteorder::{BigEndian, ByteOrder, ReadBytesExt};
 use std::fmt::{self, Debug};
 use std::io::{self, Read, Write};
@@ -691,25 +690,6 @@ impl Readable for PublicKey {
 		let buf = reader.read_fixed_bytes(PublicKey::LEN)?;
 		let pk = PublicKey::from_slice(&buf).map_err(|_| Error::CorruptedData)?;
 		Ok(pk)
-	}
-}
-
-impl Writeable for hash160::Hash {
-	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), Error> {
-		use bitcoin_hashes::Hash;
-
-		writer.write_fixed_bytes(&self.into_inner().as_ref())?;
-		Ok(())
-	}
-}
-
-impl Readable for hash160::Hash {
-	fn read(reader: &mut dyn Reader) -> Result<Self, Error> {
-		use bitcoin_hashes::Hash;
-
-		let buf = reader.read_fixed_bytes(hash160::Hash::LEN)?;
-		let hash = hash160::Hash::from_slice(&buf).map_err(|_| Error::CorruptedData)?;
-		Ok(hash)
 	}
 }
 
