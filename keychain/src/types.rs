@@ -23,7 +23,6 @@ use std::ops::Add;
 /// commitment generation.
 use std::{error, fmt};
 
-use crate::blake2::blake2b::blake2b;
 use crate::extkey_bip32::{self, ChildNumber};
 use serde::{de, ser}; //TODO: Convert errors to use ErrorKind
 
@@ -44,6 +43,8 @@ pub const IDENTIFIER_SIZE: usize = 17;
 pub enum Error {
 	Secp(secp::Error),
 	KeyDerivation(extkey_bip32::Error),
+	InvalidIdentifier,
+	FromHexError(String),
 	Transaction(String),
 	RangeProof(String),
 	SwitchCommitment,
@@ -52,6 +53,12 @@ pub enum Error {
 impl From<secp::Error> for Error {
 	fn from(e: secp::Error) -> Error {
 		Error::Secp(e)
+	}
+}
+
+impl From<hex::FromHexError> for Error {
+	fn from(e: hex::FromHexError) -> Error {
+		Error::FromHexError(e.to_string())
 	}
 }
 
@@ -118,7 +125,7 @@ impl<'de> de::Visitor<'de> for IdentifierVisitor {
 
 impl Identifier {
 	pub fn zero() -> Identifier {
-		Identifier::from_bytes(&[0; IDENTIFIER_SIZE])
+		Identifier::from_bytes(&[0; IDENTIFIER_SIZE]).unwrap()
 	}
 
 	pub fn from_path(path: &ExtKeychainPath) -> Identifier {
@@ -165,35 +172,24 @@ impl Identifier {
 		}
 		Identifier::from_path(&p)
 	}
-	pub fn from_bytes(bytes: &[u8]) -> Identifier {
+	pub fn from_bytes(bytes: &[u8]) -> Result<Identifier, Error> {
 		let mut identifier = [0; IDENTIFIER_SIZE];
 		for i in 0..min(IDENTIFIER_SIZE, bytes.len()) {
 			identifier[i] = bytes[i];
 		}
-		Identifier(identifier)
+		if identifier[0] > 4 {
+			return Err(Error::InvalidIdentifier);
+		}
+		Ok(Identifier(identifier))
 	}
 
 	pub fn to_bytes(&self) -> [u8; IDENTIFIER_SIZE] {
 		self.0.clone()
 	}
 
-	pub fn from_pubkey(pubkey: &PublicKey) -> Identifier {
-		let bytes = pubkey.serialize_vec(true);
-		let identifier = blake2b(IDENTIFIER_SIZE, &[], &bytes[..]);
-		Identifier::from_bytes(&identifier.as_bytes())
-	}
-
-	/// Return the identifier of the secret key
-	/// which is the blake2b (10 byte) digest of the PublicKey
-	/// corresponding to the secret key provided.
-	pub fn from_secret_key(secp: &Secp256k1, key: &SecretKey) -> Result<Identifier, Error> {
-		let key_id = PublicKey::from_secret_key(secp, key)?;
-		Ok(Identifier::from_pubkey(&key_id))
-	}
-
 	pub fn from_hex(hex: &str) -> Result<Identifier, Error> {
-		let bytes = util::from_hex(hex.to_string()).unwrap();
-		Ok(Identifier::from_bytes(&bytes))
+		let bytes = util::from_hex(hex.to_string())?;
+		Identifier::from_bytes(&bytes)
 	}
 
 	pub fn to_hex(&self) -> String {
@@ -203,6 +199,7 @@ impl Identifier {
 	pub fn to_bip_32_string(&self) -> String {
 		let p = ExtKeychainPath::from_identifier(&self);
 		let mut retval = String::from("m");
+		assert_eq!(p.path.len(), p.depth as usize);
 		for i in 0..p.depth {
 			retval.push_str(&format!("/{}", <u32>::from(p.path[i as usize])));
 		}
@@ -554,6 +551,7 @@ mod test {
 	fn path_identifier() {
 		let path = ExtKeychainPath::new(4, 1, 2, 3, 4);
 		let id = Identifier::from_path(&path);
+		println!("id.to_bip_32_string = {}", id.to_bip_32_string());
 		let ret_path = id.to_path();
 		assert_eq!(path, ret_path);
 

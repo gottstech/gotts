@@ -182,8 +182,9 @@ mod test {
 		let keychain = ExtKeychain::from_random_seed(false).unwrap();
 		let secp = keychain.secp();
 
-		let path = ExtKeychainPath::new(1, 1, 0, 0, 0);
+		let path = ExtKeychainPath::new(4, 1, 0, 0, 0);
 		let key_id = path.to_identifier();
+		println!("key_id.to_bip_32_string = {}", key_id.to_bip_32_string());
 
 		let msg_bytes = [0; 32];
 		let msg = secp::Message::from_slice(&msg_bytes[..]).unwrap();

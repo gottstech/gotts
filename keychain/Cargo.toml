@@ -23,6 +23,7 @@ lazy_static = "1"
 zeroize = "0.9"
 
 digest = "0.7"
+hex = "0.3"
 hmac = "0.6"
 ripemd160 = "0.7"
 sha2 = "0.7"

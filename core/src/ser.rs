@@ -22,7 +22,7 @@
 
 use crate::core::hash::{DefaultHashable, Hash, Hashed};
 use crate::global::PROTOCOL_VERSION;
-use crate::keychain::{BlindingFactor, Identifier, IDENTIFIER_SIZE};
+use crate::keychain::{self, BlindingFactor, Identifier, IDENTIFIER_SIZE};
 use crate::libtx::proof::{SecuredPath, SECURED_PATH_SIZE};
 use crate::util::secp::constants::{
 	AGG_SIGNATURE_SIZE, COMPRESSED_PUBLIC_KEY_SIZE, MAX_PROOF_SIZE, PEDERSEN_COMMITMENT_SIZE,
@@ -71,11 +71,19 @@ pub enum Error {
 	DuplicateError,
 	/// Block header version (hard-fork schedule).
 	InvalidBlockVersion,
+	/// Keychain Error
+	KeychainErr(keychain::Error),
 }
 
 impl From<io::Error> for Error {
 	fn from(e: io::Error) -> Error {
 		Error::IOErr(format!("{}", e), e.kind())
+	}
+}
+
+impl From<keychain::Error> for Error {
+	fn from(e: keychain::Error) -> Error {
+		Error::KeychainErr(e)
 	}
 }
 
@@ -94,6 +102,7 @@ impl fmt::Display for Error {
 			Error::TooLargeReadErr => f.write_str("too large read"),
 			Error::HexError(ref e) => write!(f, "hex error {:?}", e),
 			Error::InvalidBlockVersion => f.write_str("invalid block version"),
+			Error::KeychainErr(ref e) => write!(f, "keychain error {:?}", e),
 		}
 	}
 }
@@ -117,6 +126,7 @@ impl error::Error for Error {
 			Error::TooLargeReadErr => "too large read",
 			Error::HexError(_) => "hex error",
 			Error::InvalidBlockVersion => "invalid block version",
+			Error::KeychainErr(_) => "keychain error",
 		}
 	}
 }
@@ -582,7 +592,7 @@ impl Writeable for Identifier {
 impl Readable for Identifier {
 	fn read(reader: &mut dyn Reader) -> Result<Identifier, Error> {
 		let bytes = reader.read_fixed_bytes(IDENTIFIER_SIZE)?;
-		Ok(Identifier::from_bytes(&bytes))
+		Ok(Identifier::from_bytes(&bytes)?)
 	}
 }
 
