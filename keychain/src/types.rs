@@ -199,7 +199,7 @@ impl Identifier {
 	pub fn to_bip_32_string(&self) -> String {
 		let p = ExtKeychainPath::from_identifier(&self);
 		let mut retval = String::from("m");
-		assert_eq!(p.path.len(), p.depth as usize);
+		assert!(p.path.len() >= p.depth as usize);
 		for i in 0..p.depth {
 			retval.push_str(&format!("/{}", <u32>::from(p.path[i as usize])));
 		}
