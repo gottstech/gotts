@@ -138,7 +138,6 @@ where
 pub fn non_interactive_output<K, B>(
 	value: u64,
 	w: Option<i64>,
-	key_id: Identifier,
 	recipient_address: Address,
 	use_test_rng: bool,
 ) -> Box<Append<K, B>>
@@ -154,12 +153,12 @@ where
 				thread_rng().gen()
 			};
 
-			let (commit, locker) = proof::create_output_locker(
+			let (commit, locker, ephemeral_key) = proof::create_output_locker(
 				build.keychain,
+				value,
 				&recipient_address.get_inner_pubkey(),
 				w,
 				1,
-				&key_id,
 				use_test_rng,
 			)
 			.unwrap();
@@ -175,7 +174,7 @@ where
 					value,
 				}),
 				kern,
-				sum.add_key_id(key_id.to_value_path(value, w)),
+				sum.add_blinding_factor(BlindingFactor::from_secret_key(ephemeral_key)),
 			)
 		},
 	)
@@ -295,7 +294,7 @@ where
 
 	// Generate kernel excess and excess_sig using the split key k1.
 	let skey = blind_sum.secret_key()?;
-	kern.excess = ctx.keychain.secp().commit_i(0i64, skey)?;
+	kern.excess = ctx.keychain.secp().commit_i(0i64, &skey)?;
 	let pubkey = &kern.excess.to_pubkey(&keychain.secp())?;
 	kern.excess_sig =
 		aggsig::sign_with_blinding(&keychain.secp(), &msg, &blind_sum, Some(&pubkey)).unwrap();

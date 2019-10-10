@@ -23,7 +23,6 @@
 //!	use gotts_util::secp::key::{SecretKey, PublicKey};
 //!	use gotts_util::secp::{ContextFlag, Secp256k1};
 //! use gotts_core::address::Address;
-//! use gotts_core::global::ChainTypes;
 //! use gotts_keychain::ExtKeychainPath;
 //! use rand::thread_rng;
 //!
@@ -35,8 +34,8 @@
 //!     let public_key = PublicKey::from_secret_key(&secp, &private_key).unwrap();
 //!
 //!     // Generate PublicKey address
-//! 	let key_id = ExtKeychainPath::new(4, 0, 0, 0, 100).to_identifier();
-//!     let address = Address::from_pubkey(&public_key, &key_id, ChainTypes::Mainnet);
+//! 	let key_id = ExtKeychainPath::new(4, <u32>::max_value(), <u32>::max_value(), 0, 100).to_identifier();
+//!     let address = Address::from_pubkey(&public_key, &key_id, true);
 //!     println!("new generated address: {}", address);
 //! }
 //! ```
@@ -133,17 +132,38 @@ impl fmt::Display for Address {
 	}
 }
 
+impl Default for Address {
+	fn default() -> Self {
+		Address {
+			bech32_addr: Bech32Addr {
+				version: bech32::u5::try_from_u8(0).expect("0<32"),
+				inner_addr: InnerAddr::PubKeyAddr {
+					pubkey: PublicKey::new(),
+					keypath: 0,
+				},
+			},
+			network: ChainTypes::Mainnet,
+		}
+	}
+}
+
 impl Address {
 	/// Create an address from a public key
-	pub fn from_pubkey(pk: &PublicKey, key_id: &Identifier, network: ChainTypes) -> Address {
+	pub fn from_pubkey(pk: &PublicKey, key_id: &Identifier, is_mainnet: bool) -> Address {
+		let network = match is_mainnet {
+			true => ChainTypes::Mainnet,
+			false => ChainTypes::Floonet,
+		};
 		let path = key_id.to_path();
-		let d4 = path.last_path_index();
+		assert_eq!(path.depth, 4);
+		assert_eq!(<u32>::from(path.path[2]), 0);
+		let d3 = path.last_path_index();
 		Address {
 			bech32_addr: Bech32Addr {
 				version: bech32::u5::try_from_u8(0).expect("0<32"),
 				inner_addr: InnerAddr::PubKeyAddr {
 					pubkey: pk.clone(),
-					keypath: d4,
+					keypath: d3,
 				},
 			},
 			network,
@@ -157,11 +177,16 @@ impl Address {
 		}
 	}
 
-	/// Get the inner public key of an address, if it's a PubKeyAddr.
+	/// Get the inner key id of an address.
+	/// Considering the address length, we only open the 'd3' of the path to be configurable by user,
+	/// - d0,d1 are fixed as u32::max, no matter what is the parent_key_id.
+	/// - d2 are fixed as 0 and should not be changed for recipient key.
+	/// i.e. The path = ExtKeychainPath::new(4, u32::max, u32::max, 0, d3).
 	pub fn get_key_id(&self) -> Identifier {
 		match self.bech32_addr.inner_addr {
 			InnerAddr::PubKeyAddr { pubkey: _, keypath } => {
-				let path = ExtKeychainPath::new(4, 0, 0, 0, keypath);
+				let path =
+					ExtKeychainPath::new(4, <u32>::max_value(), <u32>::max_value(), 0, keypath);
 				path.to_identifier()
 			}
 		}
@@ -282,6 +307,7 @@ impl FromStr for Address {
 mod tests {
 	use super::*;
 
+	use crate::global::ChainTypes;
 	use crate::keychain::ExtKeychainPath;
 	use crate::util;
 	use crate::util::secp::key::PublicKey;
@@ -292,7 +318,7 @@ mod tests {
 			&Address::from_pubkey(
 				&addr.get_inner_pubkey(),
 				&addr.get_key_id(),
-				addr.network.clone()
+				addr.network == ChainTypes::Mainnet
 			),
 			addr,
 		);
@@ -302,7 +328,8 @@ mod tests {
 	fn test_p2pkh_from_key() {
 		// get address from a public key
 		let addr_str = "gs1qqwx4zsv53sts96xftapcs9tefwrlwp4g6nxjhladrhq4wzt3qvkfkugr9nlsy5r2uv";
-		let key_id = ExtKeychainPath::new(4, 0, 0, 0, 100).to_identifier();
+		let key_id =
+			ExtKeychainPath::new(4, <u32>::max_value(), <u32>::max_value(), 0, 100).to_identifier();
 		let pubkey = PublicKey::from_slice(
 			&util::from_hex(
 				"048d5141948c1702e8c95f438815794b87f706a8d4cd2bffad1dc1570971032c9b\
@@ -312,7 +339,7 @@ mod tests {
 			.unwrap(),
 		)
 		.unwrap();
-		let addr = Address::from_pubkey(&pubkey, &key_id, ChainTypes::Mainnet);
+		let addr = Address::from_pubkey(&pubkey, &key_id, true);
 		assert_eq!(&addr.to_string(), addr_str);
 		round_trips(&addr);
 		assert_eq!(addr.get_key_id(), key_id);
@@ -325,7 +352,7 @@ mod tests {
 			.unwrap(),
 		)
 		.unwrap();
-		let addr = Address::from_pubkey(&pubkey, &key_id, ChainTypes::Mainnet);
+		let addr = Address::from_pubkey(&pubkey, &key_id, true);
 		assert_eq!(&addr.to_string(), addr_str);
 		round_trips(&addr);
 
@@ -337,8 +364,9 @@ mod tests {
 			.unwrap(),
 		)
 		.unwrap();
-		let key_id = ExtKeychainPath::new(4, 0, 0, 0, 200).to_identifier();
-		let addr = Address::from_pubkey(&pubkey, &key_id, ChainTypes::Mainnet);
+		let key_id =
+			ExtKeychainPath::new(4, <u32>::max_value(), <u32>::max_value(), 0, 200).to_identifier();
+		let addr = Address::from_pubkey(&pubkey, &key_id, true);
 		assert_eq!(
 			&addr.to_string(),
 			"gs1qqvau3jpu2t04wy3znghhygrdjqvjxekrvs5vkrqjk6hesvjdj7lmcnvhha6qyyu8wa"
@@ -349,7 +377,8 @@ mod tests {
 
 	#[test]
 	fn test_default_display() {
-		let key_id = ExtKeychainPath::new(4, 0, 0, 0, 100).to_identifier();
+		let key_id =
+			ExtKeychainPath::new(4, <u32>::max_value(), <u32>::max_value(), 0, 100).to_identifier();
 		let pubkey_str = "033bc8c83c52df5712229a2f72206d90192366c36428cb0c12b6af98324d97bfbc";
 		let pubkey_vec = util::from_hex(pubkey_str.to_string()).unwrap();
 		let mut addr = Address {

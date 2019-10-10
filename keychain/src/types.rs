@@ -473,7 +473,8 @@ pub trait Keychain: Sync + Send + Clone {
 	fn public_root_key(&self) -> PublicKey;
 
 	fn derive_key(&self, id: &Identifier) -> Result<SecretKey, Error>;
-	fn commit(&self, amount: i64, id: &Identifier) -> Result<Commitment, Error>;
+	fn commit(&self, w: i64, id: &Identifier) -> Result<Commitment, Error>;
+	fn commit_raw(&self, w: i64, key: &SecretKey) -> Result<Commitment, Error>;
 	fn blind_sum(&self, blind_sum: &BlindSum) -> Result<BlindingFactor, Error>;
 	fn rewind_nonce(&self, commit: &Commitment) -> Result<SecretKey, Error>;
 	fn sign(&self, msg: &Message, id: &Identifier) -> Result<Signature, Error>;

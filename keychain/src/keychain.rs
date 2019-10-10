@@ -26,10 +26,25 @@ use crate::util::secp::key::{PublicKey, SecretKey};
 use crate::util::secp::pedersen::Commitment;
 use crate::util::secp::{self, Message, Secp256k1, Signature};
 
+/// Key as a recipient
+#[derive(Clone, Debug)]
+pub struct RecipientKey {
+	/// As recipient of non-interactive transaction, the key derivation path of the public address.
+	pub recipient_key_id: Identifier,
+	/// The public key of the recipient public address
+	pub recipient_pub_key: PublicKey,
+	/// The private key of the recipient public address
+	pub recipient_pri_key: SecretKey,
+}
+
+/// Extended Keychain
 #[derive(Clone, Debug)]
 pub struct ExtKeychain {
+	/// The secp256k1 engine, used to execute all signature operations
 	secp: Secp256k1,
+	/// Master Key
 	master: ExtendedPrivKey,
+	/// BIP32 Hasher
 	hasher: BIP32GottsHasher,
 }
 
@@ -38,6 +53,7 @@ impl Keychain for ExtKeychain {
 		let mut h = BIP32GottsHasher::new(is_floo);
 		let secp = secp::Secp256k1::with_caps(secp::ContextFlag::Commit);
 		let master = ExtendedPrivKey::new_master(&mut h, seed)?;
+
 		let keychain = ExtKeychain {
 			secp,
 			master,
@@ -50,9 +66,10 @@ impl Keychain for ExtKeychain {
 		let secp = secp::Secp256k1::with_caps(secp::ContextFlag::Commit);
 		let h = BIP32GottsHasher::new(is_floo);
 		let master = ExtendedPrivKey::from_mnemonic(word_list, extension_word, is_floo)?;
+
 		let keychain = ExtKeychain {
-			secp: secp,
-			master: master,
+			secp,
+			master,
 			hasher: h,
 		};
 		Ok(keychain)
@@ -89,9 +106,14 @@ impl Keychain for ExtKeychain {
 		Ok(ext_key.secret_key)
 	}
 
-	fn commit(&self, amount: i64, id: &Identifier) -> Result<Commitment, Error> {
+	fn commit(&self, w: i64, id: &Identifier) -> Result<Commitment, Error> {
 		let key = self.derive_key(id)?;
-		let commit = self.secp.commit_i(amount, key)?;
+		let commit = self.secp.commit_i(w, &key)?;
+		Ok(commit)
+	}
+
+	fn commit_raw(&self, w: i64, key: &SecretKey) -> Result<Commitment, Error> {
+		let commit = self.secp.commit_i(w, key)?;
 		Ok(commit)
 	}
 
