@@ -101,6 +101,20 @@ where
 	build_input(value, 0i64, OutputFeatures::Coinbase, key_id)
 }
 
+/// Adds a SigLocked input with the provided value and blinding key to the transaction
+/// being built.
+pub fn siglocked_input<K, B>(value: u64, w: i64, key_id: Identifier) -> Box<Append<K, B>>
+where
+	K: Keychain,
+	B: ProofBuild,
+{
+	debug!(
+		"Building SigLocked input (spending SigLocked output): {}, {}",
+		value, key_id
+	);
+	build_input(value, w, OutputFeatures::Plain, key_id)
+}
+
 /// Adds an output with the provided value and key identifier from the keychain.
 pub fn output<K, B>(value: u64, w: Option<i64>, key_id: Identifier) -> Box<Append<K, B>>
 where

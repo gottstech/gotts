@@ -152,7 +152,7 @@ pub fn rewind_outputlocker<K>(
 	recipient_prikey: &SecretKey,
 	commit: &Commitment,
 	locker: &OutputLocker,
-) -> Result<i64, Error>
+) -> Result<(i64, SecretKey), Error>
 where
 	K: Keychain,
 {
@@ -167,7 +167,7 @@ where
 	// Check output
 	let commit_exp = k.commit_raw(w, &ephemeral_key_q)?;
 	match commit == &commit_exp {
-		true => Ok(w),
+		true => Ok((w, ephemeral_key_q)),
 		false => Err(ErrorKind::OutputLocker("check NOK".to_owned()).into()),
 	}
 }

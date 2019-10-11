@@ -246,9 +246,9 @@ mod test {
 
 		// create commitments for secret keys 1, 2 and 3
 		// all committing to the value 0 (which is what we do for tx_kernels)
-		let commit_1 = keychain.secp.commit_i(0i64, skey1.clone()).unwrap();
-		let commit_2 = keychain.secp.commit_i(0i64, skey2.clone()).unwrap();
-		let commit_3 = keychain.secp.commit_i(0i64, skey3.clone()).unwrap();
+		let commit_1 = keychain.secp.commit_i(0i64, &skey1).unwrap();
+		let commit_2 = keychain.secp.commit_i(0i64, &skey2).unwrap();
+		let commit_3 = keychain.secp.commit_i(0i64, &skey3).unwrap();
 
 		// now sum commitments for keys 1 and 2
 		let sum = keychain
