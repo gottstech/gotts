@@ -280,7 +280,7 @@ fn block_single_tx_serialized_size() {
 	let b = new_block(vec![&tx1], &keychain, &builder, &prev, &key_id);
 	let mut vec = Vec::new();
 	ser::serialize_default(&mut vec, &b).expect("serialization failed");
-	let target_len = 729;
+	let target_len = 730;
 	assert_eq!(vec.len(), target_len);
 }
 
@@ -331,7 +331,7 @@ fn block_10_tx_serialized_size() {
 	let b = new_block(txs.iter().collect(), &keychain, &builder, &prev, &key_id);
 	let mut vec = Vec::new();
 	ser::serialize_default(&mut vec, &b).expect("serialization failed");
-	let target_len = 3_321;
+	let target_len = 3_331;
 	assert_eq!(vec.len(), target_len,);
 }
 

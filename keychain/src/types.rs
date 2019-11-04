@@ -84,7 +84,7 @@ impl fmt::Display for Error {
 	}
 }
 
-#[derive(Clone, PartialEq, Eq, Ord, Hash, PartialOrd)]
+#[derive(Clone, Copy, PartialEq, Eq, Ord, Hash, PartialOrd)]
 pub struct Identifier([u8; IDENTIFIER_SIZE]);
 
 impl ser::Serialize for Identifier {
@@ -473,6 +473,7 @@ pub trait Keychain: Sync + Send + Clone {
 	fn public_root_key(&self) -> PublicKey;
 
 	fn derive_key(&self, id: &Identifier) -> Result<SecretKey, Error>;
+	fn derive_pub_key(&self, id: &Identifier) -> Result<PublicKey, Error>;
 	fn commit(&self, w: i64, id: &Identifier) -> Result<Commitment, Error>;
 	fn commit_raw(&self, w: i64, key: &SecretKey) -> Result<Commitment, Error>;
 	fn blind_sum(&self, blind_sum: &BlindSum) -> Result<BlindingFactor, Error>;

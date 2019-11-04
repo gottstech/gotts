@@ -947,7 +947,7 @@ impl<'a> Extension<'a> {
 		}
 
 		for input in b.inputs() {
-			self.apply_input(input)?;
+			self.apply_input(&input)?;
 		}
 
 		for kernel in b.kernels() {

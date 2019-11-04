@@ -435,7 +435,7 @@ fn verify_block_sums(
 	let ref header_extension = ext.header_extension;
 	let inputs_body = extension
 		.utxo_view(header_extension)
-		.inputs_body(b.inputs())?;
+		.inputs_body(&b.inputs())?;
 
 	// Overage is based purely on the new block.
 	// Previous block_sums have taken all previous overage into account.

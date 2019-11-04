@@ -29,7 +29,7 @@ use crate::core::compact_block::{CompactBlock, CompactBlockBody};
 use crate::core::hash::{DefaultHashable, Hash, Hashed, ZERO_HASH};
 use crate::core::verifier_cache::VerifierCache;
 use crate::core::{
-	transaction, Commitment, Input, KernelFeatures, Output, Transaction, TransactionBody, TxKernel,
+	transaction, Commitment, Input, InputEx, KernelFeatures, Output, Transaction, TransactionBody, TxKernel,
 	Weighting,
 };
 
@@ -601,12 +601,21 @@ impl Block {
 	}
 
 	/// Get inputs
-	pub fn inputs(&self) -> &Vec<Input> {
+	pub fn inputs(&self) -> Vec<Input> {
+		let mut inputs: Vec<Input> = vec![];
+		for input_ex in &self.body.inputs {
+			inputs.extend_from_slice( &input_ex.inputs());
+		}
+		inputs
+	}
+
+	/// Get inputs
+	pub fn inputs_ex(&self) -> &Vec<InputEx> {
 		&self.body.inputs
 	}
 
 	/// Get inputs mutable
-	pub fn inputs_mut(&mut self) -> &mut Vec<Input> {
+	pub fn inputs_ex_mut(&mut self) -> &mut Vec<InputEx> {
 		&mut self.body.inputs
 	}
 
@@ -640,7 +649,7 @@ impl Block {
 	/// elimination is stable with respect to the order of inputs and outputs.
 	/// Method consumes the block.
 	pub fn cut_through(self) -> Result<Block, Error> {
-		let mut inputs = self.inputs().clone();
+		let mut inputs = self.inputs_ex().clone();
 		let mut outputs = self.outputs().clone();
 		transaction::cut_through(&mut inputs, &mut outputs)?;
 

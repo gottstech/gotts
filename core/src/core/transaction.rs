@@ -219,6 +219,8 @@ pub enum Error {
 	SecuredPath(String),
 	/// OutputLocker error.
 	OutputLocker(String),
+	/// InputUnlocker error.
+	InputUnlocker(String),
 }
 
 impl error::Error for Error {
@@ -568,8 +570,8 @@ pub enum Weighting {
 /// TransactionBody is a common abstraction for transaction and block
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TransactionBody {
-	/// List of inputs spent by the transaction.
-	pub inputs: Vec<Input>,
+	/// List of inputs by the transaction.
+	pub inputs: Vec<InputEx>,
 	/// List of outputs the transaction produces.
 	pub outputs: Vec<Output>,
 	/// List of kernels that make up this transaction (usually a single kernel).
@@ -635,7 +637,11 @@ impl Readable for TransactionBody {
 
 impl Committed for TransactionBody {
 	fn inputs_committed(&self) -> Vec<Commitment> {
-		self.inputs.iter().map(|x| x.commitment()).collect()
+		let mut result: Vec<Commitment> = vec![];
+		for inputs in &self.inputs {
+			result.extend_from_slice(&inputs.commitments());
+		}
+		result
 	}
 
 	fn outputs_committed(&self) -> Vec<Commitment> {
@@ -663,6 +669,19 @@ impl TransactionBody {
 		}
 	}
 
+	/// Get the Input vector
+	pub fn get_inputs_vec(&self) -> Vec<Input> {
+		let total = self.inputs.iter().fold(0usize, |t, inputs| t + inputs.len());
+		let mut result: Vec<Input> = Vec::with_capacity(total);
+		for input_ex in &self.inputs {
+			match input_ex {
+				InputEx::SingleInput(input) => result.push(input.clone()),
+				InputEx::InputsWithUnlocker{ inputs, unlocker: _} => result.extend_from_slice(inputs),
+			}
+		}
+		result
+	}
+
 	/// Sort the inputs|outputs|kernels.
 	pub fn sort(&mut self) {
 		self.inputs.sort_unstable();
@@ -674,7 +693,7 @@ impl TransactionBody {
 	/// the provided inputs, outputs and kernels.
 	/// Guarantees inputs, outputs, kernels are sorted lexicographically.
 	pub fn init(
-		inputs: Vec<Input>,
+		inputs: Vec<InputEx>,
 		outputs: Vec<Output>,
 		kernels: Vec<TxKernel>,
 		verify_sorted: bool,
@@ -700,10 +719,21 @@ impl TransactionBody {
 	/// inputs, if any, are kept intact.
 	/// Sort order is maintained.
 	pub fn with_input(mut self, input: Input) -> TransactionBody {
+		let input_ex = input.to_input_ex();
 		self.inputs
-			.binary_search(&input)
+			.binary_search(&input_ex)
 			.err()
-			.map(|e| self.inputs.insert(e, input));
+			.map(|e| self.inputs.insert(e, input_ex));
+
+		self
+	}
+
+	/// Same as above but with an InputEx.
+	pub fn with_input_ex(mut self, input_ex: InputEx) -> TransactionBody {
+		self.inputs
+			.binary_search(&input_ex)
+			.err()
+			.map(|e| self.inputs.insert(e, input_ex));
 		self
 	}
 
@@ -919,8 +949,7 @@ impl TransactionBody {
 		// Cache the successful verification results for the new outputs and kernels.
 		{
 			let mut verifier = verifier.write();
-			//todo:
-			//			verifier.add_inputunlocker_verified(outputs);
+			//todo: verifier.add_inputunlocker_verified(outputs);
 			verifier.add_kernel_sig_verified(kernels);
 		}
 		Ok(())
@@ -1005,7 +1034,7 @@ impl Transaction {
 
 	/// Creates a new transaction initialized with
 	/// the provided inputs, outputs, kernels
-	pub fn new(inputs: Vec<Input>, outputs: Vec<Output>, kernels: Vec<TxKernel>) -> Transaction {
+	pub fn new(inputs: Vec<InputEx>, outputs: Vec<Output>, kernels: Vec<TxKernel>) -> Transaction {
 		// Initialize a new tx body and sort everything.
 		let body =
 			TransactionBody::init(inputs, outputs, kernels, false).expect("sorting, not verifying");
@@ -1019,6 +1048,16 @@ impl Transaction {
 	pub fn with_input(self, input: Input) -> Transaction {
 		Transaction {
 			body: self.body.with_input(input),
+			..self
+		}
+	}
+
+	/// Builds a new transaction with the provided InputEx added. Existing
+	/// inputs, if any, are kept intact.
+	/// Sort order is maintained.
+	pub fn with_input_ex(self, input_ex: InputEx) -> Transaction {
+		Transaction {
+			body: self.body.with_input_ex(input_ex),
 			..self
 		}
 	}
@@ -1054,12 +1093,21 @@ impl Transaction {
 	}
 
 	/// Get inputs
-	pub fn inputs(&self) -> &Vec<Input> {
+	pub fn inputs(&self) -> Vec<Input> {
+		let mut inputs: Vec<Input> = vec![];
+		for input_ex in &self.body.inputs {
+			inputs.extend_from_slice( &input_ex.inputs());
+		}
+		inputs
+	}
+
+	/// Get inputs
+	pub fn inputs_ex(&self) -> &Vec<InputEx> {
 		&self.body.inputs
 	}
 
 	/// Get inputs mutable
-	pub fn inputs_mut(&mut self) -> &mut Vec<Input> {
+	pub fn inputs_ex_mut(&mut self) -> &mut Vec<InputEx> {
 		&mut self.body.inputs
 	}
 
@@ -1156,12 +1204,21 @@ impl Transaction {
 /// from the Vec. Provides a simple way to cut-through a block or aggregated
 /// transaction. The elimination is stable with respect to the order of inputs
 /// and outputs.
-pub fn cut_through(inputs: &mut Vec<Input>, outputs: &mut Vec<Output>) -> Result<(), Error> {
+/// Cut-Through in same block is forbidden for Non-Interactive Transaction, please
+/// refer to docs/intro.md#coinjoin-forbidden-for-non-interactive-transaction.
+pub fn cut_through(inputs_ex: &mut Vec<InputEx>, outputs: &mut Vec<Output>) -> Result<(), Error> {
 	// assemble output commitments set, checking they're all unique
 	outputs.sort_unstable();
 	if outputs.windows(2).any(|pair| pair[0] == pair[1]) {
 		return Err(Error::AggregationError);
 	}
+
+	let mut inputs: Vec<Input> = inputs_ex
+		.iter()
+		.filter(|i| !i.is_unlocker())
+		.map(|i| i.get_single_input().unwrap())
+		.collect();
+
 	inputs.sort_unstable();
 	let mut inputs_idx = 0;
 	let mut outputs_idx = 0;
@@ -1189,6 +1246,21 @@ pub fn cut_through(inputs: &mut Vec<Input>, outputs: &mut Vec<Output>) -> Result
 	// Cut elements that have already been copied
 	outputs.drain(outputs_idx - ncut..outputs_idx);
 	inputs.drain(inputs_idx - ncut..inputs_idx);
+
+	// Cut from the inputs_ex
+	let inputs_with_locker: Vec<InputEx> = inputs_ex
+		.drain(..)
+		.filter(|i| i.is_unlocker())
+		.collect();
+	inputs_ex.clear();
+	let left: Vec<InputEx> = inputs
+		.iter()
+		.map(|i| i.to_input_ex())
+		.collect();
+
+	inputs_ex.extend_from_slice(&left);
+	inputs_ex.extend_from_slice(&inputs_with_locker);
+
 	Ok(())
 }
 
@@ -1209,7 +1281,7 @@ pub fn aggregate(mut txs: Vec<Transaction>) -> Result<Transaction, Error> {
 		n_kernels += tx.body.kernels.len();
 	}
 
-	let mut inputs: Vec<Input> = Vec::with_capacity(n_inputs);
+	let mut inputs: Vec<InputEx> = Vec::with_capacity(n_inputs);
 	let mut outputs: Vec<Output> = Vec::with_capacity(n_outputs);
 	let mut kernels: Vec<TxKernel> = Vec::with_capacity(n_kernels);
 
@@ -1237,7 +1309,7 @@ pub fn aggregate(mut txs: Vec<Transaction>) -> Result<Transaction, Error> {
 /// Attempt to deaggregate a multi-kernel transaction based on multiple
 /// transactions
 pub fn deaggregate(mk_tx: Transaction, txs: Vec<Transaction>) -> Result<Transaction, Error> {
-	let mut inputs: Vec<Input> = vec![];
+	let mut inputs: Vec<InputEx> = vec![];
 	let mut outputs: Vec<Output> = vec![];
 	let mut kernels: Vec<TxKernel> = vec![];
 
@@ -1260,7 +1332,8 @@ pub fn deaggregate(mk_tx: Transaction, txs: Vec<Transaction>) -> Result<Transact
 	}
 
 	// Sorting them lexicographically
-	inputs.sort_unstable();
+	//todo: inputs sorting
+	//inputs.sort_unstable();
 	outputs.sort_unstable();
 	kernels.sort_unstable();
 
@@ -1296,8 +1369,8 @@ impl ::std::hash::Hash for Input {
 /// an Input as binary.
 impl Writeable for Input {
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
-		self.features.write(writer)?;
-		self.commit.write(writer)?;
+			self.features.write(writer)?;
+			self.commit.write(writer)?;
 		Ok(())
 	}
 }
@@ -1347,6 +1420,11 @@ impl Input {
 	/// Is this a plain input?
 	pub fn is_plain(&self) -> bool {
 		self.features.is_plain()
+	}
+
+	/// Create an InputEx from an Input
+	pub fn to_input_ex(&self) -> InputEx {
+		InputEx::SingleInput(self.clone())
 	}
 }
 
@@ -1398,21 +1476,25 @@ impl Readable for InputUnlocker {
 	}
 }
 
-/// A transaction inputs with the unlocker.
+/// The input of a transaction.
 ///
 /// Primarily a reference to a batch of outputs (with same 'p2pkh' locker) being spent by the transaction.
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct InputsUnlocking {
-	/// Inputs. To spend those outputs with same 'p2pkh' locker.
-	pub inputs: Vec<Input>,
-	/// The unlocker for spending one or a batch of output/s with same 'p2pkh' locker.
-	pub unlocker: InputUnlocker,
+pub enum InputEx {
+	/// Single Input w/o unlocker
+	SingleInput(Input),
+	/// Single or multiple Inputs with unlocker
+	InputsWithUnlocker {
+		/// Inputs. To spend those outputs with same 'p2pkh' locker.
+		inputs: Vec<Input>,
+		/// The unlocker for spending one or a batch of output/s with same 'p2pkh' locker.
+		unlocker: InputUnlocker,
+	},
 }
+impl DefaultHashable for InputEx {}
+hashable_ord!(InputEx);
 
-impl DefaultHashable for InputsUnlocking {}
-hashable_ord!(InputsUnlocking);
-
-impl ::std::hash::Hash for InputsUnlocking {
+impl ::std::hash::Hash for InputEx {
 	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
 		let mut vec = Vec::new();
 		ser::serialize_default(&mut vec, &self).expect("serialization failed");
@@ -1421,47 +1503,103 @@ impl ::std::hash::Hash for InputsUnlocking {
 }
 
 /// Implementation of Writeable for a transaction Inputs, defines how to write
-/// an InputsUnlocking as binary.
-impl Writeable for InputsUnlocking {
+/// an InputEx as binary.
+impl Writeable for InputEx {
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
-		assert!(self.inputs.len() <= u32::MAX as usize);
-		writer.write_u32(self.inputs.len() as u32)?;
-		self.inputs.write(writer)?;
-		self.unlocker.write(writer)?;
+		match self {
+			InputEx::SingleInput(i) => {
+				writer.write_u8(0u8)?;
+				i.write(writer)?;
+			}
+			InputEx::InputsWithUnlocker{inputs, unlocker} => {
+				assert!(inputs.len() <= u32::MAX as usize);
+				writer.write_u8(1u8)?;
+				writer.write_u32(inputs.len() as u32)?;
+				inputs.write(writer)?;
+				unlocker.write(writer)?;
+			}
+		}
 		Ok(())
 	}
 }
 
 /// Implementation of Readable for a transaction Input, defines how to read
 /// an Input from a binary stream.
-impl Readable for InputsUnlocking {
-	fn read(reader: &mut dyn Reader) -> Result<InputsUnlocking, ser::Error> {
-		let input_len = reader.read_u32()?;
-		let inputs = read_multi(reader, input_len as u64)?;
-		let unlocker = InputUnlocker::read(reader)?;
-		Ok(InputsUnlocking::new(inputs, unlocker))
+impl Readable for InputEx {
+	fn read(reader: &mut dyn Reader) -> Result<InputEx, ser::Error> {
+		let input_type = reader.read_u8()?;
+		match input_type {
+			0 => {
+				let input = Input::read(reader)?;
+				Ok(InputEx::SingleInput(input))
+			},
+			1 => {
+				let input_len = reader.read_u32()?;
+				let inputs = read_multi(reader, input_len as u64)?;
+				let unlocker = InputUnlocker::read(reader)?;
+				Ok(InputEx::InputsWithUnlocker{
+					inputs,
+					unlocker,
+				})
+			},
+			_ => Err(ser::Error::CorruptedData),
+		}
 	}
 }
 
 /// The input for a transaction, which spends a pre-existing unspent output.
 /// The input commitment is a reproduction of the commitment of the output
 /// being spent. Input must also provide the original output features.
-impl InputsUnlocking {
-	/// Build a new input from the data required to identify and verify an
-	/// output being spent.
-	pub fn new(inputs: Vec<Input>, unlocker: InputUnlocker) -> InputsUnlocking {
-		InputsUnlocking { inputs, unlocker }
+impl InputEx {
+	/// Whether it contains an InputUnlocker
+	pub fn is_unlocker(&self) -> bool {
+		match self {
+			InputEx::SingleInput(_) => false,
+			InputEx::InputsWithUnlocker{..} => true,
+		}
 	}
 
-	/// The input commitment which _partially_ identifies the output being
-	/// spent. In the presence of a fork we need additional info to uniquely
-	/// identify the output. Specifically the block hash (to correctly
-	/// calculate lock_height for coinbase outputs).
+	/// Get the Input if it's a SingleInput.
+	pub fn get_single_input(&self) -> Option<Input> {
+		match self {
+			InputEx::SingleInput(input) => Some(input.clone()),
+			InputEx::InputsWithUnlocker{..} => None,
+		}
+	}
+
+	/// Get the InputUnlocker.
+	pub fn get_unlocker(&self) -> Result<InputUnlocker, Error> {
+		match self {
+			InputEx::SingleInput(_) => Err(Error::InputUnlocker("wrong Input type".to_string())),
+			InputEx::InputsWithUnlocker{inputs: _, unlocker} => Ok(unlocker.clone()),
+		}
+	}
+
+	/// The input commitment/s.
 	pub fn commitments(&self) -> Vec<Commitment> {
-		self.inputs
-			.iter()
-			.map(|input| input.commit.clone())
-			.collect()
+		match self {
+			InputEx::SingleInput(i) => vec![i.commit.clone()],
+			InputEx::InputsWithUnlocker{ inputs, unlocker: _} => inputs
+				.iter()
+				.map(|input| input.commit.clone())
+				.collect(),
+		}
+	}
+
+	/// The inputs.
+	pub fn inputs(&self) -> Vec<Input> {
+		match self {
+			InputEx::SingleInput(i) => vec![i.clone()],
+			InputEx::InputsWithUnlocker{ inputs, unlocker: _} => inputs.clone(),
+		}
+	}
+
+	/// The vector length
+	pub fn len(&self) -> usize {
+		match self {
+			InputEx::SingleInput(_) => 1,
+			InputEx::InputsWithUnlocker{ inputs, unlocker: _} => inputs.len(),
+		}
 	}
 
 	/// Verify the transaction proof validity. Entails checking the signature verifies with
@@ -1469,7 +1607,7 @@ impl InputsUnlocking {
 	/// Caution:
 	/// 1. It's the caller's responsibility to make sure 'max_timestamp' came from the
 	/// max height of the 'outputs_to_spent', the block timestamp at that height.
-	/// 2. 'check_sig_only' must be true on production. 'false' only for test.
+	/// 2. 'check_sig_only' must be false on production. 'true' only for test.
 	///
 	pub fn verify(
 		&self,
@@ -1477,18 +1615,38 @@ impl InputsUnlocking {
 		max_timestamp: DateTime<Utc>,
 		check_sig_only: bool,
 	) -> Result<(), Error> {
-		if !check_sig_only && outputs_to_spent.is_empty() {
+		if !self.is_unlocker() {
+			return Err(Error::InputUnlocker("wrong Input type".to_string()));
+		}
+
+		if outputs_to_spent.is_empty() {
 			return Err(Error::InputNotExist);
 		}
 
+		let unlocker = self.get_unlocker().unwrap();
 		// First checking: timestamp must not earlier than any input
-		if !check_sig_only && self.unlocker.timestamp <= max_timestamp {
+		if !check_sig_only && unlocker.timestamp <= max_timestamp {
 			return Err(Error::IncorrectTimestamp);
+		}
+
+		// Second checking: All Inputs exist in 'outputs_to_spent'
+		let commits_in = self.commitments();
+		if commits_in.len() != outputs_to_spent.len() {
+			return Err(Error::InputNotExist);
+		}
+		let commits_out: Vec<Commitment> = outputs_to_spent
+			.iter()
+			.map(|o| o.output.commit.clone())
+			.collect();
+		for commit in &commits_in {
+			if !commits_out.contains(commit) {
+				return Err(Error::InputNotExist);
+			}
 		}
 
 		let secp = static_secp_instance();
 		let secp = secp.lock();
-		let p2pkh = self.unlocker.pub_key.serialize_vec(true).hash();
+		let p2pkh = unlocker.pub_key.serialize_vec(true).hash();
 		let mut msg_to_sign: Vec<u8> = Vec::with_capacity(outputs_to_spent.len() * SINGLE_MSG_SIZE);
 
 		for output_ex in outputs_to_spent {
@@ -1499,16 +1657,16 @@ impl InputsUnlocking {
 		}
 
 		// Hashing to get the final msg for signature
-		let hash = (msg_to_sign, self.unlocker.timestamp.timestamp()).hash();
+		let hash = (msg_to_sign, unlocker.timestamp.timestamp()).hash();
 		let msg = secp::Message::from_slice(&hash.as_bytes())?;
 
 		if !secp::aggsig::verify_single(
 			&secp,
-			&self.unlocker.sig,
+			&unlocker.sig,
 			&msg,
 			None,
-			&self.unlocker.pub_key,
-			Some(&self.unlocker.pub_key),
+			&unlocker.pub_key,
+			Some(&unlocker.pub_key),
 			None,
 			false,
 		) {

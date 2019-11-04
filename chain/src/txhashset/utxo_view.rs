@@ -60,7 +60,7 @@ impl<'a> UTXOView<'a> {
 		}
 
 		for input in block.inputs() {
-			self.validate_input(input)?;
+			self.validate_input(&input)?;
 		}
 		Ok(())
 	}
@@ -77,7 +77,7 @@ impl<'a> UTXOView<'a> {
 		}
 
 		for input in tx.inputs() {
-			let input_value = self.validate_input(input)?;
+			let input_value = self.validate_input(&input)?;
 			sum = sum.saturating_add(input_value as i64);
 		}
 

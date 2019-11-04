@@ -189,7 +189,6 @@ where
 
 	for output_value in output_values {
 		let key_id = ExtKeychain::derive_key_id(1, output_value as u32, 0, 0, 0);
-		//todo: change the 0u64 here when secp library support i64 value.
 		tx_elements.push(libtx::build::output(output_value, Some(0i64), key_id));
 	}
 

@@ -27,11 +27,47 @@
 //!   with_fee(1)])
 
 use crate::address::Address;
-use crate::core::{Input, Output, OutputFeatures, OutputFeaturesEx, Transaction, TxKernel};
+use crate::core::{Input, InputEx, InputUnlocker, Output, OutputFeatures, OutputFeaturesEx, Transaction, TxKernel};
+use crate::core::hash::{Hash, Hashed};
+use crate::core::SINGLE_MSG_SIZE;
 use crate::keychain::{BlindSum, BlindingFactor, Identifier, Keychain};
 use crate::libtx::proof::ProofBuild;
 use crate::libtx::{aggsig, proof, Error};
+use crate::libtx::secp_ser;
+use crate::util::secp::{Commitment, Message, SecretKey};
+use serde::{self, Deserialize};
+use chrono::prelude::*;
 use rand::{thread_rng, Rng};
+
+/// Util structure for building the InputEx to spend an/some OutputII/s
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, PartialOrd, Eq, Ord)]
+pub struct InputExBuildParm {
+	/// Transaction value
+	pub value: u64,
+	/// 'w' of the new Pedersen Commitment
+	pub w: i64,
+	/// Key ID
+	pub key_id: Identifier,
+	/// The ephemeral key for non-interactive transaction output
+	#[serde(with = "secp_ser::seckey_serde")]
+	pub ephemeral_key: SecretKey,
+	/// The recipient's public key hash for non-interactive transaction output
+	pub p2pkh: Hash,
+}
+
+impl InputExBuildParm {
+	/// The msg signed as part of the Input with a signature.
+	/// 	msg = hash(features || commit || value || timestamp) for single input
+	/// 	msg = hash((features || commit || value) || (...) || timestamp) for multiple inputs
+	/// Leave to caller to execute the final hash.
+	pub fn msg_to_sign(&self, commit: &Commitment) -> Vec<u8> {
+		let mut msg: Vec<u8> = Vec::with_capacity(SINGLE_MSG_SIZE);
+		msg.push(OutputFeatures::SigLocked as u8);
+		msg.extend_from_slice(commit.as_ref());
+		msg.extend_from_slice(&self.value.to_be_bytes());
+		msg
+	}
+}
 
 /// Context information available to transaction combinators.
 pub struct Context<'a, K, B>
@@ -103,16 +139,55 @@ where
 
 /// Adds a SigLocked input with the provided value and blinding key to the transaction
 /// being built.
-pub fn siglocked_input<K, B>(value: u64, w: i64, key_id: Identifier) -> Box<Append<K, B>>
+pub fn siglocked_input<K, B>(input_build_parm: Vec<InputExBuildParm>) -> Box<Append<K, B>>
 where
 	K: Keychain,
 	B: ProofBuild,
 {
-	debug!(
-		"Building SigLocked input (spending SigLocked output): {}, {}",
-		value, key_id
-	);
-	build_input(value, w, OutputFeatures::Plain, key_id)
+	//todo: check the 'p2pkh' and 'key_id' is same for each element, and verify the 'p2pkh' with the key_id
+
+	{
+		let values: Vec<u64> = input_build_parm.iter().map(|i| i.value).collect();
+		let keys: Vec<Identifier> = input_build_parm.iter().map(|i| i.key_id).collect();
+		debug!(
+			"Building SigLocked input (spending SigLocked output/s): {:?}, {:?}",
+			values,
+			keys,
+		);
+	}
+	Box::new(
+		move |build, (tx, kern, sum)| -> (Transaction, TxKernel, BlindSum) {
+			let mut inputs: Vec<Input> = Vec::with_capacity(input_build_parm.len());
+			let mut msg_to_sign: Vec<u8> = Vec::with_capacity(input_build_parm.len() * SINGLE_MSG_SIZE);
+
+			let key_id = input_build_parm[0].key_id.clone();
+			let mut total_sum = sum;
+			for parm in &input_build_parm {
+				let commit = build.keychain.commit_raw(parm.w, &parm.ephemeral_key).unwrap();
+				msg_to_sign.extend_from_slice(&parm.msg_to_sign(&commit));
+				inputs.push(Input::new(OutputFeatures::SigLocked, commit));
+				total_sum = total_sum.sub_blinding_factor(BlindingFactor::from_secret_key(parm.ephemeral_key.clone()));
+			}
+			let now = Utc::now();
+			// Hashing to get the final msg for signature
+			let hash = (msg_to_sign, now.timestamp()).hash();
+			let msg = Message::from_slice(&hash.as_bytes()).unwrap();
+			let sig = build.keychain.sign(&msg, &key_id).unwrap();
+
+			(
+				tx.with_input_ex(InputEx::InputsWithUnlocker {
+					inputs,
+					unlocker: InputUnlocker{
+						timestamp: now,
+						sig,
+						pub_key: build.keychain.derive_pub_key(&key_id).unwrap(),
+					},
+				}),
+				kern,
+				total_sum,
+			)
+		},
+	)
 }
 
 /// Adds an output with the provided value and key identifier from the keychain.

@@ -106,6 +106,17 @@ impl Keychain for ExtKeychain {
 		Ok(ext_key.secret_key)
 	}
 
+	fn derive_pub_key(&self, id: &Identifier) -> Result<PublicKey, Error> {
+		let mut h = self.hasher.clone();
+		let p = id.to_path();
+		let mut ext_key = self.master.clone();
+		for i in 0..p.depth {
+			ext_key = ext_key.ckd_priv(&self.secp, &mut h, p.path[i as usize])?;
+		}
+
+		Ok(PublicKey::from_secret_key(&self.secp,&ext_key.secret_key)?)
+	}
+
 	fn commit(&self, w: i64, id: &Identifier) -> Result<Commitment, Error> {
 		let key = self.derive_key(id)?;
 		let commit = self.secp.commit_i(w, &key)?;

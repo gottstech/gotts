@@ -22,7 +22,7 @@ use crate::util::to_hex;
 
 pub use crate::util::secp::{
 	hex_to_key, option_pubkey_serde, option_seckey_serde, option_sig_serde, pubkey_serde,
-	sig_serde, u8_to_hex,
+	seckey_serde, sig_serde, u8_to_hex,
 };
 
 /// Creates a SecuredPath from a hex string
