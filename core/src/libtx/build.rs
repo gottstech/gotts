@@ -27,17 +27,19 @@
 //!   with_fee(1)])
 
 use crate::address::Address;
-use crate::core::{Input, InputEx, InputUnlocker, Output, OutputFeatures, OutputFeaturesEx, Transaction, TxKernel};
 use crate::core::hash::{Hash, Hashed};
 use crate::core::SINGLE_MSG_SIZE;
+use crate::core::{
+	Input, InputEx, InputUnlocker, Output, OutputFeatures, OutputFeaturesEx, Transaction, TxKernel,
+};
 use crate::keychain::{BlindSum, BlindingFactor, Identifier, Keychain};
 use crate::libtx::proof::ProofBuild;
-use crate::libtx::{aggsig, proof, Error};
 use crate::libtx::secp_ser;
+use crate::libtx::{aggsig, proof, Error};
 use crate::util::secp::{Commitment, Message, SecretKey};
-use serde::{self, Deserialize};
 use chrono::prelude::*;
 use rand::{thread_rng, Rng};
+use serde::{self, Deserialize};
 
 /// Util structure for building the InputEx to spend an/some OutputII/s
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, PartialOrd, Eq, Ord)]
@@ -151,22 +153,27 @@ where
 		let keys: Vec<Identifier> = input_build_parm.iter().map(|i| i.key_id).collect();
 		debug!(
 			"Building SigLocked input (spending SigLocked output/s): {:?}, {:?}",
-			values,
-			keys,
+			values, keys,
 		);
 	}
 	Box::new(
 		move |build, (tx, kern, sum)| -> (Transaction, TxKernel, BlindSum) {
 			let mut inputs: Vec<Input> = Vec::with_capacity(input_build_parm.len());
-			let mut msg_to_sign: Vec<u8> = Vec::with_capacity(input_build_parm.len() * SINGLE_MSG_SIZE);
+			let mut msg_to_sign: Vec<u8> =
+				Vec::with_capacity(input_build_parm.len() * SINGLE_MSG_SIZE);
 
 			let key_id = input_build_parm[0].key_id.clone();
 			let mut total_sum = sum;
 			for parm in &input_build_parm {
-				let commit = build.keychain.commit_raw(parm.w, &parm.ephemeral_key).unwrap();
+				let commit = build
+					.keychain
+					.commit_raw(parm.w, &parm.ephemeral_key)
+					.unwrap();
 				msg_to_sign.extend_from_slice(&parm.msg_to_sign(&commit));
 				inputs.push(Input::new(OutputFeatures::SigLocked, commit));
-				total_sum = total_sum.sub_blinding_factor(BlindingFactor::from_secret_key(parm.ephemeral_key.clone()));
+				total_sum = total_sum.sub_blinding_factor(BlindingFactor::from_secret_key(
+					parm.ephemeral_key.clone(),
+				));
 			}
 			let now = Utc::now();
 			// Hashing to get the final msg for signature
@@ -177,7 +184,7 @@ where
 			(
 				tx.with_input_ex(InputEx::InputsWithUnlocker {
 					inputs,
-					unlocker: InputUnlocker{
+					unlocker: InputUnlocker {
 						timestamp: now,
 						sig,
 						pub_key: build.keychain.derive_pub_key(&key_id).unwrap(),

@@ -671,12 +671,18 @@ impl TransactionBody {
 
 	/// Get the Input vector
 	pub fn get_inputs_vec(&self) -> Vec<Input> {
-		let total = self.inputs.iter().fold(0usize, |t, inputs| t + inputs.len());
+		let total = self
+			.inputs
+			.iter()
+			.fold(0usize, |t, inputs| t + inputs.len());
 		let mut result: Vec<Input> = Vec::with_capacity(total);
 		for input_ex in &self.inputs {
 			match input_ex {
 				InputEx::SingleInput(input) => result.push(input.clone()),
-				InputEx::InputsWithUnlocker{ inputs, unlocker: _} => result.extend_from_slice(inputs),
+				InputEx::InputsWithUnlocker {
+					inputs,
+					unlocker: _,
+				} => result.extend_from_slice(inputs),
 			}
 		}
 		result
@@ -1096,7 +1102,7 @@ impl Transaction {
 	pub fn inputs(&self) -> Vec<Input> {
 		let mut inputs: Vec<Input> = vec![];
 		for input_ex in &self.body.inputs {
-			inputs.extend_from_slice( &input_ex.inputs());
+			inputs.extend_from_slice(&input_ex.inputs());
 		}
 		inputs
 	}
@@ -1248,15 +1254,10 @@ pub fn cut_through(inputs_ex: &mut Vec<InputEx>, outputs: &mut Vec<Output>) -> R
 	inputs.drain(inputs_idx - ncut..inputs_idx);
 
 	// Cut from the inputs_ex
-	let inputs_with_locker: Vec<InputEx> = inputs_ex
-		.drain(..)
-		.filter(|i| i.is_unlocker())
-		.collect();
+	let inputs_with_locker: Vec<InputEx> =
+		inputs_ex.drain(..).filter(|i| i.is_unlocker()).collect();
 	inputs_ex.clear();
-	let left: Vec<InputEx> = inputs
-		.iter()
-		.map(|i| i.to_input_ex())
-		.collect();
+	let left: Vec<InputEx> = inputs.iter().map(|i| i.to_input_ex()).collect();
 
 	inputs_ex.extend_from_slice(&left);
 	inputs_ex.extend_from_slice(&inputs_with_locker);
@@ -1369,8 +1370,8 @@ impl ::std::hash::Hash for Input {
 /// an Input as binary.
 impl Writeable for Input {
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
-			self.features.write(writer)?;
-			self.commit.write(writer)?;
+		self.features.write(writer)?;
+		self.commit.write(writer)?;
 		Ok(())
 	}
 }
@@ -1511,7 +1512,7 @@ impl Writeable for InputEx {
 				writer.write_u8(0u8)?;
 				i.write(writer)?;
 			}
-			InputEx::InputsWithUnlocker{inputs, unlocker} => {
+			InputEx::InputsWithUnlocker { inputs, unlocker } => {
 				assert!(inputs.len() <= u32::MAX as usize);
 				writer.write_u8(1u8)?;
 				writer.write_u32(inputs.len() as u32)?;
@@ -1532,16 +1533,13 @@ impl Readable for InputEx {
 			0 => {
 				let input = Input::read(reader)?;
 				Ok(InputEx::SingleInput(input))
-			},
+			}
 			1 => {
 				let input_len = reader.read_u32()?;
 				let inputs = read_multi(reader, input_len as u64)?;
 				let unlocker = InputUnlocker::read(reader)?;
-				Ok(InputEx::InputsWithUnlocker{
-					inputs,
-					unlocker,
-				})
-			},
+				Ok(InputEx::InputsWithUnlocker { inputs, unlocker })
+			}
 			_ => Err(ser::Error::CorruptedData),
 		}
 	}
@@ -1555,7 +1553,7 @@ impl InputEx {
 	pub fn is_unlocker(&self) -> bool {
 		match self {
 			InputEx::SingleInput(_) => false,
-			InputEx::InputsWithUnlocker{..} => true,
+			InputEx::InputsWithUnlocker { .. } => true,
 		}
 	}
 
@@ -1563,7 +1561,7 @@ impl InputEx {
 	pub fn get_single_input(&self) -> Option<Input> {
 		match self {
 			InputEx::SingleInput(input) => Some(input.clone()),
-			InputEx::InputsWithUnlocker{..} => None,
+			InputEx::InputsWithUnlocker { .. } => None,
 		}
 	}
 
@@ -1571,7 +1569,10 @@ impl InputEx {
 	pub fn get_unlocker(&self) -> Result<InputUnlocker, Error> {
 		match self {
 			InputEx::SingleInput(_) => Err(Error::InputUnlocker("wrong Input type".to_string())),
-			InputEx::InputsWithUnlocker{inputs: _, unlocker} => Ok(unlocker.clone()),
+			InputEx::InputsWithUnlocker {
+				inputs: _,
+				unlocker,
+			} => Ok(unlocker.clone()),
 		}
 	}
 
@@ -1579,10 +1580,10 @@ impl InputEx {
 	pub fn commitments(&self) -> Vec<Commitment> {
 		match self {
 			InputEx::SingleInput(i) => vec![i.commit.clone()],
-			InputEx::InputsWithUnlocker{ inputs, unlocker: _} => inputs
-				.iter()
-				.map(|input| input.commit.clone())
-				.collect(),
+			InputEx::InputsWithUnlocker {
+				inputs,
+				unlocker: _,
+			} => inputs.iter().map(|input| input.commit.clone()).collect(),
 		}
 	}
 
@@ -1590,7 +1591,10 @@ impl InputEx {
 	pub fn inputs(&self) -> Vec<Input> {
 		match self {
 			InputEx::SingleInput(i) => vec![i.clone()],
-			InputEx::InputsWithUnlocker{ inputs, unlocker: _} => inputs.clone(),
+			InputEx::InputsWithUnlocker {
+				inputs,
+				unlocker: _,
+			} => inputs.clone(),
 		}
 	}
 
@@ -1598,7 +1602,10 @@ impl InputEx {
 	pub fn len(&self) -> usize {
 		match self {
 			InputEx::SingleInput(_) => 1,
-			InputEx::InputsWithUnlocker{ inputs, unlocker: _} => inputs.len(),
+			InputEx::InputsWithUnlocker {
+				inputs,
+				unlocker: _,
+			} => inputs.len(),
 		}
 	}
 

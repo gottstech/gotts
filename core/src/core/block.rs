@@ -29,8 +29,8 @@ use crate::core::compact_block::{CompactBlock, CompactBlockBody};
 use crate::core::hash::{DefaultHashable, Hash, Hashed, ZERO_HASH};
 use crate::core::verifier_cache::VerifierCache;
 use crate::core::{
-	transaction, Commitment, Input, InputEx, KernelFeatures, Output, Transaction, TransactionBody, TxKernel,
-	Weighting,
+	transaction, Commitment, Input, InputEx, KernelFeatures, Output, Transaction, TransactionBody,
+	TxKernel, Weighting,
 };
 
 use crate::global;
@@ -604,7 +604,7 @@ impl Block {
 	pub fn inputs(&self) -> Vec<Input> {
 		let mut inputs: Vec<Input> = vec![];
 		for input_ex in &self.body.inputs {
-			inputs.extend_from_slice( &input_ex.inputs());
+			inputs.extend_from_slice(&input_ex.inputs());
 		}
 		inputs
 	}
