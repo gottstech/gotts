@@ -43,7 +43,7 @@ static BCYPHER_URL: &str = "https://api.blockcypher.com/v1/btc/main";
 static BCHAIR_URL: &str = "https://api.blockchair.com/bitcoin/blocks?limit=2";
 
 static GENESIS_RS_PATH: &str = "../../core/src/genesis.rs";
-static PLUGIN_PATH: &str = "./cuckaroo_mean_cuda_29.cuckooplugin";
+static PLUGIN_PATH: &str = "./cuckaroo_cpu_avx2_29.cuckooplugin";
 static WALLET_SEED_PATH: &str = "./wallet.seed";
 
 fn main() {
