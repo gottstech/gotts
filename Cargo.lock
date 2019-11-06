@@ -696,7 +696,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "gotts"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "blake2-rfc 0.2.18 (registry+https://github.com/rust-lang/crates.io-index)",
  "built 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -706,15 +706,15 @@ dependencies = [
  "cursive 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure_derive 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "gotts_api 0.0.2",
- "gotts_chain 0.0.2",
- "gotts_config 0.0.2",
- "gotts_core 0.0.2",
- "gotts_keychain 0.0.2",
- "gotts_p2p 0.0.2",
- "gotts_servers 0.0.2",
- "gotts_store 0.0.2",
- "gotts_util 0.0.2",
+ "gotts_api 0.0.3",
+ "gotts_chain 0.0.3",
+ "gotts_config 0.0.3",
+ "gotts_core 0.0.3",
+ "gotts_keychain 0.0.3",
+ "gotts_p2p 0.0.3",
+ "gotts_servers 0.0.3",
+ "gotts_store 0.0.3",
+ "gotts_util 0.0.3",
  "humansize 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "pancurses 0.16.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -725,18 +725,18 @@ dependencies = [
 
 [[package]]
 name = "gotts_api"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "enum_primitive 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure_derive 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
- "gotts_chain 0.0.2",
- "gotts_core 0.0.2",
- "gotts_p2p 0.0.2",
- "gotts_pool 0.0.2",
- "gotts_store 0.0.2",
- "gotts_util 0.0.2",
+ "gotts_chain 0.0.3",
+ "gotts_core 0.0.3",
+ "gotts_p2p 0.0.3",
+ "gotts_pool 0.0.3",
+ "gotts_store 0.0.3",
+ "gotts_util 0.0.3",
  "http 0.1.18 (registry+https://github.com/rust-lang/crates.io-index)",
  "hyper 0.12.35 (registry+https://github.com/rust-lang/crates.io-index)",
  "hyper-rustls 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -757,7 +757,7 @@ dependencies = [
 
 [[package]]
 name = "gotts_chain"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "bitflags 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -766,10 +766,10 @@ dependencies = [
  "env_logger 0.5.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure_derive 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "gotts_core 0.0.2",
- "gotts_keychain 0.0.2",
- "gotts_store 0.0.2",
- "gotts_util 0.0.2",
+ "gotts_core 0.0.3",
+ "gotts_keychain 0.0.3",
+ "gotts_store 0.0.3",
+ "gotts_util 0.0.3",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "lru-cache 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -781,13 +781,13 @@ dependencies = [
 
 [[package]]
 name = "gotts_config"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "dirs 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "gotts_core 0.0.2",
- "gotts_p2p 0.0.2",
- "gotts_servers 0.0.2",
- "gotts_util 0.0.2",
+ "gotts_core 0.0.3",
+ "gotts_p2p 0.0.3",
+ "gotts_servers 0.0.3",
+ "gotts_util 0.0.3",
  "pretty_assertions 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -797,7 +797,7 @@ dependencies = [
 
 [[package]]
 name = "gotts_core"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "bech32 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "blake2-rfc 0.2.18 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -808,8 +808,8 @@ dependencies = [
  "enum_primitive 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure_derive 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "gotts_keychain 0.0.2",
- "gotts_util 0.0.2",
+ "gotts_keychain 0.0.3",
+ "gotts_util 0.0.3",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "lru-cache 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -826,13 +826,13 @@ dependencies = [
 
 [[package]]
 name = "gotts_keychain"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "blake2-rfc 0.2.18 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "digest 0.7.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "enum_primitive 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "gotts_util 0.0.2",
+ "gotts_util 0.0.3",
  "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hmac 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -850,17 +850,17 @@ dependencies = [
 
 [[package]]
 name = "gotts_p2p"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "bitflags 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes 0.4.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "enum_primitive 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "gotts_chain 0.0.2",
- "gotts_core 0.0.2",
- "gotts_pool 0.0.2",
- "gotts_store 0.0.2",
- "gotts_util 0.0.2",
+ "gotts_chain 0.0.3",
+ "gotts_core 0.0.3",
+ "gotts_pool 0.0.3",
+ "gotts_store 0.0.3",
+ "gotts_util 0.0.3",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "net2 0.2.33 (registry+https://github.com/rust-lang/crates.io-index)",
  "num 0.1.42 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -872,17 +872,17 @@ dependencies = [
 
 [[package]]
 name = "gotts_pool"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "blake2-rfc 0.2.18 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure_derive 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "gotts_chain 0.0.2",
- "gotts_core 0.0.2",
- "gotts_keychain 0.0.2",
- "gotts_store 0.0.2",
- "gotts_util 0.0.2",
+ "gotts_chain 0.0.3",
+ "gotts_core 0.0.3",
+ "gotts_keychain 0.0.3",
+ "gotts_store 0.0.3",
+ "gotts_util 0.0.3",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -908,19 +908,19 @@ dependencies = [
 
 [[package]]
 name = "gotts_servers"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "fs2 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
- "gotts_api 0.0.2",
- "gotts_chain 0.0.2",
- "gotts_core 0.0.2",
- "gotts_keychain 0.0.2",
- "gotts_p2p 0.0.2",
- "gotts_pool 0.0.2",
- "gotts_store 0.0.2",
- "gotts_util 0.0.2",
+ "gotts_api 0.0.3",
+ "gotts_chain 0.0.3",
+ "gotts_core 0.0.3",
+ "gotts_keychain 0.0.3",
+ "gotts_p2p 0.0.3",
+ "gotts_pool 0.0.3",
+ "gotts_store 0.0.3",
+ "gotts_util 0.0.3",
  "http 0.1.18 (registry+https://github.com/rust-lang/crates.io-index)",
  "hyper 0.12.35 (registry+https://github.com/rust-lang/crates.io-index)",
  "hyper-rustls 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -936,7 +936,7 @@ dependencies = [
 
 [[package]]
 name = "gotts_store"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -945,8 +945,8 @@ dependencies = [
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure_derive 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "filetime 0.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
- "gotts_core 0.0.2",
- "gotts_util 0.0.2",
+ "gotts_core 0.0.3",
+ "gotts_util 0.0.3",
  "libc 0.2.62 (registry+https://github.com/rust-lang/crates.io-index)",
  "lmdb-zero 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -959,7 +959,7 @@ dependencies = [
 
 [[package]]
 name = "gotts_util"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "backtrace 0.3.37 (registry+https://github.com/rust-lang/crates.io-index)",
  "base64 0.9.3 (registry+https://github.com/rust-lang/crates.io-index)",

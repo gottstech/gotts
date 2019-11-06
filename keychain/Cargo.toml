@@ -1,6 +1,6 @@
 [package]
 name = "gotts_keychain"
-version = "0.0.2"
+version = "0.0.3"
 authors = ["Gotts Developers <gotts.tech@lists.launchpad.net>"]
 description = "Chain implementation for gotts, a simple, private and scalable cryptocurrency implementation based on the MimbleWimble chain format."
 license = "Apache-2.0"
@@ -29,4 +29,4 @@ ripemd160 = "0.7"
 sha2 = "0.7"
 pbkdf2 = "0.2"
 
-gotts_util = { path = "../util", version = "0.0.2" }
+gotts_util = { path = "../util", version = "0.0.3" }

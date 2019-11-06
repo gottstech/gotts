@@ -1,6 +1,6 @@
 [package]
 name = "gotts_store"
-version = "0.0.2"
+version = "0.0.3"
 authors = ["Gotts Developers <gotts.tech@lists.launchpad.net>"]
 description = "Simple, private and scalable cryptocurrency implementation based on the MimbleWimble chain format."
 license = "Apache-2.0"
@@ -23,8 +23,8 @@ serde = "1"
 serde_derive = "1"
 log = "0.4"
 
-gotts_core = { path = "../core", version = "0.0.2" }
-gotts_util = { path = "../util", version = "0.0.2" }
+gotts_core = { path = "../core", version = "0.0.3" }
+gotts_util = { path = "../util", version = "0.0.3" }
 
 [dev-dependencies]
 chrono = "0.4.4"
