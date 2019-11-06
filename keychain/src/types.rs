@@ -23,7 +23,6 @@ use std::ops::Add;
 /// commitment generation.
 use std::{error, fmt};
 
-use crate::blake2::blake2b::blake2b;
 use crate::extkey_bip32::{self, ChildNumber};
 use serde::{de, ser}; //TODO: Convert errors to use ErrorKind
 
@@ -44,6 +43,8 @@ pub const IDENTIFIER_SIZE: usize = 17;
 pub enum Error {
 	Secp(secp::Error),
 	KeyDerivation(extkey_bip32::Error),
+	InvalidIdentifier,
+	FromHexError(String),
 	Transaction(String),
 	RangeProof(String),
 	SwitchCommitment,
@@ -52,6 +53,12 @@ pub enum Error {
 impl From<secp::Error> for Error {
 	fn from(e: secp::Error) -> Error {
 		Error::Secp(e)
+	}
+}
+
+impl From<hex::FromHexError> for Error {
+	fn from(e: hex::FromHexError) -> Error {
+		Error::FromHexError(e.to_string())
 	}
 }
 
@@ -77,7 +84,7 @@ impl fmt::Display for Error {
 	}
 }
 
-#[derive(Clone, PartialEq, Eq, Ord, Hash, PartialOrd)]
+#[derive(Clone, Copy, PartialEq, Eq, Ord, Hash, PartialOrd)]
 pub struct Identifier([u8; IDENTIFIER_SIZE]);
 
 impl ser::Serialize for Identifier {
@@ -118,7 +125,7 @@ impl<'de> de::Visitor<'de> for IdentifierVisitor {
 
 impl Identifier {
 	pub fn zero() -> Identifier {
-		Identifier::from_bytes(&[0; IDENTIFIER_SIZE])
+		Identifier::from_bytes(&[0; IDENTIFIER_SIZE]).unwrap()
 	}
 
 	pub fn from_path(path: &ExtKeychainPath) -> Identifier {
@@ -165,35 +172,24 @@ impl Identifier {
 		}
 		Identifier::from_path(&p)
 	}
-	pub fn from_bytes(bytes: &[u8]) -> Identifier {
+	pub fn from_bytes(bytes: &[u8]) -> Result<Identifier, Error> {
 		let mut identifier = [0; IDENTIFIER_SIZE];
 		for i in 0..min(IDENTIFIER_SIZE, bytes.len()) {
 			identifier[i] = bytes[i];
 		}
-		Identifier(identifier)
+		if identifier[0] > 4 {
+			return Err(Error::InvalidIdentifier);
+		}
+		Ok(Identifier(identifier))
 	}
 
 	pub fn to_bytes(&self) -> [u8; IDENTIFIER_SIZE] {
 		self.0.clone()
 	}
 
-	pub fn from_pubkey(secp: &Secp256k1, pubkey: &PublicKey) -> Identifier {
-		let bytes = pubkey.serialize_vec(secp, true);
-		let identifier = blake2b(IDENTIFIER_SIZE, &[], &bytes[..]);
-		Identifier::from_bytes(&identifier.as_bytes())
-	}
-
-	/// Return the identifier of the secret key
-	/// which is the blake2b (10 byte) digest of the PublicKey
-	/// corresponding to the secret key provided.
-	pub fn from_secret_key(secp: &Secp256k1, key: &SecretKey) -> Result<Identifier, Error> {
-		let key_id = PublicKey::from_secret_key(secp, key)?;
-		Ok(Identifier::from_pubkey(secp, &key_id))
-	}
-
 	pub fn from_hex(hex: &str) -> Result<Identifier, Error> {
-		let bytes = util::from_hex(hex.to_string()).unwrap();
-		Ok(Identifier::from_bytes(&bytes))
+		let bytes = util::from_hex(hex.to_string())?;
+		Identifier::from_bytes(&bytes)
 	}
 
 	pub fn to_hex(&self) -> String {
@@ -203,6 +199,7 @@ impl Identifier {
 	pub fn to_bip_32_string(&self) -> String {
 		let p = ExtKeychainPath::from_identifier(&self);
 		let mut retval = String::from("m");
+		assert!(p.path.len() >= p.depth as usize);
 		for i in 0..p.depth {
 			retval.push_str(&format!("/{}", <u32>::from(p.path[i as usize])));
 		}
@@ -261,7 +258,7 @@ impl Add for BlindingFactor {
 		let keys = vec![self, other]
 			.into_iter()
 			.filter(|x| *x != BlindingFactor::zero())
-			.filter_map(|x| x.secret_key(&secp).ok())
+			.filter_map(|x| x.secret_key().ok())
 			.collect::<Vec<_>>();
 
 		if keys.is_empty() {
@@ -299,14 +296,14 @@ impl BlindingFactor {
 		Ok(BlindingFactor::from_slice(&bytes))
 	}
 
-	pub fn secret_key(&self, secp: &Secp256k1) -> Result<secp::key::SecretKey, Error> {
+	pub fn secret_key(&self) -> Result<secp::key::SecretKey, Error> {
 		if *self == BlindingFactor::zero() {
 			// TODO - need this currently for tx tests
 			// the "zero" secret key is not actually a valid secret_key
 			// and secp lib checks this
 			Ok(secp::key::ZERO_KEY)
 		} else {
-			secp::key::SecretKey::from_slice(secp, &self.0).map_err(|e| Error::Secp(e))
+			secp::key::SecretKey::from_slice(&self.0).map_err(|e| Error::Secp(e))
 		}
 	}
 
@@ -317,10 +314,10 @@ impl BlindingFactor {
 	/// and kernels from a block to identify and reconstruct a particular tx
 	/// from a block. You would need both k1, k2 to do this.
 	pub fn split(&self, secp: &Secp256k1) -> Result<SplitBlindingFactor, Error> {
-		let skey_1 = secp::key::SecretKey::new(secp, &mut thread_rng());
+		let skey_1 = secp::key::SecretKey::new(&mut thread_rng());
 
 		// use blind_sum to subtract skey_1 from our key (to give k = k1 + k2)
-		let skey = self.secret_key(secp)?;
+		let skey = self.secret_key()?;
 		let skey_2 = secp.blind_sum(vec![skey], vec![skey_1.clone()])?;
 
 		let blind_1 = BlindingFactor::from_secret_key(skey_1);
@@ -476,7 +473,9 @@ pub trait Keychain: Sync + Send + Clone {
 	fn public_root_key(&self) -> PublicKey;
 
 	fn derive_key(&self, id: &Identifier) -> Result<SecretKey, Error>;
-	fn commit(&self, amount: i64, id: &Identifier) -> Result<Commitment, Error>;
+	fn derive_pub_key(&self, id: &Identifier) -> Result<PublicKey, Error>;
+	fn commit(&self, w: i64, id: &Identifier) -> Result<Commitment, Error>;
+	fn commit_raw(&self, w: i64, key: &SecretKey) -> Result<Commitment, Error>;
 	fn blind_sum(&self, blind_sum: &BlindSum) -> Result<BlindingFactor, Error>;
 	fn rewind_nonce(&self, commit: &Commitment) -> Result<SecretKey, Error>;
 	fn sign(&self, msg: &Message, id: &Identifier) -> Result<Signature, Error>;
@@ -525,14 +524,14 @@ mod test {
 	#[test]
 	fn split_blinding_factor() {
 		let secp = Secp256k1::new();
-		let skey_in = SecretKey::new(&secp, &mut thread_rng());
+		let skey_in = SecretKey::new(&mut thread_rng());
 		let blind = BlindingFactor::from_secret_key(skey_in.clone());
 		let split = blind.split(&secp).unwrap();
 
 		// split a key, sum the split keys and confirm the sum matches the original key
-		let mut skey_sum = split.blind_1.secret_key(&secp).unwrap();
-		let skey_2 = split.blind_2.secret_key(&secp).unwrap();
-		let _ = skey_sum.add_assign(&secp, &skey_2).unwrap();
+		let mut skey_sum = split.blind_1.secret_key().unwrap();
+		let skey_2 = split.blind_2.secret_key().unwrap();
+		let _ = skey_sum.add_assign(&skey_2).unwrap();
 		assert_eq!(skey_in, skey_sum);
 	}
 
@@ -540,12 +539,11 @@ mod test {
 	// the same key that we started with (k + 0 = k)
 	#[test]
 	fn zero_key_addition() {
-		let secp = Secp256k1::new();
-		let skey_in = SecretKey::new(&secp, &mut thread_rng());
+		let skey_in = SecretKey::new(&mut thread_rng());
 		let skey_zero = ZERO_KEY;
 
 		let mut skey_out = skey_in.clone();
-		let _ = skey_out.add_assign(&secp, &skey_zero).unwrap();
+		let _ = skey_out.add_assign(&skey_zero).unwrap();
 
 		assert_eq!(skey_in, skey_out);
 	}
@@ -555,6 +553,7 @@ mod test {
 	fn path_identifier() {
 		let path = ExtKeychainPath::new(4, 1, 2, 3, 4);
 		let id = Identifier::from_path(&path);
+		println!("id.to_bip_32_string = {}", id.to_bip_32_string());
 		let ret_path = id.to_path();
 		assert_eq!(path, ret_path);
 

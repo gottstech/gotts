@@ -20,7 +20,10 @@ use crate::keychain::BlindingFactor;
 use crate::serde::{Deserialize, Deserializer, Serializer};
 use crate::util::to_hex;
 
-pub use crate::util::secp::{hex_to_key, option_sig_serde, pubkey_serde, sig_serde, u8_to_hex};
+pub use crate::util::secp::{
+	hex_to_key, option_pubkey_serde, option_seckey_serde, option_sig_serde, pubkey_serde,
+	seckey_serde, sig_serde, u8_to_hex,
+};
 
 /// Creates a SecuredPath from a hex string
 pub fn securedpath_from_hex<'de, D>(deserializer: D) -> Result<SecuredPath, D::Error>
@@ -223,7 +226,7 @@ mod test {
 		pub fn random() -> SerTest {
 			let static_secp = static_secp_instance();
 			let secp = static_secp.lock();
-			let sk = SecretKey::new(&secp, &mut thread_rng());
+			let sk = SecretKey::new(&mut thread_rng());
 			let mut msg = [0u8; 32];
 			thread_rng().fill(&mut msg);
 			let msg = Message::from_slice(&msg).unwrap();

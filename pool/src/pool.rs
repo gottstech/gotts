@@ -321,19 +321,21 @@ impl Pool {
 			let mut insert_pos = None;
 			let mut is_rejected = false;
 
-			for input in entry.tx.inputs() {
-				if rejected.contains(&input.commitment()) {
-					// Depends on a rejected tx, so reject this one.
-					is_rejected = true;
-					continue;
-				} else if let Some(pos) = output_commits.get(&input.commitment()) {
-					if insert_pos.is_some() {
-						// Multiple dependencies so reject this tx (pick it up in next block).
+			for input_ex in entry.tx.inputs_ex() {
+				for input in input_ex.commitments() {
+					if rejected.contains(&input) {
+						// Depends on a rejected tx, so reject this one.
 						is_rejected = true;
 						continue;
-					} else {
-						// Track the pos of the bucket we fall into.
-						insert_pos = Some(*pos);
+					} else if let Some(pos) = output_commits.get(&input) {
+						if insert_pos.is_some() {
+							// Multiple dependencies so reject this tx (pick it up in next block).
+							is_rejected = true;
+							continue;
+						} else {
+							// Track the pos of the bucket we fall into.
+							insert_pos = Some(*pos);
+						}
 					}
 				}
 			}
@@ -434,9 +436,10 @@ impl Pool {
 		// Reject any txs where we see a matching tx kernel in the block.
 		// Also reject any txs where we see a conflicting tx,
 		// where an input is spent in a different tx.
+		let block_inputs = block.inputs();
 		self.entries.retain(|x| {
 			!x.tx.kernels().iter().any(|y| block.kernels().contains(y))
-				&& !x.tx.inputs().iter().any(|y| block.inputs().contains(y))
+				&& !x.tx.inputs().iter().any(|y| block_inputs.contains(y))
 		});
 	}
 

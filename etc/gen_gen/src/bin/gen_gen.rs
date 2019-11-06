@@ -43,7 +43,7 @@ static BCYPHER_URL: &str = "https://api.blockcypher.com/v1/btc/main";
 static BCHAIR_URL: &str = "https://api.blockchair.com/bitcoin/blocks?limit=2";
 
 static GENESIS_RS_PATH: &str = "../../core/src/genesis.rs";
-static PLUGIN_PATH: &str = "./cuckaroo_mean_cuda_29.cuckooplugin";
+static PLUGIN_PATH: &str = "./cuckaroo_cpu_avx2_29.cuckooplugin";
 static WALLET_SEED_PATH: &str = "./wallet.seed";
 
 fn main() {
@@ -180,17 +180,17 @@ fn update_genesis_rs(gen: &core::core::Block) {
 		),
 	));
 	replacements.push((
-		"output_root".to_string(),
+		"output_i_root".to_string(),
 		format!(
 			"Hash::from_hex(\"{}\").unwrap()",
-			gen.header.output_root.to_hex()
+			gen.header.output_i_root.to_hex()
 		),
 	));
 	replacements.push((
-		"range_proof_root".to_string(),
+		"output_ii_root".to_string(),
 		format!(
 			"Hash::from_hex(\"{}\").unwrap()",
-			gen.header.range_proof_root.to_hex()
+			gen.header.output_ii_root.to_hex()
 		),
 	));
 	replacements.push((
@@ -215,8 +215,8 @@ fn update_genesis_rs(gen: &core::core::Block) {
 	replacements.push((
 		"excess_sig".to_string(),
 		format!(
-			"Signature::from_raw_data(&{:?}).unwrap()",
-			gen.kernels()[0].excess_sig.to_raw_data().to_vec(),
+			"Signature::from_compact(&util::from_hex({:x?}.to_string()).unwrap()).unwrap()",
+			util::to_hex(gen.kernels()[0].excess_sig.serialize_compact().to_vec()),
 		),
 	));
 	replacements.push((

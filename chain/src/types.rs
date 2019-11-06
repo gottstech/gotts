@@ -19,9 +19,9 @@ use chrono::prelude::{DateTime, Utc};
 use std::sync::Arc;
 
 use crate::core::core::hash::{Hash, Hashed, ZERO_HASH};
-use crate::core::core::{Block, BlockHeader};
+use crate::core::core::{Block, BlockHeader, OutputFeatures};
 use crate::core::pow::Difficulty;
-use crate::core::ser;
+use crate::core::ser::{self, Readable, Reader, Writeable, Writer};
 use crate::error::Error;
 use crate::util::RwLock;
 
@@ -208,8 +208,10 @@ impl TxHashsetWriteStatus for SyncState {
 /// readable.
 #[derive(Debug, PartialEq)]
 pub struct TxHashSetRoots {
-	/// Output root
+	/// Output I root
 	pub output_i_root: Hash,
+	/// Output II root
+	pub output_ii_root: Hash,
 	/// Kernel root
 	pub kernel_root: Hash,
 }
@@ -224,6 +226,50 @@ pub struct OutputMMRPosition {
 	pub position: u64,
 	/// Block height
 	pub height: u64,
+}
+
+/// A helper to hold the output feature, pmmr position, and height in order to keep them
+/// readable.
+#[derive(Debug)]
+pub struct OutputFeaturePosHeight {
+	/// The output features
+	pub features: OutputFeatures,
+	/// MMR position
+	pub position: u64,
+	/// Block height
+	pub height: u64,
+}
+
+impl Writeable for OutputFeaturePosHeight {
+	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
+		writer.write_u8(self.features as u8)?;
+		writer.write_u64(self.position)?;
+		writer.write_u64(self.height)?;
+		Ok(())
+	}
+}
+
+impl Readable for OutputFeaturePosHeight {
+	fn read(reader: &mut dyn Reader) -> Result<OutputFeaturePosHeight, ser::Error> {
+		let features = OutputFeatures::read(reader)?;
+		let position = reader.read_u64()?;
+		let height = reader.read_u64()?;
+		Ok(OutputFeaturePosHeight {
+			features,
+			position,
+			height,
+		})
+	}
+}
+
+impl Default for OutputFeaturePosHeight {
+	fn default() -> Self {
+		OutputFeaturePosHeight {
+			features: OutputFeatures::Plain,
+			position: 0,
+			height: 0,
+		}
+	}
 }
 
 /// The tip of a fork. A handle to the fork ancestry from its leaf in the

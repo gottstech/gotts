@@ -73,6 +73,8 @@ fn test_unexpected_zip() {
 			"outputI/badfile",
 			"outputI/pmmr_data.bin",
 			"outputI/pmmr_hash.bin",
+			"outputII/pmmr_data.bin",
+			"outputII/pmmr_hash.bin",
 		];
 		assert_eq!(
 			files,
@@ -98,6 +100,8 @@ fn test_unexpected_zip() {
 			"kernel/pmmr_hash.bin",
 			"outputI/pmmr_data.bin",
 			"outputI/pmmr_hash.bin",
+			"outputII/pmmr_data.bin",
+			"outputII/pmmr_hash.bin",
 		];
 		assert_eq!(
 			files,

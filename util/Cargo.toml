@@ -28,4 +28,5 @@ zeroize = "0.9"
 [dependencies.gotts_secp256k1zkp]
 git = "https://github.com/gottstech/rust-secp256k1-zkp"
 #path = "../../rust-secp256k1-zkp"
-version = "0.7.10"
+#version = "0.7.10"
+rev = "51798f2"

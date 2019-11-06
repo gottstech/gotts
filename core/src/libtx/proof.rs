@@ -42,7 +42,7 @@ pub const OUTPUT_LOCKER_SIZE: usize = 32 + secp::COMPRESSED_PUBLIC_KEY_SIZE + 8 
 /// A locker to limit an output only spendable to someone who owns the private key of 'p2pkh'.
 #[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OutputLocker {
-	/// The Hash of 'Pay-to-Public-Key-Hash'.
+	/// The Blake2b hash of 'Pay-to-Public-Key-Hash'.
 	pub p2pkh: Hash,
 	/// The 'R' for ephemeral key: `q = Hash(secured_w || p*R)`.
 	#[serde(with = "pubkey_serde")]
@@ -52,6 +52,26 @@ pub struct OutputLocker {
 	pub secured_w: i64,
 	/// The relative lock height, after which the output can be spent.
 	pub relative_lock_height: u32,
+}
+
+impl OutputLocker {
+	/// Get the ephemeral key: `q = Hash(value || p*R)`, for self owned output
+	pub fn get_ephemeral_key<K>(
+		&self,
+		k: &K,
+		value: u64,
+		recipient_prikey: &SecretKey,
+	) -> Result<SecretKey, Error>
+	where
+		K: Keychain,
+	{
+		let secp = k.secp();
+		let mut tmp = self.pub_nonce.clone();
+		tmp.mul_assign(&secp, recipient_prikey)?;
+		let hash = (value, tmp.serialize_vec(true)).hash();
+		let ephemeral_key_q = SecretKey::from_slice(hash.as_bytes())?;
+		Ok(ephemeral_key_q)
+	}
 }
 
 impl Writeable for OutputLocker {
@@ -82,41 +102,74 @@ impl Readable for OutputLocker {
 /// Create a OutputLocker
 pub fn create_output_locker<K>(
 	k: &K,
+	value: u64,
 	recipient_pubkey: &PublicKey,
-	secured_w: i64,
+	w: i64,
 	relative_lock_height: u32,
-	key_id: &Identifier,
-) -> Result<(Commitment, OutputLocker), Error>
+	use_test_rng: bool,
+) -> Result<(Commitment, OutputLocker, SecretKey), Error>
 where
 	K: Keychain,
 {
 	let secp = k.secp();
-	let private_nonce = SecretKey::new(&secp, &mut thread_rng());
+	let private_nonce = if !use_test_rng {
+		SecretKey::new(&mut thread_rng())
+	} else {
+		SecretKey::from_slice(&[1; 32]).unwrap()
+	};
 	let pub_nonce = PublicKey::from_secret_key(&secp, &private_nonce)?;
 
-	// The ephemeral key: `q = Hash(secured_w || k*P)`
+	// The ephemeral key: `q = Hash(value || k*P)`
 	let mut tmp = recipient_pubkey.clone();
 	tmp.mul_assign(&secp, &private_nonce)?;
-	let hash = (secured_w, tmp).hash();
-	let ephemeral_key_q = SecretKey::from_slice(&secp, hash.as_bytes())?;
+	let hash = (value, tmp.serialize_vec(true)).hash();
+	let ephemeral_key_q = SecretKey::from_slice(hash.as_bytes())?;
 
-	// The real 'w' is calculated by: `w = secured_w XOR q[0..8]`.
+	// The secured_w is calculated by: `secured_w = w XOR q[0..8]`.
 	let mut buf = &ephemeral_key_q.0[0..8];
 	let num = buf.read_i64::<LittleEndian>().unwrap();
-	let w = secured_w ^ num;
+	let secured_w = w ^ num;
 
 	// The Pedersen commitment: `C = q*G + w*H`.
-	let commit = k.commit(w, key_id)?;
+	let commit = k.commit_raw(w, &ephemeral_key_q)?;
 
 	Ok((
 		commit,
 		OutputLocker {
-			p2pkh: recipient_pubkey.serialize_vec(&secp, true).hash(),
+			p2pkh: recipient_pubkey.serialize_vec(true).hash(),
 			pub_nonce,
 			secured_w,
 			relative_lock_height,
 		},
+		ephemeral_key_q,
 	))
+}
+
+/// Rewind a OutputLocker to retrieve the 'w'
+pub fn rewind_outputlocker<K>(
+	k: &K,
+	value: u64,
+	recipient_prikey: &SecretKey,
+	commit: &Commitment,
+	locker: &OutputLocker,
+) -> Result<(i64, SecretKey), Error>
+where
+	K: Keychain,
+{
+	// The ephemeral key: `q = Hash(value || p*R)`
+	let ephemeral_key_q = locker.get_ephemeral_key(k, value, recipient_prikey)?;
+
+	// The secured_w is calculated by: `secured_w = w XOR q[0..8]`.
+	let mut buf = &ephemeral_key_q.0[0..8];
+	let num = buf.read_i64::<LittleEndian>().unwrap();
+	let w = locker.secured_w ^ num;
+
+	// Check output
+	let commit_exp = k.commit_raw(w, &ephemeral_key_q)?;
+	match commit == &commit_exp {
+		true => Ok((w, ephemeral_key_q)),
+		false => Err(ErrorKind::OutputLocker("check NOK".to_owned()).into()),
+	}
 }
 
 /// A secured path message which hide the key identifier and the random w of commitment
@@ -216,7 +269,7 @@ impl PathMessage {
 		let mut rdr =
 			Cursor::new((&data[SECURED_PATH_PREFIX_SIZE..SECURED_PATH_PREFIX_SIZE + 8]).clone());
 		let w = rdr.read_i64::<LittleEndian>().unwrap();;
-		let key_id: Identifier = Identifier::from_bytes(&data[SECURED_PATH_PREFIX_SIZE + 8..]);
+		let key_id: Identifier = Identifier::from_bytes(&data[SECURED_PATH_PREFIX_SIZE + 8..])?;
 
 		Ok(PathMessage {
 			reserved,
@@ -299,9 +352,7 @@ where
 {
 	/// Creates a new instance of this proof builder
 	pub fn new(keychain: &'a K) -> Self {
-		let public_root_key = keychain
-			.public_root_key()
-			.serialize_vec(keychain.secp(), true);
+		let public_root_key = keychain.public_root_key().serialize_vec(true);
 		let rewind_hash = Hash::from_vec(blake2b(32, &[], &public_root_key[..]).as_bytes());
 
 		Self {

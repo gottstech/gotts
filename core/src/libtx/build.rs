@@ -26,11 +26,50 @@
 //! build::transaction(vec![input_rand(75), output_rand(42), output_rand(32),
 //!   with_fee(1)])
 
-use crate::core::{Input, Output, OutputFeatures, OutputFeaturesEx, Transaction, TxKernel};
+use crate::address::Address;
+use crate::core::hash::{Hash, Hashed};
+use crate::core::SINGLE_MSG_SIZE;
+use crate::core::{
+	Input, InputEx, InputUnlocker, Output, OutputFeatures, OutputFeaturesEx, Transaction, TxKernel,
+};
 use crate::keychain::{BlindSum, BlindingFactor, Identifier, Keychain};
 use crate::libtx::proof::ProofBuild;
+use crate::libtx::secp_ser;
 use crate::libtx::{aggsig, proof, Error};
+use crate::util::secp::{Commitment, Message, SecretKey};
+use chrono::prelude::*;
 use rand::{thread_rng, Rng};
+use serde::{self, Deserialize};
+
+/// Util structure for building the InputEx to spend an/some OutputII/s
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, PartialOrd, Eq, Ord)]
+pub struct InputExBuildParm {
+	/// Transaction value
+	pub value: u64,
+	/// 'w' of the new Pedersen Commitment
+	pub w: i64,
+	/// Key ID
+	pub key_id: Identifier,
+	/// The ephemeral key for non-interactive transaction output
+	#[serde(with = "secp_ser::seckey_serde")]
+	pub ephemeral_key: SecretKey,
+	/// The recipient's public key hash for non-interactive transaction output
+	pub p2pkh: Hash,
+}
+
+impl InputExBuildParm {
+	/// The msg signed as part of the Input with a signature.
+	/// 	msg = hash(features || commit || value || timestamp) for single input
+	/// 	msg = hash((features || commit || value) || (...) || timestamp) for multiple inputs
+	/// Leave to caller to execute the final hash.
+	pub fn msg_to_sign(&self, commit: &Commitment) -> Vec<u8> {
+		let mut msg: Vec<u8> = Vec::with_capacity(SINGLE_MSG_SIZE);
+		msg.push(OutputFeatures::SigLocked as u8);
+		msg.extend_from_slice(commit.as_ref());
+		msg.extend_from_slice(&self.value.to_be_bytes());
+		msg
+	}
+}
 
 /// Context information available to transaction combinators.
 pub struct Context<'a, K, B>
@@ -100,8 +139,65 @@ where
 	build_input(value, 0i64, OutputFeatures::Coinbase, key_id)
 }
 
-/// Adds an output with the provided value and key identifier from the
-/// keychain.
+/// Adds a SigLocked input with the provided value and blinding key to the transaction
+/// being built.
+pub fn siglocked_input<K, B>(input_build_parm: Vec<InputExBuildParm>) -> Box<Append<K, B>>
+where
+	K: Keychain,
+	B: ProofBuild,
+{
+	//todo: check the 'p2pkh' and 'key_id' is same for each element, and verify the 'p2pkh' with the key_id
+
+	{
+		let values: Vec<u64> = input_build_parm.iter().map(|i| i.value).collect();
+		let keys: Vec<Identifier> = input_build_parm.iter().map(|i| i.key_id).collect();
+		debug!(
+			"Building SigLocked input (spending SigLocked output/s): {:?}, {:?}",
+			values, keys,
+		);
+	}
+	Box::new(
+		move |build, (tx, kern, sum)| -> (Transaction, TxKernel, BlindSum) {
+			let mut inputs: Vec<Input> = Vec::with_capacity(input_build_parm.len());
+			let mut msg_to_sign: Vec<u8> =
+				Vec::with_capacity(input_build_parm.len() * SINGLE_MSG_SIZE);
+
+			let key_id = input_build_parm[0].key_id.clone();
+			let mut total_sum = sum;
+			for parm in &input_build_parm {
+				let commit = build
+					.keychain
+					.commit_raw(parm.w, &parm.ephemeral_key)
+					.unwrap();
+				msg_to_sign.extend_from_slice(&parm.msg_to_sign(&commit));
+				inputs.push(Input::new(OutputFeatures::SigLocked, commit));
+				total_sum = total_sum.sub_blinding_factor(BlindingFactor::from_secret_key(
+					parm.ephemeral_key.clone(),
+				));
+			}
+			let now = Utc::now();
+			// Hashing to get the final msg for signature
+			let hash = (msg_to_sign, now.timestamp()).hash();
+			let msg = Message::from_slice(&hash.as_bytes()).unwrap();
+			let sig = build.keychain.sign(&msg, &key_id).unwrap();
+
+			(
+				tx.with_input_ex(InputEx::InputsWithUnlocker {
+					inputs,
+					unlocker: InputUnlocker {
+						timestamp: now,
+						sig,
+						pub_key: build.keychain.derive_pub_key(&key_id).unwrap(),
+					},
+				}),
+				kern,
+				total_sum,
+			)
+		},
+	)
+}
+
+/// Adds an output with the provided value and key identifier from the keychain.
 pub fn output<K, B>(value: u64, w: Option<i64>, key_id: Identifier) -> Box<Append<K, B>>
 where
 	K: Keychain,
@@ -129,6 +225,52 @@ where
 				}),
 				kern,
 				sum.add_key_id(key_id.to_value_path(value, w)),
+			)
+		},
+	)
+}
+
+/// Adds a non-interactive transaction output with the provided value and key identifier from the keychain.
+pub fn non_interactive_output<K, B>(
+	value: u64,
+	w: Option<i64>,
+	recipient_address: Address,
+	use_test_rng: bool,
+) -> Box<Append<K, B>>
+where
+	K: Keychain,
+	B: ProofBuild,
+{
+	Box::new(
+		move |build, (tx, kern, sum)| -> (Transaction, TxKernel, BlindSum) {
+			let w: i64 = if let Some(w) = w {
+				w
+			} else {
+				thread_rng().gen()
+			};
+
+			let (commit, locker, ephemeral_key) = proof::create_output_locker(
+				build.keychain,
+				value,
+				&recipient_address.get_inner_pubkey(),
+				w,
+				1,
+				use_test_rng,
+			)
+			.unwrap();
+			debug!(
+				"Building non-interactive tx output: {}, {:?}",
+				value, commit
+			);
+
+			(
+				tx.with_output(Output {
+					features: OutputFeaturesEx::SigLocked { locker },
+					commit,
+					value,
+				}),
+				kern,
+				sum.add_blinding_factor(BlindingFactor::from_secret_key(ephemeral_key)),
 			)
 		},
 	)
@@ -247,8 +389,8 @@ where
 	let msg = kern.msg_to_sign()?;
 
 	// Generate kernel excess and excess_sig using the split key k1.
-	let skey = blind_sum.secret_key(&keychain.secp())?;
-	kern.excess = ctx.keychain.secp().commit_i(0i64, skey)?;
+	let skey = blind_sum.secret_key()?;
+	kern.excess = ctx.keychain.secp().commit_i(0i64, &skey)?;
 	let pubkey = &kern.excess.to_pubkey(&keychain.secp())?;
 	kern.excess_sig =
 		aggsig::sign_with_blinding(&keychain.secp(), &msg, &blind_sum, Some(&pubkey)).unwrap();

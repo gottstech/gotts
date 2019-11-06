@@ -361,11 +361,14 @@ impl p2p::ChainAdapter for NetToChainAdapter {
 	/// at the provided block hash.
 	fn txhashset_read(&self, h: Hash) -> Option<p2p::TxHashSetRead> {
 		match self.chain().txhashset_read(h.clone()) {
-			Ok((out_index, kernel_index, read)) => Some(p2p::TxHashSetRead {
-				output_index: out_index,
-				kernel_index: kernel_index,
-				reader: read,
-			}),
+			Ok((output_i_index, output_ii_index, kernel_index, reader)) => {
+				Some(p2p::TxHashSetRead {
+					output_i_index,
+					output_ii_index,
+					kernel_index,
+					reader,
+				})
+			}
 			Err(e) => {
 				warn!("Couldn't produce txhashset data for block {}: {:?}", h, e);
 				None

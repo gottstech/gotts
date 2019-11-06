@@ -17,7 +17,9 @@
 
 use crate::core::core::hash::{Hash, Hashed};
 use crate::core::core::pmmr::{self, ReadonlyPMMR};
-use crate::core::core::{Block, BlockHeader, Input, Output, OutputI, Transaction};
+use crate::core::core::{
+	Block, BlockHeader, Input, Output, OutputFeatures, OutputI, OutputII, Transaction,
+};
 use crate::core::global;
 use crate::core::ser::PMMRIndexHashable;
 use crate::error::{Error, ErrorKind};
@@ -26,7 +28,9 @@ use gotts_store::pmmr::PMMRBackend;
 
 /// Readonly view of the UTXO set (based on output MMR).
 pub struct UTXOView<'a> {
+	//todo: make output_i_pmmr and output_ii_pmmr as a generic type
 	output_i_pmmr: ReadonlyPMMR<'a, OutputI, PMMRBackend<OutputI>>,
+	output_ii_pmmr: ReadonlyPMMR<'a, OutputII, PMMRBackend<OutputII>>,
 	header_pmmr: ReadonlyPMMR<'a, BlockHeader, PMMRBackend<BlockHeader>>,
 	batch: &'a Batch<'a>,
 }
@@ -35,11 +39,13 @@ impl<'a> UTXOView<'a> {
 	/// Build a new UTXO view.
 	pub fn new(
 		output_i_pmmr: ReadonlyPMMR<'a, OutputI, PMMRBackend<OutputI>>,
+		output_ii_pmmr: ReadonlyPMMR<'a, OutputII, PMMRBackend<OutputII>>,
 		header_pmmr: ReadonlyPMMR<'a, BlockHeader, PMMRBackend<BlockHeader>>,
 		batch: &'a Batch<'_>,
 	) -> UTXOView<'a> {
 		UTXOView {
 			output_i_pmmr,
+			output_ii_pmmr,
 			header_pmmr,
 			batch,
 		}
@@ -54,7 +60,7 @@ impl<'a> UTXOView<'a> {
 		}
 
 		for input in block.inputs() {
-			self.validate_input(input)?;
+			self.validate_input(&input)?;
 		}
 		Ok(())
 	}
@@ -71,7 +77,7 @@ impl<'a> UTXOView<'a> {
 		}
 
 		for input in tx.inputs() {
-			let input_value = self.validate_input(input)?;
+			let input_value = self.validate_input(&input)?;
 			sum = sum.saturating_add(input_value as i64);
 		}
 
@@ -86,11 +92,23 @@ impl<'a> UTXOView<'a> {
 	pub fn inputs_body(&self, inputs: &Vec<Input>) -> Result<Vec<Output>, Error> {
 		let mut outputs: Vec<Output> = Vec::with_capacity(inputs.len());
 		for input in inputs {
-			if let Ok(pos) = self.batch.get_output_pos(&input.commitment()) {
-				if let Some(output) = self.output_i_pmmr.get_data(pos) {
-					if output.id.commit == input.commit {
-						outputs.push(output.into_output());
-						continue;
+			if let Ok(ofph) = self.batch.get_output_pos_height(&input.commitment()) {
+				match ofph.features {
+					OutputFeatures::Plain | OutputFeatures::Coinbase => {
+						if let Some(output) = self.output_i_pmmr.get_data(ofph.position) {
+							if output.id.commit == input.commit {
+								outputs.push(output.into_output());
+								continue;
+							}
+						}
+					}
+					OutputFeatures::SigLocked => {
+						if let Some(output) = self.output_ii_pmmr.get_data(ofph.position) {
+							if output.id.commit == input.commit {
+								outputs.push(output.into_output());
+								continue;
+							}
+						}
 					}
 				}
 			}
@@ -103,29 +121,52 @@ impl<'a> UTXOView<'a> {
 	// that currently exists in the output MMR.
 	// Compare the hash in the output MMR at the expected pos.
 	fn validate_input(&self, input: &Input) -> Result<u64, Error> {
-		if let Ok(pos) = self.batch.get_output_pos(&input.commitment()) {
-			if let Some(hash) = self.output_i_pmmr.get_hash(pos) {
-				if let Some(output) = self.output_i_pmmr.get_data(pos) {
-					if hash == output.hash_with_index(pos - 1) && output.id.commit == input.commit {
-						return Ok(output.value);
+		if let Ok(ofph) = self.batch.get_output_pos_height(&input.commitment()) {
+			match ofph.features {
+				OutputFeatures::Plain | OutputFeatures::Coinbase => {
+					if let Some(hash) = self.output_i_pmmr.get_hash(ofph.position) {
+						if let Some(output) = self.output_i_pmmr.get_data(ofph.position) {
+							if hash == output.hash_with_index(ofph.position - 1)
+								&& output.id.commit == input.commit
+							{
+								return Ok(output.value);
+							}
+						}
 					}
-				} else {
-					error!(
-						"validate_input: corrupted storage? pmmr hash and data mismatch at pos: {}",
-						pos
-					);
 				}
-			}
+				OutputFeatures::SigLocked => {
+					if let Some(hash) = self.output_ii_pmmr.get_hash(ofph.position) {
+						if let Some(output) = self.output_ii_pmmr.get_data(ofph.position) {
+							if hash == output.hash_with_index(ofph.position - 1)
+								&& output.id.commit == input.commit
+							{
+								return Ok(output.value);
+							}
+						}
+					}
+				}
+			};
 		}
 		Err(ErrorKind::AlreadySpent(input.commitment()).into())
 	}
 
 	// Output is valid if it would not result in a duplicate commitment in the output MMR.
 	fn validate_output(&self, output: &Output) -> Result<(), Error> {
-		if let Ok(pos) = self.batch.get_output_pos(&output.commitment()) {
-			if let Some(out_mmr) = self.output_i_pmmr.get_data(pos) {
-				if out_mmr.id.commitment() == output.commitment() {
-					return Err(ErrorKind::DuplicateCommitment(output.commitment()).into());
+		if let Ok(ofph) = self.batch.get_output_pos_height(&output.commitment()) {
+			match ofph.features {
+				OutputFeatures::Plain | OutputFeatures::Coinbase => {
+					if let Some(out_mmr) = self.output_i_pmmr.get_data(ofph.position) {
+						if out_mmr.id.commitment() == output.commitment() {
+							return Err(ErrorKind::DuplicateCommitment(output.commitment()).into());
+						}
+					}
+				}
+				OutputFeatures::SigLocked => {
+					if let Some(out_mmr) = self.output_ii_pmmr.get_data(ofph.position) {
+						if out_mmr.id.commitment() == output.commitment() {
+							return Err(ErrorKind::DuplicateCommitment(output.commitment()).into());
+						}
+					}
 				}
 			}
 		}
@@ -137,29 +178,26 @@ impl<'a> UTXOView<'a> {
 	pub fn verify_coinbase_maturity(&self, inputs: &Vec<Input>, height: u64) -> Result<(), Error> {
 		// Find the greatest output pos of any coinbase
 		// outputs we are attempting to spend.
-		let pos = inputs
+		let max_height = inputs
 			.iter()
 			.filter(|x| x.is_coinbase())
-			.filter_map(|x| self.batch.get_output_pos(&x.commitment()).ok())
+			.filter_map(|x| self.batch.get_output_height(&x.commitment()).ok())
 			.max()
 			.unwrap_or(0);
 
-		if pos > 0 {
-			// If we have not yet reached 1440 blocks then
+		if max_height > 0 {
+			// If we have not yet reached 1,440 blocks then
 			// we can fail immediately as coinbase cannot be mature.
 			if height < global::coinbase_maturity() {
 				return Err(ErrorKind::ImmatureCoinbase.into());
 			}
 
-			// Find the "cutoff" pos in the output MMR based on the
-			// header from 1,000 blocks ago.
+			// Find the "cutoff" height.
 			let cutoff_height = height.checked_sub(global::coinbase_maturity()).unwrap_or(0);
-			let cutoff_header = self.get_header_by_height(cutoff_height)?;
-			let cutoff_pos = cutoff_header.output_mmr_size;
 
-			// If any output pos exceed the cutoff_pos
+			// If any input height exceed the cutoff_height
 			// we know they have not yet sufficiently matured.
-			if pos > cutoff_pos {
+			if max_height > cutoff_height {
 				return Err(ErrorKind::ImmatureCoinbase.into());
 			}
 		}

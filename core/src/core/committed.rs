@@ -72,7 +72,7 @@ pub trait Committed {
 	fn sum_commitments(&self) -> Result<Commitment, Error> {
 		// gather the commitments
 		let input_commits = self.inputs_committed();
-		let output_commits = self.outputs_i_committed();
+		let output_commits = self.outputs_committed();
 
 		sum_commits(output_commits, input_commits)
 	}
@@ -81,7 +81,7 @@ pub trait Committed {
 	fn inputs_committed(&self) -> Vec<Commitment>;
 
 	/// Vector of output commitments to verify.
-	fn outputs_i_committed(&self) -> Vec<Commitment>;
+	fn outputs_committed(&self) -> Vec<Commitment>;
 
 	/// Vector of kernel excesses to verify.
 	fn kernels_committed(&self) -> Vec<Commitment>;
@@ -125,8 +125,8 @@ pub fn sum_kernel_offsets(
 ) -> Result<BlindingFactor, Error> {
 	let secp = static_secp_instance();
 	let secp = secp.lock();
-	let positive = to_secrets(positive, &secp);
-	let negative = to_secrets(negative, &secp);
+	let positive = to_secrets(positive);
+	let negative = to_secrets(negative);
 
 	if positive.is_empty() {
 		Ok(BlindingFactor::zero())
@@ -136,9 +136,9 @@ pub fn sum_kernel_offsets(
 	}
 }
 
-fn to_secrets(bf: Vec<BlindingFactor>, secp: &secp::Secp256k1) -> Vec<SecretKey> {
+fn to_secrets(bf: Vec<BlindingFactor>) -> Vec<SecretKey> {
 	bf.into_iter()
 		.filter(|x| *x != BlindingFactor::zero())
-		.filter_map(|x| x.secret_key(&secp).ok())
+		.filter_map(|x| x.secret_key().ok())
 		.collect::<Vec<_>>()
 }

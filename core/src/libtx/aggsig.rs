@@ -77,7 +77,7 @@ pub fn create_secnonce(secp: &Secp256k1) -> Result<SecretKey, Error> {
 ///
 /// let secp = Secp256k1::with_caps(ContextFlag::SignOnly);
 /// let secret_nonce = aggsig::create_secnonce(&secp).unwrap();
-/// let secret_key = SecretKey::new(&secp, &mut thread_rng());
+/// let secret_key = SecretKey::new(&mut thread_rng());
 /// let pub_nonce_sum = PublicKey::from_secret_key(&secp, &secret_nonce).unwrap();
 /// // ... Add all other participating nonces
 /// let pub_key_sum = PublicKey::from_secret_key(&secp, &secret_key).unwrap();
@@ -148,7 +148,7 @@ pub fn calculate_partial_sig(
 ///
 /// let secp = Secp256k1::with_caps(ContextFlag::Full);
 /// let secret_nonce = aggsig::create_secnonce(&secp).unwrap();
-/// let secret_key = SecretKey::new(&secp, &mut thread_rng());
+/// let secret_key = SecretKey::new(&mut thread_rng());
 /// let pub_nonce_sum = PublicKey::from_secret_key(&secp, &secret_nonce).unwrap();
 /// // ... Add all other participating nonces
 /// let pub_key_sum = PublicKey::from_secret_key(&secp, &secret_key).unwrap();
@@ -378,7 +378,7 @@ pub fn verify_single_from_commit(
 ///
 /// let secp = Secp256k1::with_caps(ContextFlag::Full);
 /// let secret_nonce = aggsig::create_secnonce(&secp).unwrap();
-/// let secret_key = SecretKey::new(&secp, &mut thread_rng());
+/// let secret_key = SecretKey::new(&mut thread_rng());
 /// let pub_nonce_sum = PublicKey::from_secret_key(&secp, &secret_nonce).unwrap();
 /// // ... Add all other participating nonces
 /// let pub_key_sum = PublicKey::from_secret_key(&secp, &secret_key).unwrap();
@@ -465,7 +465,7 @@ pub fn sign_with_blinding(
 	blinding: &BlindingFactor,
 	pubkey_sum: Option<&PublicKey>,
 ) -> Result<Signature, Error> {
-	let skey = &blinding.secret_key(&secp)?;
+	let skey = &blinding.secret_key()?;
 	//let pubkey_sum = PublicKey::from_secret_key(&secp, &skey)?;
 	let sig = aggsig::sign_single(secp, &msg, skey, None, None, None, pubkey_sum, None)?;
 	Ok(sig)

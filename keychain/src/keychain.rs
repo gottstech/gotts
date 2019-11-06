@@ -26,10 +26,25 @@ use crate::util::secp::key::{PublicKey, SecretKey};
 use crate::util::secp::pedersen::Commitment;
 use crate::util::secp::{self, Message, Secp256k1, Signature};
 
+/// Key as a recipient
+#[derive(Clone, Debug)]
+pub struct RecipientKey {
+	/// As recipient of non-interactive transaction, the key derivation path of the public address.
+	pub recipient_key_id: Identifier,
+	/// The public key of the recipient public address
+	pub recipient_pub_key: PublicKey,
+	/// The private key of the recipient public address
+	pub recipient_pri_key: SecretKey,
+}
+
+/// Extended Keychain
 #[derive(Clone, Debug)]
 pub struct ExtKeychain {
+	/// The secp256k1 engine, used to execute all signature operations
 	secp: Secp256k1,
+	/// Master Key
 	master: ExtendedPrivKey,
+	/// BIP32 Hasher
 	hasher: BIP32GottsHasher,
 }
 
@@ -37,7 +52,8 @@ impl Keychain for ExtKeychain {
 	fn from_seed(seed: &[u8], is_floo: bool) -> Result<Self, Error> {
 		let mut h = BIP32GottsHasher::new(is_floo);
 		let secp = secp::Secp256k1::with_caps(secp::ContextFlag::Commit);
-		let master = ExtendedPrivKey::new_master(&secp, &mut h, seed)?;
+		let master = ExtendedPrivKey::new_master(&mut h, seed)?;
+
 		let keychain = ExtKeychain {
 			secp,
 			master,
@@ -49,10 +65,11 @@ impl Keychain for ExtKeychain {
 	fn from_mnemonic(word_list: &str, extension_word: &str, is_floo: bool) -> Result<Self, Error> {
 		let secp = secp::Secp256k1::with_caps(secp::ContextFlag::Commit);
 		let h = BIP32GottsHasher::new(is_floo);
-		let master = ExtendedPrivKey::from_mnemonic(&secp, word_list, extension_word, is_floo)?;
+		let master = ExtendedPrivKey::from_mnemonic(word_list, extension_word, is_floo)?;
+
 		let keychain = ExtKeychain {
-			secp: secp,
-			master: master,
+			secp,
+			master,
 			hasher: h,
 		};
 		Ok(keychain)
@@ -89,9 +106,25 @@ impl Keychain for ExtKeychain {
 		Ok(ext_key.secret_key)
 	}
 
-	fn commit(&self, amount: i64, id: &Identifier) -> Result<Commitment, Error> {
+	fn derive_pub_key(&self, id: &Identifier) -> Result<PublicKey, Error> {
+		let mut h = self.hasher.clone();
+		let p = id.to_path();
+		let mut ext_key = self.master.clone();
+		for i in 0..p.depth {
+			ext_key = ext_key.ckd_priv(&self.secp, &mut h, p.path[i as usize])?;
+		}
+
+		Ok(PublicKey::from_secret_key(&self.secp, &ext_key.secret_key)?)
+	}
+
+	fn commit(&self, w: i64, id: &Identifier) -> Result<Commitment, Error> {
 		let key = self.derive_key(id)?;
-		let commit = self.secp.commit_i(amount, key)?;
+		let commit = self.secp.commit_i(w, &key)?;
+		Ok(commit)
+	}
+
+	fn commit_raw(&self, w: i64, key: &SecretKey) -> Result<Commitment, Error> {
+		let commit = self.secp.commit_i(w, key)?;
 		Ok(commit)
 	}
 
@@ -125,14 +158,14 @@ impl Keychain for ExtKeychain {
 		let keys = blind_sum
 			.positive_blinding_factors
 			.iter()
-			.filter_map(|b| b.secret_key(&self.secp).ok().clone())
+			.filter_map(|b| b.secret_key().ok().clone())
 			.collect::<Vec<SecretKey>>();
 		pos_keys.extend(keys);
 
 		let keys = blind_sum
 			.negative_blinding_factors
 			.iter()
-			.filter_map(|b| b.secret_key(&self.secp).ok().clone())
+			.filter_map(|b| b.secret_key().ok().clone())
 			.collect::<Vec<SecretKey>>();
 		neg_keys.extend(keys);
 
@@ -145,7 +178,7 @@ impl Keychain for ExtKeychain {
 		let root_key = self.derive_key(&Self::root_key_id())?;
 		let res = blake2b(32, &commit.0, &root_key.0[..]);
 		let res = res.as_bytes();
-		SecretKey::from_slice(&self.secp, &res)
+		SecretKey::from_slice(&res)
 			.map_err(|e| Error::RangeProof(format!("Unable to create nonce: {:?}", e).to_string()))
 	}
 
@@ -160,7 +193,7 @@ impl Keychain for ExtKeychain {
 		msg: &Message,
 		blinding: &BlindingFactor,
 	) -> Result<Signature, Error> {
-		let skey = &blinding.secret_key(&self.secp)?;
+		let skey = &blinding.secret_key()?;
 		let sig = self.secp.sign(msg, &skey)?;
 		Ok(sig)
 	}
@@ -182,8 +215,9 @@ mod test {
 		let keychain = ExtKeychain::from_random_seed(false).unwrap();
 		let secp = keychain.secp();
 
-		let path = ExtKeychainPath::new(1, 1, 0, 0, 0);
+		let path = ExtKeychainPath::new(4, 1, 0, 0, 0);
 		let key_id = path.to_identifier();
+		println!("key_id.to_bip_32_string = {}", key_id.to_bip_32_string());
 
 		let msg_bytes = [0; 32];
 		let msg = secp::Message::from_slice(&msg_bytes[..]).unwrap();
@@ -205,33 +239,27 @@ mod test {
 	fn secret_key_addition() {
 		let keychain = ExtKeychain::from_random_seed(false).unwrap();
 
-		let skey1 = SecretKey::from_slice(
-			&keychain.secp,
-			&[
-				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-				0, 0, 0, 1,
-			],
-		)
+		let skey1 = SecretKey::from_slice(&[
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0, 1,
+		])
 		.unwrap();
 
-		let skey2 = SecretKey::from_slice(
-			&keychain.secp,
-			&[
-				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-				0, 0, 0, 2,
-			],
-		)
+		let skey2 = SecretKey::from_slice(&[
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0, 2,
+		])
 		.unwrap();
 
 		// adding secret keys 1 and 2 to give secret key 3
 		let mut skey3 = skey1.clone();
-		let _ = skey3.add_assign(&keychain.secp, &skey2).unwrap();
+		let _ = skey3.add_assign(&skey2).unwrap();
 
 		// create commitments for secret keys 1, 2 and 3
 		// all committing to the value 0 (which is what we do for tx_kernels)
-		let commit_1 = keychain.secp.commit_i(0i64, skey1.clone()).unwrap();
-		let commit_2 = keychain.secp.commit_i(0i64, skey2.clone()).unwrap();
-		let commit_3 = keychain.secp.commit_i(0i64, skey3.clone()).unwrap();
+		let commit_1 = keychain.secp.commit_i(0i64, &skey1).unwrap();
+		let commit_2 = keychain.secp.commit_i(0i64, &skey2).unwrap();
+		let commit_3 = keychain.secp.commit_i(0i64, &skey3).unwrap();
 
 		// now sum commitments for keys 1 and 2
 		let sum = keychain

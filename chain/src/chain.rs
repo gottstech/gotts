@@ -32,8 +32,8 @@ use crate::store;
 use crate::txhashset;
 use crate::txhashset::{PMMRHandle, TxHashSet};
 use crate::types::{
-	BlockStatus, ChainAdapter, NoStatus, Options, OutputMMRPosition, Tip, TxHashSetRoots,
-	TxHashsetWriteStatus,
+	BlockStatus, ChainAdapter, NoStatus, Options, OutputFeaturePosHeight, OutputMMRPosition, Tip,
+	TxHashSetRoots, TxHashsetWriteStatus,
 };
 use crate::util::secp::pedersen::Commitment;
 use crate::util::RwLock;
@@ -598,15 +598,16 @@ impl Chain {
 		b.header.prev_root = prev_root;
 
 		// Set the output, rangeproof and kernel MMR roots.
-		b.header.output_root = roots.output_i_root;
-		b.header.range_proof_root = ZERO_HASH;
+		b.header.output_i_root = roots.output_i_root;
+		b.header.output_ii_root = roots.output_ii_root;;
 		b.header.kernel_root = roots.kernel_root;
 
 		// Set the output and kernel MMR sizes.
 		{
 			// Carefully destructure these correctly...
-			let (output_mmr_size, kernel_mmr_size) = sizes;
-			b.header.output_mmr_size = output_mmr_size;
+			let (output_i_mmr_size, output_ii_mmr_size, kernel_mmr_size) = sizes;
+			b.header.output_i_mmr_size = output_i_mmr_size;
+			b.header.output_ii_mmr_size = output_ii_mmr_size;
 			b.header.kernel_mmr_size = kernel_mmr_size;
 		}
 
@@ -671,7 +672,7 @@ impl Chain {
 	/// Provides a reading view into the current txhashset state as well as
 	/// the required indexes for a consumer to rewind to a consistent state
 	/// at the provided block hash.
-	pub fn txhashset_read(&self, h: Hash) -> Result<(u64, u64, File), Error> {
+	pub fn txhashset_read(&self, h: Hash) -> Result<(u64, u64, u64, File), Error> {
 		// now we want to rewind the txhashset extension and
 		// sync a "rewound" copy of the leaf_set files to disk
 		// so we can send these across as part of the zip file.
@@ -692,7 +693,8 @@ impl Chain {
 		// prepares the zip and return the corresponding Read
 		let txhashset_reader = txhashset::zip_read(self.db_root.clone(), &header)?;
 		Ok((
-			header.output_mmr_size,
+			header.output_i_mmr_size,
+			header.output_ii_mmr_size,
 			header.kernel_mmr_size,
 			txhashset_reader,
 		))
@@ -1150,24 +1152,42 @@ impl Chain {
 	}
 
 	/// Get the output mmr position and block height
-	pub fn get_output_pos_height(&self, commit: &Commitment) -> Result<(u64, u64), Error> {
+	pub fn get_output_pos_height(
+		&self,
+		commit: &Commitment,
+	) -> Result<OutputFeaturePosHeight, Error> {
 		Ok(self.txhashset.read().get_output_pos_height(commit)?)
 	}
 
-	/// outputs by insertion index
+	/// outputs by insertion index.
+	/// Only used by transaction API for traversal of utxo set.
 	pub fn unspent_outputs_by_insertion_index(
 		&self,
 		start_index: u64,
 		max: u64,
 	) -> Result<(u64, u64, Vec<Output>), Error> {
-		let txhashset = self.txhashset.read();
-		let max_index = txhashset.highest_output_i_insertion_index();
-		let outputs = txhashset.outputs_i_by_insertion_index(start_index, max);
 		let mut output_vec: Vec<Output> = vec![];
-		for x in outputs.1 {
-			output_vec.push(x.into_output());
+		let txhashset = self.txhashset.read();
+		let max_i_index = txhashset.highest_output_i_insertion_index();
+		let max_ii_index = txhashset.highest_output_ii_insertion_index();
+		// Traversal OutputI firstly, then OutputII.
+		if start_index <= max_i_index {
+			let outputs = txhashset.outputs_i_by_insertion_index(start_index, max);
+			for x in outputs.1 {
+				output_vec.push(x.into_output());
+			}
+			Ok((outputs.0, max_i_index + max_ii_index, output_vec))
+		} else {
+			let outputs = txhashset.outputs_ii_by_insertion_index(start_index - max_i_index, max);
+			for x in outputs.1 {
+				output_vec.push(x.into_output());
+			}
+			Ok((
+				outputs.0 + max_i_index,
+				max_i_index + max_ii_index,
+				output_vec,
+			))
 		}
-		Ok((outputs.0, max_index, output_vec))
 	}
 
 	/// output by mmr position
@@ -1345,7 +1365,14 @@ impl Chain {
 		let txhashset = self.txhashset.read();
 		if let Some(out) = txhashset.output_i_by_position(1) {
 			let batch = self.store.batch()?;
-			batch.save_output_pos_height(&out.id.commit, 1, 0)?;
+			batch.save_output_pos_height(
+				&out.id.commit,
+				OutputFeaturePosHeight {
+					features: out.id.features,
+					position: 1,
+					height: 0,
+				},
+			)?;
 			batch.commit()?;
 		}
 		Ok(())

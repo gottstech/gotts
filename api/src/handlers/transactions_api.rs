@@ -98,7 +98,7 @@ impl TxHashSetHandler {
 		)))?;
 		let commit = Commitment::from_vec(c);
 		let chain = w(&self.chain)?;
-		let output_pos_height = chain
+		let ofph = chain
 			.get_output_pos_height(&commit)
 			.context(ErrorKind::NotFound)?;
 		let id = OutputIdentifier::new(features, &commit);
@@ -106,15 +106,15 @@ impl TxHashSetHandler {
 			.get_merkle_proof_for_output(&id)
 			.map_err(|_| ErrorKind::NotFound)?;
 		let output = chain
-			.unspent_output_by_position(output_pos_height.0)
+			.unspent_output_by_position(ofph.position)
 			.ok_or(ErrorKind::NotFound)?;
 		Ok(OutputPrintable {
 			output,
 			output_type: OutputType::Coinbase,
 			spent: false,
-			block_height: Some(output_pos_height.1),
+			block_height: Some(ofph.height),
 			merkle_proof: Some(merkle_proof),
-			mmr_index: output_pos_height.0,
+			mmr_index: ofph.position,
 		})
 	}
 }

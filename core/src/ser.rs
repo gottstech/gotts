@@ -22,7 +22,7 @@
 
 use crate::core::hash::{DefaultHashable, Hash, Hashed};
 use crate::global::PROTOCOL_VERSION;
-use crate::keychain::{BlindingFactor, Identifier, IDENTIFIER_SIZE};
+use crate::keychain::{self, BlindingFactor, Identifier, IDENTIFIER_SIZE};
 use crate::libtx::proof::{SecuredPath, SECURED_PATH_SIZE};
 use crate::util::secp::constants::{
 	AGG_SIGNATURE_SIZE, COMPRESSED_PUBLIC_KEY_SIZE, MAX_PROOF_SIZE, PEDERSEN_COMMITMENT_SIZE,
@@ -31,7 +31,6 @@ use crate::util::secp::constants::{
 use crate::util::secp::key::PublicKey;
 use crate::util::secp::pedersen::{Commitment, RangeProof};
 use crate::util::secp::Signature;
-use crate::util::secp::{ContextFlag, Secp256k1};
 use byteorder::{BigEndian, ByteOrder, ReadBytesExt};
 use std::fmt::{self, Debug};
 use std::io::{self, Read, Write};
@@ -71,11 +70,19 @@ pub enum Error {
 	DuplicateError,
 	/// Block header version (hard-fork schedule).
 	InvalidBlockVersion,
+	/// Keychain Error
+	KeychainErr(keychain::Error),
 }
 
 impl From<io::Error> for Error {
 	fn from(e: io::Error) -> Error {
 		Error::IOErr(format!("{}", e), e.kind())
+	}
+}
+
+impl From<keychain::Error> for Error {
+	fn from(e: keychain::Error) -> Error {
+		Error::KeychainErr(e)
 	}
 }
 
@@ -94,6 +101,7 @@ impl fmt::Display for Error {
 			Error::TooLargeReadErr => f.write_str("too large read"),
 			Error::HexError(ref e) => write!(f, "hex error {:?}", e),
 			Error::InvalidBlockVersion => f.write_str("invalid block version"),
+			Error::KeychainErr(ref e) => write!(f, "keychain error {:?}", e),
 		}
 	}
 }
@@ -117,6 +125,7 @@ impl error::Error for Error {
 			Error::TooLargeReadErr => "too large read",
 			Error::HexError(_) => "hex error",
 			Error::InvalidBlockVersion => "invalid block version",
+			Error::KeychainErr(_) => "keychain error",
 		}
 	}
 }
@@ -224,6 +233,12 @@ pub trait Reader {
 pub trait Writeable {
 	/// Write the data held by this Writeable to the provided writer
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), Error>;
+}
+
+/// Trait for Hash160 serialization.
+pub trait Hash160Writeable {
+	/// Write the data held by this Writeable to the provided writer
+	fn write_into<W: io::Write>(&self, writer: W) -> Result<(), Error>;
 }
 
 /// Reader that exposes an Iterator interface.
@@ -576,7 +591,7 @@ impl Writeable for Identifier {
 impl Readable for Identifier {
 	fn read(reader: &mut dyn Reader) -> Result<Identifier, Error> {
 		let bytes = reader.read_fixed_bytes(IDENTIFIER_SIZE)?;
-		Ok(Identifier::from_bytes(&bytes))
+		Ok(Identifier::from_bytes(&bytes)?)
 	}
 }
 
@@ -656,8 +671,15 @@ impl FixedLength for PublicKey {
 impl Writeable for PublicKey {
 	// Write the public key in compressed form
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), Error> {
-		let secp = Secp256k1::with_caps(ContextFlag::None);
-		writer.write_fixed_bytes(&self.serialize_vec(&secp, true).as_ref())?;
+		writer.write_fixed_bytes(&self.serialize_vec(true).as_ref())?;
+		Ok(())
+	}
+}
+
+impl Hash160Writeable for PublicKey {
+	// Write the public key in compressed form
+	fn write_into<W: io::Write>(&self, mut writer: W) -> Result<(), Error> {
+		writer.write_all(&self.serialize_vec(true).as_ref())?;
 		Ok(())
 	}
 }
@@ -666,8 +688,7 @@ impl Readable for PublicKey {
 	// Read the public key in compressed form
 	fn read(reader: &mut dyn Reader) -> Result<Self, Error> {
 		let buf = reader.read_fixed_bytes(PublicKey::LEN)?;
-		let secp = Secp256k1::with_caps(ContextFlag::None);
-		let pk = PublicKey::from_slice(&secp, &buf).map_err(|_| Error::CorruptedData)?;
+		let pk = PublicKey::from_slice(&buf).map_err(|_| Error::CorruptedData)?;
 		Ok(pk)
 	}
 }
