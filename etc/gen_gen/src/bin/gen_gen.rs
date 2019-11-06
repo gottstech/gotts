@@ -215,8 +215,8 @@ fn update_genesis_rs(gen: &core::core::Block) {
 	replacements.push((
 		"excess_sig".to_string(),
 		format!(
-			"Signature::from_raw_data(&{:?}).unwrap()",
-			gen.kernels()[0].excess_sig.to_raw_data().to_vec(),
+			"Signature::from_compact(&util::from_hex({:x?}.to_string()).unwrap()).unwrap()",
+			util::to_hex(gen.kernels()[0].excess_sig.serialize_compact().to_vec()),
 		),
 	));
 	replacements.push((

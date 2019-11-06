@@ -51,9 +51,9 @@ pub fn genesis_dev() -> core::Block {
 pub fn genesis_floo() -> core::Block {
 	let gen = core::Block::with_header(core::BlockHeader {
 		height: 0,
-		timestamp: Utc.ymd(2019, 11, 5).and_hms(14, 36, 50),
+		timestamp: Utc.ymd(2019, 11, 6).and_hms(0, 53, 35),
 		prev_root: Hash::from_hex(
-			"000000000000000000003a3b4073aa1f155cb99705cc62d0d052bf318072bce4",
+			"0000000000000000000c0e600d0acb6bbdea738f9f5d6d49fc82318da427f11b",
 		)
 		.unwrap(),
 		output_i_root: Hash::from_hex(
@@ -65,7 +65,7 @@ pub fn genesis_floo() -> core::Block {
 		)
 		.unwrap(),
 		kernel_root: Hash::from_hex(
-			"fb4050618f85eeb04ceaf2635141bf340194c8d1f89fc681e00d779fcd691ab1",
+			"3c2d85c54a0b09306d67cd8a7daa15bb557ed28b9ddb0007aac802ab45d58bff",
 		)
 		.unwrap(),
 		output_i_mmr_size: 1,
@@ -74,15 +74,15 @@ pub fn genesis_floo() -> core::Block {
 		pow: ProofOfWork {
 			total_difficulty: Difficulty::from_num(10_u64.pow(4)),
 			secondary_scaling: 1856,
-			nonce: 28,
+			nonce: 27,
 			proof: Proof {
 				nonces: vec![
-					650230, 6926521, 31137998, 50236734, 58055146, 58753112, 71371672, 84172708,
-					114107050, 121157144, 126585876, 126658184, 129713219, 168517429, 172184610,
-					188388637, 211309123, 211769029, 219409258, 221959403, 267287292, 280493025,
-					281365801, 286490796, 312020445, 326722039, 347430695, 374128146, 375977322,
-					384363953, 397205970, 408064646, 411176527, 443626967, 445750928, 457181541,
-					471166499, 473873136, 479963913, 506757685, 524530986, 527402994,
+					17476596, 32443702, 56145007, 58141318, 104365753, 107360137, 127175005,
+					138039798, 139057522, 166814828, 169308347, 195051560, 214591286, 218391532,
+					222045925, 230418031, 237776292, 243154286, 249848739, 276514698, 277972881,
+					286002285, 307797231, 318277568, 321115456, 328512216, 330895080, 340557176,
+					348715841, 372128343, 391881755, 396501951, 410088557, 429215845, 450829244,
+					464140808, 464624790, 469242887, 480164419, 517525540, 524896010, 534173509,
 				],
 				edge_bits: 29,
 			},
@@ -91,19 +91,8 @@ pub fn genesis_floo() -> core::Block {
 	});
 	let kernel = core::TxKernel {
 		features: core::KernelFeatures::Coinbase,
-		excess: Commitment::from_vec(
-			util::from_hex(
-				"09603078dc4784b57ae301efd16ea6e1702676ed12e8a06defed2d6658de1ce013".to_string(),
-			)
-			.unwrap(),
-		),
-		excess_sig: Signature::from_raw_data(&[
-			162, 233, 186, 49, 107, 65, 160, 171, 85, 11, 99, 95, 9, 129, 169, 229, 243, 8, 175,
-			124, 74, 85, 131, 237, 222, 30, 17, 193, 72, 105, 89, 194, 96, 24, 37, 154, 54, 184,
-			210, 12, 213, 130, 144, 63, 181, 232, 95, 75, 167, 245, 154, 171, 76, 2, 46, 189, 170,
-			183, 99, 41, 214, 252, 80, 247,
-		])
-		.unwrap(),
+		excess: Commitment::from_vec(util::from_hex("09603078dc4784b57ae301efd16ea6e1702676ed12e8a06defed2d6658de1ce013".to_string()).unwrap()),
+		excess_sig: Signature::from_compact(&util::from_hex("cf4a1ec0431d738cd79daf54b70ee1208799702012d12433ea5cdec5960a74bd91d76bfc8ab82456b0aa523954d1036d94c4d7b117e94ce57f56f38d3bdb9519".to_string()).unwrap()).unwrap(),
 	};
 	let output = core::Output {
 		features: core::OutputFeaturesEx::Coinbase {
@@ -177,11 +166,11 @@ mod test {
 		println!("floonet genesis full hash: {}\n", gen_bin.hash().to_hex());
 		assert_eq!(
 			gen_hash.to_hex(),
-			"e3141a11afb90aa254c9ca9517ddc64970d5f77bde8c75505b18a28f0af5c9cb"
+			"5c31e17e2d506f9876ca10e498ac4ae6a60eb2fec10bde3ba8482e0d76365735"
 		);
 		assert_eq!(
 			gen_bin.hash().to_hex(),
-			"7c7e997950fa6acaba8e86a1844566417badb83c7a7401a5f4ae2f2b2ee14490"
+			"5c3d6e7c9e19dea1b48c70d11cf1bd0471fb92e1ad62dcedccd882a7d63753b0"
 		);
 	}
 
