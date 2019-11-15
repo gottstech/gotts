@@ -156,10 +156,10 @@ impl TxHashSet {
 	/// Check if an output is unspent.
 	/// We look in the index to find the output MMR pos.
 	/// Then we check the entry in the output MMR and confirm the hash matches.
-	pub fn is_unspent(&self, output_id: &OutputIdentifier) -> Result<OutputMMRPosition, Error> {
-		match self.commit_index.get_output_pos_height(&output_id.commit) {
+	pub fn is_unspent(&self, output_commit: &Commitment) -> Result<OutputMMRPosition, Error> {
+		match self.commit_index.get_output_pos_height(output_commit) {
 			Ok(ofph) => {
-				let (hash, output) = match output_id.features {
+				let (hash, output) = match ofph.features {
 					OutputFeatures::Plain | OutputFeatures::Coinbase => {
 						let output_pmmr: ReadonlyPMMR<'_, OutputI, _> = ReadonlyPMMR::at(
 							&self.output_i_pmmr_h.backend,
@@ -185,12 +185,13 @@ impl TxHashSet {
 				};
 				if let Some(hash) = hash {
 					if hash == output.hash_with_index(ofph.position - 1)
-						&& output_id.commit == output.commit
+						&& *output_commit == output.commit
 					{
 						Ok(OutputMMRPosition {
 							output_mmr_hash: hash,
 							position: ofph.position,
 							height: ofph.height,
+							features: output.features.as_flag(),
 						})
 					} else {
 						Err(ErrorKind::TxHashSetErr(format!("txhashset hash mismatch")).into())

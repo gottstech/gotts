@@ -20,8 +20,8 @@ use crate::core::core::hash::{Hash, Hashed, ZERO_HASH};
 use crate::core::core::merkle_proof::MerkleProof;
 use crate::core::core::verifier_cache::VerifierCache;
 use crate::core::core::{
-	Block, BlockHeader, BlockSums, Committed, Output, OutputI, OutputIdentifier, Transaction,
-	TxKernel, TxKernelApiEntry, TxKernelEntry,
+	Block, BlockHeader, BlockSums, Committed, Output, OutputFeatures, OutputI, OutputIdentifier,
+	Transaction, TxKernel, TxKernelApiEntry, TxKernelEntry,
 };
 use crate::core::global;
 use crate::core::pow;
@@ -503,7 +503,7 @@ impl Chain {
 	/// spent. This querying is done in a way that is consistent with the
 	/// current chain state, specifically the current winning (valid, most
 	/// work) fork.
-	pub fn is_unspent(&self, output_ref: &OutputIdentifier) -> Result<OutputMMRPosition, Error> {
+	pub fn is_unspent(&self, output_ref: &Commitment) -> Result<OutputMMRPosition, Error> {
 		let txhashset = self.txhashset.read();
 		txhashset.is_unspent(output_ref)
 	}
@@ -1191,12 +1191,27 @@ impl Chain {
 	}
 
 	/// output by mmr position
-	pub fn unspent_output_by_position(&self, position: u64) -> Option<Output> {
+	pub fn unspent_output_by_position(
+		&self,
+		position: u64,
+		features: OutputFeatures,
+	) -> Option<Output> {
 		let txhashset = self.txhashset.read();
-		if let Some(out) = txhashset.output_i_by_position(position) {
-			Some(out.into_output())
-		} else {
-			None
+		match features {
+			OutputFeatures::Plain | OutputFeatures::Coinbase => {
+				if let Some(out) = txhashset.output_i_by_position(position) {
+					Some(out.into_output())
+				} else {
+					None
+				}
+			}
+			OutputFeatures::SigLocked => {
+				if let Some(out) = txhashset.output_ii_by_position(position) {
+					Some(out.into_output())
+				} else {
+					None
+				}
+			}
 		}
 	}
 
@@ -1385,7 +1400,7 @@ impl Chain {
 	) -> Result<BlockHeader, Error> {
 		let header_pmmr = self.header_pmmr.read();
 		let txhashset = self.txhashset.read();
-		let output_pos = txhashset.is_unspent(output_ref)?;
+		let output_pos = txhashset.is_unspent(&output_ref.commit)?;
 		let hash = header_pmmr.get_header_hash_by_height(output_pos.height)?;
 		Ok(self.get_block_header(&hash)?)
 	}

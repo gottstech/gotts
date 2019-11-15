@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::chain;
-use crate::core::core::{OutputEx, OutputFeatures, OutputIdentifier};
+use crate::core::core::{OutputEx, OutputIdentifier};
 use crate::rest::*;
 use crate::util;
 use crate::util::secp::pedersen::Commitment;
@@ -40,46 +40,35 @@ pub fn get_output(
 	)))?;
 	let commit = Commitment::from_vec(c);
 
-	// We need the features here to be able to generate the necessary hash
-	// to compare against the hash in the output MMR.
-	// For now we can just try both (but this probably needs to be part of the api
-	// params)
-	let outputs = [
-		OutputIdentifier::new(OutputFeatures::Plain, &commit),
-		OutputIdentifier::new(OutputFeatures::Coinbase, &commit),
-	];
-
 	let chain = w(chain)?;
-
-	for x in outputs.iter() {
-		let res = chain.is_unspent(x);
+	{
+		let res = chain.is_unspent(&commit);
 		match res {
 			Ok(output_pos) => {
-				if let Some(out) = chain.unspent_output_by_position(output_pos.position) {
+				if let Some(out) =
+					chain.unspent_output_by_position(output_pos.position, output_pos.features)
+				{
 					return Ok((
 						OutputEx {
-							output: out,
+							output: out.clone(),
 							height: output_pos.height,
 							mmr_index: output_pos.position,
 						},
-						x.clone(),
+						out.id(),
 					));
 				} else {
 					error!(
-						"get_output: err: {} for commit: {:?} with feature: {:?}",
-						"corrupted storage? unspent output not found in pmmr backend.",
-						x.commit,
-						x.features
+						"get_output: err: corrupted storage? unspent output not found in pmmr backend. for commit: {:?}",
+						commit,
 					);
 					return Err(ErrorKind::NotFound)?;
 				}
 			}
 			Err(e) => {
 				trace!(
-					"get_output: err: {} for commit: {:?} with feature: {:?}",
+					"get_output: err: {} for commit: {:?}",
 					e.to_string(),
-					x.commit,
-					x.features
+					commit,
 				);
 			}
 		}

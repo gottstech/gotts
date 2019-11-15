@@ -106,7 +106,7 @@ impl TxHashSetHandler {
 			.get_merkle_proof_for_output(&id)
 			.map_err(|_| ErrorKind::NotFound)?;
 		let output = chain
-			.unspent_output_by_position(ofph.position)
+			.unspent_output_by_position(ofph.position, features)
 			.ok_or(ErrorKind::NotFound)?;
 		Ok(OutputPrintable {
 			output,

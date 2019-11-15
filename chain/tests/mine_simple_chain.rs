@@ -629,10 +629,10 @@ fn spend_in_fork_and_compact() {
 		assert_eq!(head.height, 6);
 		assert_eq!(head.hash(), prev_main.hash());
 		assert!(chain
-			.is_unspent(&OutputIdentifier::from_output(&tx2.outputs()[0]))
+			.is_unspent(&OutputIdentifier::from_output(&tx2.outputs()[0]).commit)
 			.is_ok());
 		assert!(chain
-			.is_unspent(&OutputIdentifier::from_output(&tx1.outputs()[0]))
+			.is_unspent(&OutputIdentifier::from_output(&tx1.outputs()[0]).commit)
 			.is_err());
 
 		// make the fork win
@@ -648,10 +648,10 @@ fn spend_in_fork_and_compact() {
 		assert_eq!(head.height, 7);
 		assert_eq!(head.hash(), prev_fork.hash());
 		assert!(chain
-			.is_unspent(&OutputIdentifier::from_output(&tx2.outputs()[0]))
+			.is_unspent(&OutputIdentifier::from_output(&tx2.outputs()[0]).commit)
 			.is_ok());
 		assert!(chain
-			.is_unspent(&OutputIdentifier::from_output(&tx1.outputs()[0]))
+			.is_unspent(&OutputIdentifier::from_output(&tx1.outputs()[0]).commit)
 			.is_err());
 
 		// add 20 blocks to go past the test horizon
