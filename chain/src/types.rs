@@ -226,6 +226,8 @@ pub struct OutputMMRPosition {
 	pub position: u64,
 	/// Block height
 	pub height: u64,
+	/// The output features
+	pub features: OutputFeatures,
 }
 
 /// A helper to hold the output feature, pmmr position, and height in order to keep them

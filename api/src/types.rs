@@ -170,7 +170,7 @@ impl OutputPrintable {
 		};
 
 		let out_id = core::OutputIdentifier::from_output(&output);
-		let res = chain.is_unspent(&out_id);
+		let res = chain.is_unspent(&out_id.commit);
 		let (spent, block_height) = if let Ok(output_pos) = res {
 			(false, Some(output_pos.height))
 		} else {
