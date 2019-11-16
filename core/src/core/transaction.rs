@@ -2270,6 +2270,14 @@ pub struct OutputIdentifier {
 impl DefaultHashable for OutputIdentifier {}
 hashable_ord!(OutputIdentifier);
 
+impl ::std::hash::Hash for OutputIdentifier {
+	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
+		let mut vec = Vec::new();
+		ser::serialize_default(&mut vec, &self).expect("serialization failed");
+		::std::hash::Hash::hash(&vec, state);
+	}
+}
+
 impl OutputIdentifier {
 	/// Build a new output_identifier.
 	pub fn new(features: OutputFeatures, commit: &Commitment) -> OutputIdentifier {
