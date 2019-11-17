@@ -1219,6 +1219,7 @@ pub fn cut_through(inputs_ex: &mut Vec<InputEx>, outputs: &mut Vec<Output>) -> R
 		return Err(Error::AggregationError);
 	}
 
+	//todo: SigLocked Output cut-through, InputsWithUnlocker cut-through
 	let mut inputs: Vec<Input> = inputs_ex
 		.iter()
 		.filter(|i| !i.is_unlocker())
@@ -1333,8 +1334,7 @@ pub fn deaggregate(mk_tx: Transaction, txs: Vec<Transaction>) -> Result<Transact
 	}
 
 	// Sorting them lexicographically
-	//todo: inputs sorting
-	//inputs.sort_unstable();
+	inputs.sort_unstable();
 	outputs.sort_unstable();
 	kernels.sort_unstable();
 
@@ -1903,10 +1903,6 @@ impl PartialEq for Output {
 }
 impl Eq for Output {}
 
-/// To make it simple among all 3 types: Output, OutputI, and OutputII, we define same Hash
-/// for all of them:
-/// 1. Only the OutputIdentifier is used for Hash.
-/// 2. All 3 types (Output, OutputI, OutputII) have same Hash result.
 impl ::std::hash::Hash for Output {
 	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
 		let mut vec = Vec::new();
