@@ -64,6 +64,7 @@ impl Handshake {
 		&self,
 		capabilities: Capabilities,
 		total_difficulty: Difficulty,
+		height: u64,
 		self_addr: PeerAddr,
 		conn: &mut TcpStream,
 	) -> Result<PeerInfo, Error> {
@@ -83,6 +84,7 @@ impl Handshake {
 			nonce,
 			genesis: self.genesis,
 			total_difficulty,
+			height,
 			sender_addr: self_addr,
 			receiver_addr: peer_addr,
 			user_agent: USER_AGENT.to_string(),
@@ -105,7 +107,10 @@ impl Handshake {
 			user_agent: shake.user_agent,
 			addr: peer_addr,
 			version: shake.version,
-			live_info: Arc::new(RwLock::new(PeerLiveInfo::new(shake.total_difficulty))),
+			live_info: Arc::new(RwLock::new(PeerLiveInfo::new(
+				shake.total_difficulty,
+				shake.height,
+			))),
 			direction: Direction::Outbound,
 		};
 
@@ -116,8 +121,9 @@ impl Handshake {
 		}
 
 		debug!(
-			"Connected! Cumulative {} offered from {:?} {:?} {:?}",
+			"Connected! Cumulative {}@{} offered from {:?} {:?} {:?}",
 			shake.total_difficulty.to_num(),
+			shake.height,
 			peer_info.addr,
 			peer_info.user_agent,
 			peer_info.capabilities
@@ -130,6 +136,7 @@ impl Handshake {
 		&self,
 		capab: Capabilities,
 		total_difficulty: Difficulty,
+		height: u64,
 		conn: &mut TcpStream,
 	) -> Result<PeerInfo, Error> {
 		// Note: We read the Hand message *before* we know which protocol version
@@ -165,7 +172,10 @@ impl Handshake {
 			user_agent: hand.user_agent,
 			addr: resolve_peer_addr(hand.sender_addr, &conn),
 			version: hand.version,
-			live_info: Arc::new(RwLock::new(PeerLiveInfo::new(hand.total_difficulty))),
+			live_info: Arc::new(RwLock::new(PeerLiveInfo::new(
+				hand.total_difficulty,
+				hand.height,
+			))),
 			direction: Direction::Inbound,
 		};
 
@@ -182,7 +192,8 @@ impl Handshake {
 			version,
 			capabilities: capab,
 			genesis: self.genesis,
-			total_difficulty: total_difficulty,
+			total_difficulty,
+			height,
 			user_agent: USER_AGENT.to_string(),
 		};
 

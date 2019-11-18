@@ -155,11 +155,13 @@ impl Server {
 			Ok(stream) => {
 				let addr = SocketAddr::new(self.config.host, self.config.port);
 				let total_diff = self.peers.total_difficulty()?;
+				let height = self.peers.total_height()?;
 
 				let peer = Peer::connect(
 					stream,
 					self.capabilities,
 					total_diff,
+					height,
 					PeerAddr(addr),
 					&self.handshake,
 					self.peers.clone(),
@@ -186,12 +188,14 @@ impl Server {
 			return Err(Error::ConnectionClose);
 		}
 		let total_diff = self.peers.total_difficulty()?;
+		let height = self.peers.total_height()?;
 
 		// accept the peer and add it to the server map
 		let peer = Peer::accept(
 			stream,
 			self.capabilities,
 			total_diff,
+			height,
 			&self.handshake,
 			self.peers.clone(),
 		)?;

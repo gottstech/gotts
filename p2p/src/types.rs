@@ -407,10 +407,10 @@ pub struct PeerInfo {
 }
 
 impl PeerLiveInfo {
-	pub fn new(difficulty: Difficulty) -> PeerLiveInfo {
+	pub fn new(difficulty: Difficulty, height: u64) -> PeerLiveInfo {
 		PeerLiveInfo {
 			total_difficulty: difficulty,
-			height: 0,
+			height,
 			first_seen: Utc::now(),
 			last_seen: Utc::now(),
 			stuck_detector: Utc::now(),

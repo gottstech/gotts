@@ -75,6 +75,7 @@ fn peer_handshake() {
 		socket,
 		p2p::Capabilities::UNKNOWN,
 		Difficulty::min(),
+		0,
 		my_addr,
 		&p2p::handshake::Handshake::new(Hash::from_vec(&vec![]), p2p_config.clone()),
 		net_adapter,

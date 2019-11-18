@@ -102,11 +102,12 @@ impl Peer {
 		mut conn: TcpStream,
 		capab: Capabilities,
 		total_difficulty: Difficulty,
+		height: u64,
 		hs: &Handshake,
 		adapter: Arc<dyn NetAdapter>,
 	) -> Result<Peer, Error> {
 		debug!("accept: handshaking from {:?}", conn.peer_addr());
-		let info = hs.accept(capab, total_difficulty, &mut conn);
+		let info = hs.accept(capab, total_difficulty, height, &mut conn);
 		match info {
 			Ok(info) => Ok(Peer::new(info, conn, adapter)?),
 			Err(e) => {
@@ -127,12 +128,13 @@ impl Peer {
 		mut conn: TcpStream,
 		capab: Capabilities,
 		total_difficulty: Difficulty,
+		height: u64,
 		self_addr: PeerAddr,
 		hs: &Handshake,
 		adapter: Arc<dyn NetAdapter>,
 	) -> Result<Peer, Error> {
 		debug!("connect: handshaking with {:?}", conn.peer_addr());
-		let info = hs.initiate(capab, total_difficulty, self_addr, &mut conn);
+		let info = hs.initiate(capab, total_difficulty, height, self_addr, &mut conn);
 		match info {
 			Ok(info) => Ok(Peer::new(info, conn, adapter)?),
 			Err(e) => {
