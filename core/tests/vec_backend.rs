@@ -19,7 +19,9 @@ use self::core::core::hash::{DefaultHashable, Hash, Hashed};
 use self::core::core::pmmr::{self, Backend};
 use self::core::core::BlockHeader;
 use self::core::ser;
-use self::core::ser::{FixedLength, PMMRIndexHashable, PMMRable, Readable, Reader, Writeable, Writer};
+use self::core::ser::{
+	FixedLength, PMMRIndexHashable, PMMRable, Readable, Reader, Writeable, Writer,
+};
 use croaring;
 use croaring::Bitmap;
 use gotts_core as core;

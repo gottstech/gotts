@@ -28,7 +28,8 @@ use crate::blake2::blake2b::Blake2b;
 
 use crate::libtx::secp_ser;
 use crate::ser::{
-	self, AsFixedBytes, Error, FixedLength, PMMRIndexHashable, ProtocolVersion, Readable, Reader, Writeable, Writer,
+	self, AsFixedBytes, Error, FixedLength, PMMRIndexHashable, ProtocolVersion, Readable, Reader,
+	Writeable, Writer,
 };
 use crate::util;
 use crate::zeroize::Zeroize;
