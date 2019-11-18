@@ -41,7 +41,7 @@ pub struct MerkleProof {
 impl Writeable for MerkleProof {
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
 		writer.write_u64(self.mmr_size)?;
-		writer.write_u64(self.path.len() as u64)?;
+		writer.write_u8(self.path.len() as u8)?;
 		self.path.write(writer)?;
 		Ok(())
 	}
@@ -50,7 +50,7 @@ impl Writeable for MerkleProof {
 impl Readable for MerkleProof {
 	fn read(reader: &mut dyn Reader) -> Result<MerkleProof, ser::Error> {
 		let mmr_size = reader.read_u64()?;
-		let path_len = reader.read_u64()?;
+		let path_len = reader.read_u8()?;
 		let mut path = Vec::with_capacity(path_len as usize);
 		for _ in 0..path_len {
 			let hash = Hash::read(reader)?;

@@ -86,11 +86,11 @@ impl CompactBlockBody {
 impl Readable for CompactBlockBody {
 	fn read(reader: &mut dyn Reader) -> Result<CompactBlockBody, ser::Error> {
 		let (out_full_len, kern_full_len, kern_id_len) =
-			ser_multiread!(reader, read_u64, read_u64, read_u64);
+			ser_multiread!(reader, read_u32, read_u32, read_u32);
 
-		let out_full = read_multi(reader, out_full_len)?;
-		let kern_full = read_multi(reader, kern_full_len)?;
-		let kern_ids = read_multi(reader, kern_id_len)?;
+		let out_full = read_multi(reader, out_full_len as u64)?;
+		let kern_full = read_multi(reader, kern_full_len as u64)?;
+		let kern_ids = read_multi(reader, kern_id_len as u64)?;
 
 		// Initialize compact block body, verifying sort order.
 		let body = CompactBlockBody::init(out_full, kern_full, kern_ids, true)
@@ -104,9 +104,9 @@ impl Writeable for CompactBlockBody {
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
 		ser_multiwrite!(
 			writer,
-			[write_u64, self.out_full.len() as u64],
-			[write_u64, self.kern_full.len() as u64],
-			[write_u64, self.kern_ids.len() as u64]
+			[write_u32, self.out_full.len() as u32],
+			[write_u32, self.kern_full.len() as u32],
+			[write_u32, self.kern_ids.len() as u32]
 		);
 
 		self.out_full.write(writer)?;
