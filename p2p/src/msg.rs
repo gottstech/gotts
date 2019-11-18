@@ -194,8 +194,12 @@ pub fn write_to_buf<T: Writeable>(
 
 	// build and serialize the header using the body size
 	let mut msg_buf = vec![];
-	let blen = body_buf.len() as u64;
-	ser::serialize(&mut msg_buf, version, &MsgHeader::new(msg_type, blen))?;
+	let blen = body_buf.len() as u32;
+	ser::serialize(
+		&mut msg_buf,
+		version,
+		&MsgHeader::new(msg_type, blen as u64),
+	)?;
 	msg_buf.append(&mut body_buf);
 
 	Ok(msg_buf)
@@ -245,8 +249,8 @@ impl MsgHeader {
 }
 
 impl FixedLength for MsgHeader {
-	// 2 magic bytes + 1 type byte + 8 bytes (msg_len)
-	const LEN: usize = 2 + 1 + 8;
+	// 2 magic bytes + 1 type byte + 4 bytes (msg_len)
+	const LEN: usize = 2 + 1 + 4;
 }
 
 impl Writeable for MsgHeader {
@@ -256,7 +260,7 @@ impl Writeable for MsgHeader {
 			[write_u8, self.magic[0]],
 			[write_u8, self.magic[1]],
 			[write_u8, self.msg_type as u8],
-			[write_u64, self.msg_len]
+			[write_u32, self.msg_len as u32]
 		);
 		Ok(())
 	}
@@ -270,7 +274,7 @@ impl Readable for MsgHeaderWrapper {
 
 		// Read the msg header.
 		// We do not yet know if the msg type is one we support locally.
-		let (t, msg_len) = ser_multiread!(reader, read_u8, read_u64);
+		let (t, msg_len) = ser_multiread!(reader, read_u8, read_u32);
 
 		// Attempt to convert the msg type byte into one of our known msg type enum variants.
 		// Check the msg_len while we are at it.
@@ -278,7 +282,7 @@ impl Readable for MsgHeaderWrapper {
 			Some(msg_type) => {
 				// TODO 4x the limits for now to leave ourselves space to change things.
 				let max_len = max_msg_size(msg_type) * 4;
-				if msg_len > max_len {
+				if msg_len as u64 > max_len {
 					error!(
 						"Too large read {:?}, max_len: {}, msg_len: {}.",
 						msg_type, max_len, msg_len
@@ -289,13 +293,13 @@ impl Readable for MsgHeaderWrapper {
 				Ok(MsgHeaderWrapper::Known(MsgHeader {
 					magic: m,
 					msg_type,
-					msg_len,
+					msg_len: msg_len as u64,
 				}))
 			}
 			None => {
 				// Unknown msg type, but we still want to limit how big the msg is.
 				let max_len = default_max_msg_size() * 4;
-				if msg_len > max_len {
+				if msg_len as u64 > max_len {
 					error!(
 						"Too large read (unknown msg type) {:?}, max_len: {}, msg_len: {}.",
 						t, max_len, msg_len
@@ -303,7 +307,7 @@ impl Readable for MsgHeaderWrapper {
 					return Err(ser::Error::TooLargeReadErr);
 				}
 
-				Ok(MsgHeaderWrapper::Unknown(msg_len))
+				Ok(MsgHeaderWrapper::Unknown(msg_len as u64))
 			}
 		}
 	}

@@ -591,9 +591,9 @@ impl Writeable for TransactionBody {
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
 		ser_multiwrite!(
 			writer,
-			[write_u64, self.inputs.len() as u64],
-			[write_u64, self.outputs.len() as u64],
-			[write_u64, self.kernels.len() as u64]
+			[write_u32, self.inputs.len() as u32],
+			[write_u32, self.outputs.len() as u32],
+			[write_u32, self.kernels.len() as u32]
 		);
 
 		self.inputs.write(writer)?;
@@ -609,7 +609,7 @@ impl Writeable for TransactionBody {
 impl Readable for TransactionBody {
 	fn read(reader: &mut dyn Reader) -> Result<TransactionBody, ser::Error> {
 		let (input_len, output_len, kernel_len) =
-			ser_multiread!(reader, read_u64, read_u64, read_u64);
+			ser_multiread!(reader, read_u32, read_u32, read_u32);
 
 		// Quick block weight check before proceeding.
 		// Note: We use weight_as_block here (inputs have weight).
@@ -623,9 +623,9 @@ impl Readable for TransactionBody {
 			return Err(ser::Error::TooLargeReadErr);
 		}
 
-		let inputs = read_multi(reader, input_len)?;
-		let outputs = read_multi(reader, output_len)?;
-		let kernels = read_multi(reader, kernel_len)?;
+		let inputs = read_multi(reader, input_len as u64)?;
+		let outputs = read_multi(reader, output_len as u64)?;
+		let kernels = read_multi(reader, kernel_len as u64)?;
 
 		// Initialize tx body and verify everything is sorted.
 		let body = TransactionBody::init(inputs, outputs, kernels, true)
