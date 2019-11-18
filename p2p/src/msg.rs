@@ -327,6 +327,8 @@ pub struct Hand {
 	/// total difficulty accumulated by the sender, used to check whether sync
 	/// may be needed
 	pub total_difficulty: Difficulty,
+	/// total height
+	pub height: u64,
 	/// network address of the sender
 	pub sender_addr: PeerAddr,
 	/// network address of the receiver
@@ -344,6 +346,7 @@ impl Writeable for Hand {
 			[write_u64, self.nonce]
 		);
 		self.total_difficulty.write(writer)?;
+		writer.write_u64(self.height)?;
 		self.sender_addr.write(writer)?;
 		self.receiver_addr.write(writer)?;
 		writer.write_bytes(&self.user_agent)?;
@@ -358,6 +361,7 @@ impl Readable for Hand {
 		let (capab, nonce) = ser_multiread!(reader, read_u32, read_u64);
 		let capabilities = Capabilities::from_bits_truncate(capab);
 		let total_difficulty = Difficulty::read(reader)?;
+		let height = reader.read_u64()?;
 		let sender_addr = PeerAddr::read(reader)?;
 		let receiver_addr = PeerAddr::read(reader)?;
 		let ua = reader.read_bytes_len_prefix()?;
@@ -369,6 +373,7 @@ impl Readable for Hand {
 			nonce,
 			genesis,
 			total_difficulty,
+			height,
 			sender_addr,
 			receiver_addr,
 			user_agent,
@@ -388,6 +393,8 @@ pub struct Shake {
 	/// total difficulty accumulated by the sender, used to check whether sync
 	/// may be needed
 	pub total_difficulty: Difficulty,
+	/// total height
+	pub height: u64,
 	/// name of version of the software
 	pub user_agent: String,
 }
@@ -397,6 +404,7 @@ impl Writeable for Shake {
 		self.version.write(writer)?;
 		writer.write_u32(self.capabilities.bits())?;
 		self.total_difficulty.write(writer)?;
+		writer.write_u64(self.height)?;
 		writer.write_bytes(&self.user_agent)?;
 		self.genesis.write(writer)?;
 		Ok(())
@@ -409,6 +417,7 @@ impl Readable for Shake {
 		let capab = reader.read_u32()?;
 		let capabilities = Capabilities::from_bits_truncate(capab);
 		let total_difficulty = Difficulty::read(reader)?;
+		let height = reader.read_u64()?;
 		let ua = reader.read_bytes_len_prefix()?;
 		let user_agent = String::from_utf8(ua).map_err(|_| ser::Error::CorruptedData)?;
 		let genesis = Hash::read(reader)?;
@@ -417,6 +426,7 @@ impl Readable for Shake {
 			capabilities,
 			genesis,
 			total_difficulty,
+			height,
 			user_agent,
 		})
 	}
