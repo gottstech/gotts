@@ -268,7 +268,7 @@ impl PathMessage {
 
 		let mut rdr =
 			Cursor::new((&data[SECURED_PATH_PREFIX_SIZE..SECURED_PATH_PREFIX_SIZE + 8]).clone());
-		let w = rdr.read_i64::<LittleEndian>().unwrap();;
+		let w = rdr.read_i64::<LittleEndian>().unwrap();
 		let key_id: Identifier = Identifier::from_bytes(&data[SECURED_PATH_PREFIX_SIZE + 8..])?;
 
 		Ok(PathMessage {
