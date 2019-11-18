@@ -979,7 +979,11 @@ impl Readable for TestVariableElem {
 	}
 }
 
-fn variable_load(pos: u64, elems: &[TestVariableElem], backend: &mut store::pmmr::PMMRBackend<TestVariableElem>) -> u64 {
+fn variable_load(
+	pos: u64,
+	elems: &[TestVariableElem],
+	backend: &mut store::pmmr::PMMRBackend<TestVariableElem>,
+) -> u64 {
 	let mut pmmr = PMMR::at(backend, pos);
 	for elem in elems {
 		pmmr.push(elem).unwrap();
@@ -1003,10 +1007,13 @@ fn variable_setup(tag: &str) -> (String, Vec<TestVariableElem>) {
 
 	let mut elems = vec![];
 	for x in 1..20 {
-		let feature = match x%3 {
+		let feature = match x % 3 {
 			0 => KernelFeatures::Coinbase,
 			1 => KernelFeatures::Plain { fee: x },
-			2 => KernelFeatures::HeightLocked { fee: x, lock_height: 100+x},
+			2 => KernelFeatures::HeightLocked {
+				fee: x,
+				lock_height: 100 + x,
+			},
 			_ => KernelFeatures::Coinbase,
 		};
 		elems.push(TestVariableElem(feature));
