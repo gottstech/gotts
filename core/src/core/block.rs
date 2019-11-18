@@ -36,7 +36,9 @@ use crate::core::{
 use crate::global;
 use crate::keychain::{self};
 use crate::pow::{Difficulty, Proof, ProofOfWork};
-use crate::ser::{self, FixedLength, PMMRable, Readable, Reader, Writeable, Writer};
+use crate::ser::{
+	self, FixedLength, PMMRIndexHashable, PMMRable, Readable, Reader, Writeable, Writer,
+};
 use crate::util::{secp, static_secp_instance};
 
 /// Errors thrown by Block validation
@@ -274,6 +276,12 @@ impl PMMRable for BlockHeader {
 			secondary_scaling: self.pow.secondary_scaling,
 			is_secondary: self.pow.is_secondary(),
 		}
+	}
+}
+
+impl PMMRIndexHashable for BlockHeader {
+	fn hash_with_index(&self, index: u64) -> Hash {
+		(index, self).hash()
 	}
 }
 

@@ -28,7 +28,8 @@ use crate::blake2::blake2b::Blake2b;
 
 use crate::libtx::secp_ser;
 use crate::ser::{
-	self, AsFixedBytes, Error, FixedLength, ProtocolVersion, Readable, Reader, Writeable, Writer,
+	self, AsFixedBytes, Error, FixedLength, PMMRIndexHashable, ProtocolVersion, Readable, Reader,
+	Writeable, Writer,
 };
 use crate::util;
 use crate::zeroize::Zeroize;
@@ -48,6 +49,17 @@ pub struct Hash(
 );
 
 impl DefaultHashable for Hash {}
+
+impl PMMRIndexHashable for Hash {
+	fn hash_with_index(&self, index: u64) -> Hash {
+		(index, self).hash()
+	}
+}
+impl PMMRIndexHashable for (Hash, Hash) {
+	fn hash_with_index(&self, index: u64) -> Hash {
+		(index, self).hash()
+	}
+}
 
 impl Hash {
 	fn hash_with<T: Writeable>(&self, other: T) -> Hash {

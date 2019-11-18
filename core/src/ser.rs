@@ -628,6 +628,12 @@ impl PMMRable for RangeProof {
 	}
 }
 
+impl PMMRIndexHashable for RangeProof {
+	fn hash_with_index(&self, index: u64) -> Hash {
+		(index, self).hash()
+	}
+}
+
 impl Writeable for SecuredPath {
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), Error> {
 		writer.write_fixed_bytes(self)
@@ -887,12 +893,6 @@ pub trait PMMRable: Writeable + Clone + Debug + DefaultHashable {
 pub trait PMMRIndexHashable {
 	/// Hash with a given index
 	fn hash_with_index(&self, index: u64) -> Hash;
-}
-
-impl<T: DefaultHashable> PMMRIndexHashable for T {
-	fn hash_with_index(&self, index: u64) -> Hash {
-		(index, self).hash()
-	}
 }
 
 /// Useful marker trait on types that can be sized byte slices

@@ -599,7 +599,7 @@ impl Chain {
 
 		// Set the output, rangeproof and kernel MMR roots.
 		b.header.output_i_root = roots.output_i_root;
-		b.header.output_ii_root = roots.output_ii_root;;
+		b.header.output_ii_root = roots.output_ii_root;
 		b.header.kernel_root = roots.kernel_root;
 
 		// Set the output and kernel MMR sizes.

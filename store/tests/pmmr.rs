@@ -22,7 +22,7 @@ use std::fs;
 use chrono::prelude::Utc;
 use croaring::Bitmap;
 
-use crate::core::core::hash::DefaultHashable;
+use crate::core::core::hash::{DefaultHashable, Hash, Hashed};
 use crate::core::core::pmmr::{Backend, PMMR};
 use crate::core::ser::{
 	Error, FixedLength, PMMRIndexHashable, PMMRable, Readable, Reader, Writeable, Writer,
@@ -921,6 +921,12 @@ impl PMMRable for TestElem {
 
 	fn as_elmt(&self) -> Self::E {
 		self.clone()
+	}
+}
+
+impl PMMRIndexHashable for TestElem {
+	fn hash_with_index(&self, index: u64) -> Hash {
+		(index, self).hash()
 	}
 }
 
