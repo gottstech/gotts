@@ -24,6 +24,7 @@ use croaring::Bitmap;
 
 use crate::core::core::hash::{DefaultHashable, Hash, Hashed};
 use crate::core::core::pmmr::{Backend, PMMR};
+use crate::core::core::transaction::KernelFeatures;
 use crate::core::ser::{
 	Error, FixedLength, PMMRIndexHashable, PMMRable, Readable, Reader, Writeable, Writer,
 };
@@ -939,4 +940,267 @@ impl Readable for TestElem {
 	fn read(reader: &mut dyn Reader) -> Result<TestElem, Error> {
 		Ok(TestElem(reader.read_u32()?))
 	}
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+struct TestVariableElem(KernelFeatures);
+
+impl DefaultHashable for TestVariableElem {}
+
+/// Kernels are "variable size" but we need to implement FixedLength for legacy reasons.
+/// The different length for 3 types: Plain, Coinbase, HeightLocked: 9/1/17
+/// At some point we will refactor the MMR backend so this is no longer required.
+impl FixedLength for TestVariableElem {
+	const LEN: usize = 0;
+}
+
+impl PMMRable for TestVariableElem {
+	type E = Self;
+
+	fn as_elmt(&self) -> Self::E {
+		self.clone()
+	}
+}
+
+impl PMMRIndexHashable for TestVariableElem {
+	fn hash_with_index(&self, index: u64) -> Hash {
+		(index, self).hash()
+	}
+}
+
+impl Writeable for TestVariableElem {
+	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), Error> {
+		self.0.write(writer)
+	}
+}
+impl Readable for TestVariableElem {
+	fn read(reader: &mut dyn Reader) -> Result<TestVariableElem, Error> {
+		Ok(TestVariableElem(KernelFeatures::read(reader)?))
+	}
+}
+
+fn variable_load(
+	pos: u64,
+	elems: &[TestVariableElem],
+	backend: &mut store::pmmr::PMMRBackend<TestVariableElem>,
+) -> u64 {
+	let mut pmmr = PMMR::at(backend, pos);
+	for elem in elems {
+		pmmr.push(elem).unwrap();
+	}
+	pmmr.unpruned_size()
+}
+
+fn variable_setup(tag: &str) -> (String, Vec<TestVariableElem>) {
+	match env_logger::try_init() {
+		Ok(_) => println!("Initializing env logger"),
+		Err(e) => println!("env logger already initialized: {:?}", e),
+	};
+	let t = Utc::now();
+	let data_dir = format!(
+		"./target/tmp/{}.{}-{}",
+		t.timestamp(),
+		t.timestamp_subsec_nanos(),
+		tag
+	);
+	fs::create_dir_all(data_dir.clone()).unwrap();
+
+	let mut elems = vec![];
+	for x in 1..20 {
+		let feature = match x % 3 {
+			0 => KernelFeatures::Coinbase,
+			1 => KernelFeatures::Plain { fee: x },
+			2 => KernelFeatures::HeightLocked {
+				fee: x,
+				lock_height: 100 + x,
+			},
+			_ => KernelFeatures::Coinbase,
+		};
+		elems.push(TestVariableElem(feature));
+	}
+	(data_dir, elems)
+}
+
+#[test]
+fn pmmr_variable_append() {
+	let (data_dir, elems) = variable_setup("variable_append");
+	{
+		let mut backend =
+			store::pmmr::PMMRBackend::new(data_dir.to_string(), true, false, None).unwrap();
+
+		// adding first set of 4 elements and sync
+		let mut mmr_size = variable_load(0, &elems[0..4], &mut backend);
+		backend.sync().unwrap();
+
+		let pos_0 = elems[0].hash_with_index(0);
+		let pos_1 = elems[1].hash_with_index(1);
+		let pos_2 = (pos_0, pos_1).hash_with_index(2);
+
+		{
+			// Note: 1-indexed PMMR API
+			let pmmr: PMMR<'_, TestVariableElem, _> = PMMR::at(&mut backend, mmr_size);
+
+			assert_eq!(pmmr.get_data(1), Some(elems[0]));
+			assert_eq!(pmmr.get_data(2), Some(elems[1]));
+
+			assert_eq!(pmmr.get_hash(1), Some(pos_0));
+			assert_eq!(pmmr.get_hash(2), Some(pos_1));
+			assert_eq!(pmmr.get_hash(3), Some(pos_2));
+		}
+
+		// adding the rest and sync again
+		mmr_size = variable_load(mmr_size, &elems[4..9], &mut backend);
+		backend.sync().unwrap();
+
+		// 0010012001001230
+
+		let pos_3 = elems[2].hash_with_index(3);
+		let pos_4 = elems[3].hash_with_index(4);
+		let pos_5 = (pos_3, pos_4).hash_with_index(5);
+		let pos_6 = (pos_2, pos_5).hash_with_index(6);
+
+		let pos_7 = elems[4].hash_with_index(7);
+		let pos_8 = elems[5].hash_with_index(8);
+		let pos_9 = (pos_7, pos_8).hash_with_index(9);
+
+		let pos_10 = elems[6].hash_with_index(10);
+		let pos_11 = elems[7].hash_with_index(11);
+		let pos_12 = (pos_10, pos_11).hash_with_index(12);
+		let pos_13 = (pos_9, pos_12).hash_with_index(13);
+		let pos_14 = (pos_6, pos_13).hash_with_index(14);
+
+		let pos_15 = elems[8].hash_with_index(15);
+
+		{
+			// Note: 1-indexed PMMR API
+			let pmmr: PMMR<'_, TestVariableElem, _> = PMMR::at(&mut backend, mmr_size);
+
+			// First pair of leaves.
+			assert_eq!(pmmr.get_data(1), Some(elems[0]));
+			assert_eq!(pmmr.get_data(2), Some(elems[1]));
+
+			// Second pair of leaves.
+			assert_eq!(pmmr.get_data(4), Some(elems[2]));
+			assert_eq!(pmmr.get_data(5), Some(elems[3]));
+
+			// Third pair of leaves.
+			assert_eq!(pmmr.get_data(8), Some(elems[4]));
+			assert_eq!(pmmr.get_data(9), Some(elems[5]));
+			assert_eq!(pmmr.get_hash(10), Some(pos_9));
+		}
+
+		// check the resulting backend store and the computation of the root
+		let node_hash = elems[0].hash_with_index(0);
+		assert_eq!(backend.get_hash(1).unwrap(), node_hash);
+
+		{
+			let pmmr: PMMR<'_, TestVariableElem, _> = PMMR::at(&mut backend, mmr_size);
+			assert_eq!(pmmr.root().unwrap(), (pos_14, pos_15).hash_with_index(16));
+		}
+	}
+
+	teardown(data_dir);
+}
+
+#[test]
+fn pmmr_variable_reload() {
+	let (data_dir, elems) = variable_setup("variable_reload");
+
+	// set everything up with an initial backend
+	{
+		let mut backend =
+			store::pmmr::PMMRBackend::new(data_dir.to_string(), true, false, None).unwrap();
+
+		let mmr_size = variable_load(0, &elems[..], &mut backend);
+
+		// retrieve entries from the hash file for comparison later
+		let pos_3_hash = backend.get_hash(3).unwrap();
+		let pos_4_hash = backend.get_hash(4).unwrap();
+		let pos_5_hash = backend.get_hash(5).unwrap();
+
+		// save the root
+		let root = {
+			let pmmr: PMMR<'_, TestVariableElem, _> = PMMR::at(&mut backend, mmr_size);
+			pmmr.root().unwrap()
+		};
+
+		{
+			backend.sync().unwrap();
+			assert_eq!(backend.unpruned_size(), mmr_size);
+
+			// prune a node so we have prune data
+			{
+				let mut pmmr: PMMR<'_, TestVariableElem, _> = PMMR::at(&mut backend, mmr_size);
+				pmmr.prune(1).unwrap();
+			}
+			backend.sync().unwrap();
+			assert_eq!(backend.unpruned_size(), mmr_size);
+
+			// now check and compact the backend
+			backend.check_compact(1, &Bitmap::create()).unwrap();
+			assert_eq!(backend.unpruned_size(), mmr_size);
+			backend.sync().unwrap();
+			assert_eq!(backend.unpruned_size(), mmr_size);
+
+			// prune another node to force compact to actually do something
+			{
+				let mut pmmr: PMMR<'_, TestVariableElem, _> = PMMR::at(&mut backend, mmr_size);
+				pmmr.prune(4).unwrap();
+				pmmr.prune(2).unwrap();
+			}
+			backend.sync().unwrap();
+			assert_eq!(backend.unpruned_size(), mmr_size);
+
+			backend.check_compact(4, &Bitmap::create()).unwrap();
+
+			backend.sync().unwrap();
+			assert_eq!(backend.unpruned_size(), mmr_size);
+
+			// prune some more to get rm log data
+			{
+				let mut pmmr: PMMR<'_, TestVariableElem, _> = PMMR::at(&mut backend, mmr_size);
+				pmmr.prune(5).unwrap();
+			}
+			backend.sync().unwrap();
+			assert_eq!(backend.unpruned_size(), mmr_size);
+		}
+
+		// create a new backend referencing the data files
+		// and check everything still works as expected
+		{
+			let mut backend =
+				store::pmmr::PMMRBackend::new(data_dir.to_string(), true, false, None).unwrap();
+			assert_eq!(backend.unpruned_size(), mmr_size);
+			{
+				let pmmr: PMMR<'_, TestVariableElem, _> = PMMR::at(&mut backend, mmr_size);
+				assert_eq!(root, pmmr.root().unwrap());
+			}
+
+			// pos 1 and pos 2 are both removed (via parent pos 3 in prune list)
+			assert_eq!(backend.get_hash(1), None);
+			assert_eq!(backend.get_hash(2), None);
+
+			// pos 3 is "removed" but we keep the hash around for root of pruned subtree
+			assert_eq!(backend.get_hash(3), Some(pos_3_hash));
+
+			// pos 4 is removed (via prune list)
+			assert_eq!(backend.get_hash(4), None);
+			// pos 5 is removed (via leaf_set)
+			assert_eq!(backend.get_hash(5), None);
+
+			// now check contents of the hash file
+			// pos 1 and pos 2 are no longer in the hash file
+			assert_eq!(backend.get_from_file(1), None);
+			assert_eq!(backend.get_from_file(2), None);
+
+			// pos 3 is still in there
+			assert_eq!(backend.get_from_file(3), Some(pos_3_hash));
+
+			// pos 4 and pos 5 are also still in there
+			assert_eq!(backend.get_from_file(4), Some(pos_4_hash));
+			assert_eq!(backend.get_from_file(5), Some(pos_5_hash));
+		}
+	}
+
+	teardown(data_dir);
 }

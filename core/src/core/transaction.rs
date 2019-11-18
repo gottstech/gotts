@@ -48,7 +48,7 @@ use std::{error, fmt};
 pub const SINGLE_MSG_SIZE: usize = 1 + secp::PEDERSEN_COMMITMENT_SIZE + 8;
 
 /// Various tx kernel variants.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum KernelFeatures {
 	/// Plain kernel (the default for Gotts txs).
 	Plain {
@@ -107,19 +107,16 @@ impl KernelFeatures {
 }
 
 impl Writeable for KernelFeatures {
-	/// Still only supporting protocol version v1 serialization.
-	/// Always include fee, defaulting to 0, and lock_height, defaulting to 0, for all feature variants.
+	/// Protocol version v1 serialization.
+	/// fee and lock_height could be skipped, depending on feature variants.
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
 		match self {
 			KernelFeatures::Plain { fee } => {
 				writer.write_u8(self.as_u8())?;
 				writer.write_u64(*fee)?;
-				writer.write_u64(0)?;
 			}
 			KernelFeatures::Coinbase => {
 				writer.write_u8(self.as_u8())?;
-				writer.write_u64(0)?;
-				writer.write_u64(0)?;
 			}
 			KernelFeatures::HeightLocked { fee, lock_height } => {
 				writer.write_u8(self.as_u8())?;
@@ -139,23 +136,9 @@ impl Readable for KernelFeatures {
 		let features = match reader.read_u8()? {
 			KernelFeatures::PLAIN_U8 => {
 				let fee = reader.read_u64()?;
-				let lock_height = reader.read_u64()?;
-				if lock_height != 0 {
-					return Err(ser::Error::CorruptedData);
-				}
 				KernelFeatures::Plain { fee }
 			}
-			KernelFeatures::COINBASE_U8 => {
-				let fee = reader.read_u64()?;
-				if fee != 0 {
-					return Err(ser::Error::CorruptedData);
-				}
-				let lock_height = reader.read_u64()?;
-				if lock_height != 0 {
-					return Err(ser::Error::CorruptedData);
-				}
-				KernelFeatures::Coinbase
-			}
+			KernelFeatures::COINBASE_U8 => KernelFeatures::Coinbase,
 			KernelFeatures::HEIGHT_LOCKED_U8 => {
 				let fee = reader.read_u64()?;
 				let lock_height = reader.read_u64()?;
@@ -324,13 +307,22 @@ impl Readable for TxKernel {
 	}
 }
 
-/// We store TxKernelEntry in the kernel MMR.
+/// We store TxKernel in the kernel MMR.
+/// Note: These are "variable size" to support different kernel feature variants.
 impl PMMRable for TxKernel {
-	type E = TxKernelEntry;
+	type E = Self;
 
-	fn as_elmt(&self) -> TxKernelEntry {
-		TxKernelEntry::from_kernel(self)
+	fn as_elmt(&self) -> Self::E {
+		self.clone()
 	}
+}
+
+/// Kernels are "variable size" but we need to implement FixedLength for legacy reasons.
+/// The different length for 3 types: Plain, Coinbase, HeightLocked:
+/// 	106/98/114=(9/1/17)+33+64.
+/// At some point we will refactor the MMR backend so this is no longer required.
+impl FixedLength for TxKernel {
+	const LEN: usize = 0;
 }
 
 impl PMMRIndexHashable for TxKernel {
@@ -487,61 +479,6 @@ impl TxKernel {
 			KernelFeatures::Coinbase => panic!("lock_height not supported on coinbase kernel"),
 		}
 	}
-}
-
-/// Wrapper around a tx kernel used when maintaining them in the MMR.
-/// These will be useful once we implement relative lockheights via relative kernels
-/// as a kernel may have an optional rel_kernel but we will not want to store these
-/// directly in the kernel MMR.
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct TxKernelEntry {
-	/// The underlying tx kernel.
-	pub kernel: TxKernel,
-}
-
-impl Writeable for TxKernelEntry {
-	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
-		self.kernel.write(writer)?;
-		Ok(())
-	}
-}
-
-impl Readable for TxKernelEntry {
-	fn read(reader: &mut dyn Reader) -> Result<TxKernelEntry, ser::Error> {
-		let kernel = TxKernel::read(reader)?;
-		Ok(TxKernelEntry { kernel })
-	}
-}
-
-impl TxKernelEntry {
-	/// The excess on the underlying tx kernel.
-	pub fn excess(&self) -> Commitment {
-		self.kernel.excess
-	}
-
-	/// Verify the underlying tx kernel.
-	pub fn verify(&self) -> Result<(), Error> {
-		self.kernel.verify()
-	}
-
-	/// Build a new tx kernel entry from a kernel.
-	pub fn from_kernel(kernel: &TxKernel) -> TxKernelEntry {
-		TxKernelEntry {
-			kernel: kernel.clone(),
-		}
-	}
-}
-
-impl From<TxKernel> for TxKernelEntry {
-	fn from(kernel: TxKernel) -> Self {
-		TxKernelEntry { kernel }
-	}
-}
-
-impl FixedLength for TxKernelEntry {
-	const LEN: usize = 17 // features plus fee and lock_height
-		+ secp::constants::PEDERSEN_COMMITMENT_SIZE
-		+ secp::constants::AGG_SIGNATURE_SIZE;
 }
 
 /// Wrapper around a tx kernel used when querying them by API.

@@ -21,7 +21,7 @@ use crate::core::core::merkle_proof::MerkleProof;
 use crate::core::core::verifier_cache::VerifierCache;
 use crate::core::core::{
 	Block, BlockHeader, BlockSums, Committed, Output, OutputFeatures, OutputI, OutputIdentifier,
-	Transaction, TxKernel, TxKernelApiEntry, TxKernelEntry,
+	Transaction, TxKernel, TxKernelApiEntry,
 };
 use crate::core::global;
 use crate::core::pow;
@@ -660,7 +660,7 @@ impl Chain {
 	pub fn kernel_data_write(&self, reader: &mut dyn Read) -> Result<(), Error> {
 		let mut count = 0;
 		let mut stream = StreamingReader::new(reader, ProtocolVersion::local());
-		while let Ok(_kernel) = TxKernelEntry::read(&mut stream) {
+		while let Ok(_kernel) = TxKernel::read(&mut stream) {
 			count += 1;
 		}
 
@@ -1147,7 +1147,7 @@ impl Chain {
 	}
 
 	/// as above, for kernels
-	pub fn get_last_n_kernel(&self, distance: u64) -> Vec<(Hash, TxKernelEntry)> {
+	pub fn get_last_n_kernel(&self, distance: u64) -> Vec<(Hash, TxKernel)> {
 		self.txhashset.read().last_n_kernel(distance)
 	}
 
@@ -1299,8 +1299,7 @@ impl Chain {
 			height: pos_height.1,
 			kernel: txhashset
 				.txkernel_by_insertion_index(pos_height.0)
-				.ok_or(ErrorKind::TxKernelNotFound)?
-				.kernel,
+				.ok_or(ErrorKind::TxKernelNotFound)?,
 		};
 		Ok(tx_kernel_api_entry)
 	}
@@ -1360,8 +1359,8 @@ impl Chain {
 			let kernel_mmr_size = batch.get_block_header(&hash)?.kernel_mmr_size;
 			while pos <= kernel_mmr_size {
 				// Note: 1-based and not 0-based, here must be '<=' instead of '<'
-				if let Some(entry) = txhashset.txkernel_by_insertion_index(pos) {
-					batch.save_txkernel_pos_height(&entry.kernel.excess, pos, height)?;
+				if let Some(kernel) = txhashset.txkernel_by_insertion_index(pos) {
+					batch.save_txkernel_pos_height(&kernel.excess, pos, height)?;
 				}
 				pos += 1;
 			}

@@ -22,7 +22,7 @@ use crate::core::core::merkle_proof::MerkleProof;
 use crate::core::core::pmmr::{self, Backend, ReadonlyPMMR, RewindablePMMR, PMMR};
 use crate::core::core::{
 	Block, BlockHeader, Input, Output, OutputFeatures, OutputI, OutputII, OutputIdentifier,
-	TxKernel, TxKernelEntry,
+	TxKernel,
 };
 use crate::core::ser::{PMMRIndexHashable, PMMRable};
 use crate::error::{Error, ErrorKind};
@@ -222,7 +222,7 @@ impl TxHashSet {
 	}
 
 	/// as above, for kernels
-	pub fn last_n_kernel(&self, distance: u64) -> Vec<(Hash, TxKernelEntry)> {
+	pub fn last_n_kernel(&self, distance: u64) -> Vec<(Hash, TxKernel)> {
 		ReadonlyPMMR::at(&self.kernel_pmmr_h.backend, self.kernel_pmmr_h.last_pos)
 			.get_last_n_insertions(distance)
 	}
@@ -296,9 +296,9 @@ impl TxHashSet {
 		let mut index = max_index + 1;
 		while index > min_index {
 			index -= 1;
-			if let Some(t) = pmmr.get_data(index) {
-				if &t.kernel.excess == excess {
-					return Some((t.kernel, index));
+			if let Some(kernel) = pmmr.get_data(index) {
+				if &kernel.excess == excess {
+					return Some((kernel, index));
 				}
 			}
 		}
@@ -306,14 +306,12 @@ impl TxHashSet {
 	}
 
 	/// Returns a tx kernel from the given insertion (leaf) index.
-	pub fn txkernel_by_insertion_index(&self, index: u64) -> Option<TxKernelEntry> {
+	pub fn txkernel_by_insertion_index(&self, index: u64) -> Option<TxKernel> {
 		ReadonlyPMMR::at(&self.kernel_pmmr_h.backend, self.kernel_pmmr_h.last_pos).get_data(index)
 	}
 
 	/// Get MMR roots.
 	pub fn roots(&self) -> TxHashSetRoots {
-		// let header_pmmr =
-		// 	ReadonlyPMMR::at(&self.header_pmmr_h.backend, self.header_pmmr_h.last_pos);
 		let output_i_pmmr =
 			ReadonlyPMMR::at(&self.output_i_pmmr_h.backend, self.output_i_pmmr_h.last_pos);
 		let output_ii_pmmr = ReadonlyPMMR::at(
@@ -1347,7 +1345,7 @@ impl<'a> Extension<'a> {
 					.get_data(n)
 					.ok_or::<Error>(ErrorKind::TxKernelNotFound.into())?;
 
-				tx_kernels.push(kernel.kernel);
+				tx_kernels.push(kernel);
 			}
 
 			if tx_kernels.len() >= KERNEL_BATCH_SIZE || n >= self.kernel_pmmr.unpruned_size() {
