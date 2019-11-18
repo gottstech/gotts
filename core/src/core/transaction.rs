@@ -48,7 +48,7 @@ use std::{error, fmt};
 pub const SINGLE_MSG_SIZE: usize = 1 + secp::PEDERSEN_COMMITMENT_SIZE + 8;
 
 /// Various tx kernel variants.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum KernelFeatures {
 	/// Plain kernel (the default for Gotts txs).
 	Plain {
