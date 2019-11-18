@@ -15,11 +15,11 @@
 
 use std::fs::File;
 
-use self::core::core::hash::{DefaultHashable, Hash};
+use self::core::core::hash::{DefaultHashable, Hash, Hashed};
 use self::core::core::pmmr::{self, Backend};
 use self::core::core::BlockHeader;
 use self::core::ser;
-use self::core::ser::{FixedLength, PMMRable, Readable, Reader, Writeable, Writer};
+use self::core::ser::{FixedLength, PMMRIndexHashable, PMMRable, Readable, Reader, Writeable, Writer};
 use croaring;
 use croaring::Bitmap;
 use gotts_core as core;
@@ -38,6 +38,12 @@ impl PMMRable for TestElem {
 
 	fn as_elmt(&self) -> Self::E {
 		self.clone()
+	}
+}
+
+impl PMMRIndexHashable for TestElem {
+	fn hash_with_index(&self, index: u64) -> Hash {
+		(index, self).hash()
 	}
 }
 

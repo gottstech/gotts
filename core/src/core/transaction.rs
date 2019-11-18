@@ -25,8 +25,8 @@ use crate::libtx::proof::{
 };
 use crate::libtx::secp_ser;
 use crate::ser::{
-	self, read_multi, FixedLength, PMMRable, Readable, Reader, VerifySortedAndUnique, Writeable,
-	Writer,
+	self, read_multi, FixedLength, PMMRIndexHashable, PMMRable, Readable, Reader,
+	VerifySortedAndUnique, Writeable, Writer,
 };
 use crate::util;
 use crate::util::secp;
@@ -330,6 +330,12 @@ impl PMMRable for TxKernel {
 
 	fn as_elmt(&self) -> TxKernelEntry {
 		TxKernelEntry::from_kernel(self)
+	}
+}
+
+impl PMMRIndexHashable for TxKernel {
+	fn hash_with_index(&self, index: u64) -> Hash {
+		(index, self).hash()
 	}
 }
 
@@ -1883,6 +1889,19 @@ pub struct Output {
 
 impl DefaultHashable for Output {}
 
+impl PMMRIndexHashable for Output {
+	fn hash_with_index(&self, index: u64) -> Hash {
+		match self.features.as_flag() {
+			OutputFeatures::Plain | OutputFeatures::Coinbase => {
+				OutputI::from_output(&self).unwrap().hash_with_index(index)
+			}
+			OutputFeatures::SigLocked => {
+				OutputII::from_output(&self).unwrap().hash_with_index(index)
+			}
+		}
+	}
+}
+
 impl Ord for Output {
 	fn cmp(&self, other: &Output) -> Ordering {
 		self.id().cmp(&other.id())
@@ -2027,7 +2046,8 @@ impl Output {
 		bin_buf
 	}
 
-	/// Full hash with all contents
+	/// Full hash with all contents.
+	/// Note: the self.hash() only hash on id().
 	pub fn full_hash(&self) -> Hash {
 		self.to_vec().hash()
 	}
@@ -2116,6 +2136,12 @@ impl PMMRable for OutputI {
 	}
 }
 
+impl PMMRIndexHashable for OutputI {
+	fn hash_with_index(&self, index: u64) -> Hash {
+		(index, self.to_vec()).hash()
+	}
+}
+
 impl OutputI {
 	/// Build an OutputI from an Output.
 	pub fn from_output(output: &Output) -> Result<Self, Error> {
@@ -2138,6 +2164,24 @@ impl OutputI {
 			commit: self.id.commit,
 			value: self.value,
 		}
+	}
+
+	/// Return the binary of OutputI, unhashed
+	pub fn to_vec(&self) -> Vec<u8> {
+		let mut bin_buf = vec![];
+		{
+			let mut writer = ser::BinWriter::default(&mut bin_buf);
+			writer.write_u64(self.value).unwrap();
+			self.id.write(&mut writer).unwrap();
+			self.spath.write(&mut writer).unwrap();
+		}
+		bin_buf
+	}
+
+	/// Full hash with all contents.
+	/// Note: the self.hash() only hash on id().
+	pub fn full_hash(&self) -> Hash {
+		self.to_vec().hash()
 	}
 }
 
@@ -2224,6 +2268,12 @@ impl PMMRable for OutputII {
 	}
 }
 
+impl PMMRIndexHashable for OutputII {
+	fn hash_with_index(&self, index: u64) -> Hash {
+		(index, self.to_vec()).hash()
+	}
+}
+
 impl OutputII {
 	/// Build an OutputII from an Output.
 	pub fn from_output(output: &Output) -> Result<Self, Error> {
@@ -2247,6 +2297,24 @@ impl OutputII {
 			commit: self.id.commit,
 			value: self.value,
 		}
+	}
+
+	/// Return the binary of OutputII, unhashed
+	pub fn to_vec(&self) -> Vec<u8> {
+		let mut bin_buf = vec![];
+		{
+			let mut writer = ser::BinWriter::default(&mut bin_buf);
+			writer.write_u64(self.value).unwrap();
+			self.id.write(&mut writer).unwrap();
+			self.locker.write(&mut writer).unwrap();
+		}
+		bin_buf
+	}
+
+	/// Full hash with all contents.
+	/// Note: the self.hash() only hash on id().
+	pub fn full_hash(&self) -> Hash {
+		self.to_vec().hash()
 	}
 }
 

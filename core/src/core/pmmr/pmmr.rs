@@ -46,7 +46,7 @@ where
 	_marker: marker::PhantomData<T>,
 }
 
-impl<'a, T, B> PMMR<'a, T, B>
+impl<'a, T: PMMRIndexHashable, B> PMMR<'a, T, B>
 where
 	T: PMMRable,
 	B: 'a + Backend<T>,
