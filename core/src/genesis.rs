@@ -170,7 +170,7 @@ mod test {
 		);
 		assert_eq!(
 			gen_bin.hash().to_hex(),
-			"eb9f99417c8f57600889f6bf1a1798b85cf82d8af089ec32c928001e8111a6b9"
+			"8836414fe6d70c19ab3d1f0560ebfc0c4679538690c3f70fee7b811f9f2f830a"
 		);
 	}
 
@@ -186,7 +186,7 @@ mod test {
 		);
 		assert_eq!(
 			gen_bin.hash().to_hex(),
-			"0c2637a6ac751ef15dea26022f45f5d2131dd2dd7210387384f5f443931be277"
+			"be10ae6e874475bb29585a4997f8e42b5afe4ac3a131430036c93b5aaceefd3b"
 		);
 	}
 }

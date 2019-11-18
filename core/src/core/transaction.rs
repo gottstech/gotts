@@ -107,19 +107,16 @@ impl KernelFeatures {
 }
 
 impl Writeable for KernelFeatures {
-	/// Still only supporting protocol version v1 serialization.
-	/// Always include fee, defaulting to 0, and lock_height, defaulting to 0, for all feature variants.
+	/// Protocol version v1 serialization.
+	/// fee and lock_height could be skipped, depending on feature variants.
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
 		match self {
 			KernelFeatures::Plain { fee } => {
 				writer.write_u8(self.as_u8())?;
 				writer.write_u64(*fee)?;
-				writer.write_u64(0)?;
 			}
 			KernelFeatures::Coinbase => {
 				writer.write_u8(self.as_u8())?;
-				writer.write_u64(0)?;
-				writer.write_u64(0)?;
 			}
 			KernelFeatures::HeightLocked { fee, lock_height } => {
 				writer.write_u8(self.as_u8())?;
@@ -139,23 +136,9 @@ impl Readable for KernelFeatures {
 		let features = match reader.read_u8()? {
 			KernelFeatures::PLAIN_U8 => {
 				let fee = reader.read_u64()?;
-				let lock_height = reader.read_u64()?;
-				if lock_height != 0 {
-					return Err(ser::Error::CorruptedData);
-				}
 				KernelFeatures::Plain { fee }
 			}
-			KernelFeatures::COINBASE_U8 => {
-				let fee = reader.read_u64()?;
-				if fee != 0 {
-					return Err(ser::Error::CorruptedData);
-				}
-				let lock_height = reader.read_u64()?;
-				if lock_height != 0 {
-					return Err(ser::Error::CorruptedData);
-				}
-				KernelFeatures::Coinbase
-			}
+			KernelFeatures::COINBASE_U8 => KernelFeatures::Coinbase,
 			KernelFeatures::HEIGHT_LOCKED_U8 => {
 				let fee = reader.read_u64()?;
 				let lock_height = reader.read_u64()?;
@@ -538,6 +521,9 @@ impl From<TxKernel> for TxKernelEntry {
 	}
 }
 
+/// Even TxKernel has different length for 3 types: Plain, Coinbase, HeightLocked, for its suitable
+/// for PMMR, at this moment we always use 114=17+33+64 as the fixed length for PMMR.
+/// todo: variable size PMMR.
 impl FixedLength for TxKernelEntry {
 	const LEN: usize = 17 // features plus fee and lock_height
 		+ secp::constants::PEDERSEN_COMMITMENT_SIZE
