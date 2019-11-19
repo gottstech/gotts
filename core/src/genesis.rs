@@ -51,13 +51,13 @@ pub fn genesis_dev() -> core::Block {
 pub fn genesis_floo() -> core::Block {
 	let gen = core::Block::with_header(core::BlockHeader {
 		height: 0,
-		timestamp: Utc.ymd(2019, 11, 6).and_hms(0, 53, 35),
+		timestamp: Utc.ymd(2019, 11, 19).and_hms(11, 5, 57),
 		prev_root: Hash::from_hex(
-			"0000000000000000000c0e600d0acb6bbdea738f9f5d6d49fc82318da427f11b",
+			"000000000000000000144fd714bfd4ce8d1d4c144e2b16f6159a9917b1570732",
 		)
 		.unwrap(),
 		output_i_root: Hash::from_hex(
-			"8eb4296382c7feea98f851ea1724740fcc5484ad0738fd226258ec815ecd149d",
+			"8233a3826ac81c5077b01e558aef183ff23e7f4df378276b3f1eeef31b9456b6",
 		)
 		.unwrap(),
 		output_ii_root: Hash::from_hex(
@@ -65,24 +65,24 @@ pub fn genesis_floo() -> core::Block {
 		)
 		.unwrap(),
 		kernel_root: Hash::from_hex(
-			"3c2d85c54a0b09306d67cd8a7daa15bb557ed28b9ddb0007aac802ab45d58bff",
+			"fda7320458bec205a2d79de0587d0d8b6c7fdcfa1ebb44128e937662a0d26480",
 		)
 		.unwrap(),
 		output_i_mmr_size: 1,
 		output_ii_mmr_size: 0,
 		kernel_mmr_size: 1,
 		pow: ProofOfWork {
-			total_difficulty: Difficulty::from_num(10_u64.pow(4)),
+			total_difficulty: Difficulty::from_num(10_u64.pow(3)),
 			secondary_scaling: 1856,
-			nonce: 27,
+			nonce: 10,
 			proof: Proof {
 				nonces: vec![
-					17476596, 32443702, 56145007, 58141318, 104365753, 107360137, 127175005,
-					138039798, 139057522, 166814828, 169308347, 195051560, 214591286, 218391532,
-					222045925, 230418031, 237776292, 243154286, 249848739, 276514698, 277972881,
-					286002285, 307797231, 318277568, 321115456, 328512216, 330895080, 340557176,
-					348715841, 372128343, 391881755, 396501951, 410088557, 429215845, 450829244,
-					464140808, 464624790, 469242887, 480164419, 517525540, 524896010, 534173509,
+					10041868, 10081004, 27450470, 30164461, 31309253, 52957945, 75520034,
+					149472619, 155698073, 165023110, 169406003, 201178374, 202536961, 206955939,
+					207173826, 207796956, 222586000, 224836028, 236552375, 250069741, 260260498,
+					282179934, 286454758, 303922880, 314959757, 323525307, 331775582, 338127072,
+					347103743, 348610726, 386218307, 409319759, 441701070, 458441174, 477235510,
+					481919117, 493460028, 500169831, 504263775, 508591322, 512244144, 531391596,
 				],
 				edge_bits: 29,
 			},
@@ -91,21 +91,21 @@ pub fn genesis_floo() -> core::Block {
 	});
 	let kernel = core::TxKernel {
 		features: core::KernelFeatures::Coinbase,
-		excess: Commitment::from_vec(util::from_hex("09603078dc4784b57ae301efd16ea6e1702676ed12e8a06defed2d6658de1ce013".to_string()).unwrap()),
-		excess_sig: Signature::from_compact(&util::from_hex("cf4a1ec0431d738cd79daf54b70ee1208799702012d12433ea5cdec5960a74bd91d76bfc8ab82456b0aa523954d1036d94c4d7b117e94ce57f56f38d3bdb9519".to_string()).unwrap()).unwrap(),
+		excess: Commitment::from_vec(util::from_hex("098364706891b414a55a91ef8686c51ec70d4b779052977009f625630e17a2f1c3".to_string()).unwrap()),
+		excess_sig: Signature::from_compact(&util::from_hex("0310ae8f5acaede5ebd62cef36a4979eb7e2cb76cee071a47c3876c1976f0b8373ece849ccaee9b23b0a8d29150d0e1df2bc9028cb80b956a3bef3299b9d369a".to_string()).unwrap()).unwrap(),
 	};
 	let output = core::Output {
 		features: core::OutputFeaturesEx::Coinbase {
 			spath: SecuredPath::from_vec(
 				util::from_hex(
-					"0731dab0f44bc53769cad8ff51e21ea8841160c0f7096cace42797f5".to_string(),
+					"bd3be4bdd2a8d4a7a8559bbcfb5e4705cec320d0ebc633eaaf403c46".to_string(),
 				)
 				.unwrap(),
 			),
 		},
 		commit: Commitment::from_vec(
 			util::from_hex(
-				"09603078dc4784b57ae301efd16ea6e1702676ed12e8a06defed2d6658de1ce013".to_string(),
+				"098364706891b414a55a91ef8686c51ec70d4b779052977009f625630e17a2f1c3".to_string(),
 			)
 			.unwrap(),
 		),
@@ -166,11 +166,11 @@ mod test {
 		println!("floonet genesis full hash: {}\n", gen_bin.hash().to_hex());
 		assert_eq!(
 			gen_hash.to_hex(),
-			"5c31e17e2d506f9876ca10e498ac4ae6a60eb2fec10bde3ba8482e0d76365735"
+			"be9f27aa3e8facf0c37f7a0f654dc24c899460fbc7bbd076ffac936407aa2b0e"
 		);
 		assert_eq!(
 			gen_bin.hash().to_hex(),
-			"8836414fe6d70c19ab3d1f0560ebfc0c4679538690c3f70fee7b811f9f2f830a"
+			"8dcab2576ccb50c76b6604d109224a74aed50a78011c854c5aa6825ca5260ea2"
 		);
 	}
 

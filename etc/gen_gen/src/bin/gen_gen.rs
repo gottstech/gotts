@@ -43,7 +43,8 @@ static BCYPHER_URL: &str = "https://api.blockcypher.com/v1/btc/main";
 static BCHAIR_URL: &str = "https://api.blockchair.com/bitcoin/blocks?limit=2";
 
 static GENESIS_RS_PATH: &str = "../../core/src/genesis.rs";
-static PLUGIN_PATH: &str = "./cuckaroo_cpu_avx2_29.cuckooplugin";
+//static PLUGIN_PATH: &str = "./cuckaroo_cpu_avx2_29.cuckooplugin";
+static PLUGIN_PATH: &str = "./cuckaroo_cpu_compat_29.cuckooplugin";
 static WALLET_SEED_PATH: &str = "./wallet.seed";
 
 fn main() {
@@ -87,7 +88,7 @@ fn main() {
 		&rpassword::prompt_password_stdout("Password: ").unwrap(),
 	)
 	.unwrap();
-	let keychain: ExtKeychain = seed.derive_keychain(false).unwrap();
+	let keychain = ExtKeychain::from_seed(&seed.to_vec(), false).unwrap();
 	let builder = core::libtx::ProofBuilder::new(&keychain);
 	let key_id = ExtKeychain::derive_key_id(3, 1, 0, 0, 0);
 	let reward = core::libtx::reward::output(&keychain, &builder, &key_id, 0, false).unwrap();
