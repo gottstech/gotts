@@ -21,10 +21,12 @@ use self::core::core::{Block, BlockHeader, Transaction};
 use self::core::libtx;
 use self::core::pow::Difficulty;
 use self::keychain::{ExtKeychain, Keychain};
+use self::pool::types::PoolError;
 use self::util::RwLock;
 use crate::common::*;
 use gotts_core as core;
 use gotts_keychain as keychain;
+use gotts_pool as pool;
 use gotts_util as util;
 use std::sync::Arc;
 
@@ -134,6 +136,31 @@ fn test_transaction_pool_block_building() {
 			write_pool.reconcile_block(&block).unwrap();
 
 			assert_eq!(write_pool.total_size(), 0);
+		}
+
+		// Now create a bad transaction with inflation
+		let header = block.header;
+		let bad_tx_1 = test_bad_transaction(&keychain, vec![32], vec![15]);
+		{
+			let mut write_pool = pool.write();
+
+			// Add this bad tx to the pool.
+			assert_eq!(
+				write_pool.add_to_pool(test_source(), bad_tx_1.clone(), false, &header),
+				Err(PoolError::Other(format!("transaction sum mismatch"))),
+			);
+			assert_eq!(write_pool.total_size(), 0);
+
+			let goog_tx_1 = test_transaction(&keychain, vec![32], vec![15]);
+			let bad_tx_2 = test_bad_transaction(&keychain, vec![15], vec![9]);
+			write_pool
+				.add_to_pool(test_source(), goog_tx_1.clone(), false, &header)
+				.unwrap();
+			assert_eq!(
+				write_pool.add_to_pool(test_source(), bad_tx_2.clone(), false, &header),
+				Err(PoolError::Other(format!("transaction sum mismatch"))),
+			);
+			assert_eq!(write_pool.total_size(), 1);
 		}
 	}
 	// Cleanup db directory
