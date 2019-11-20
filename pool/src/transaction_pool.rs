@@ -152,11 +152,6 @@ impl TransactionPool {
 		tx.validate(Weighting::AsTransaction, self.verifier_cache.clone())
 			.map_err(PoolError::InvalidTx)?;
 
-		// Validate the tx against current chain state.
-		// Check all inputs are in the current UTXO set.
-		// Check all outputs are unique in current UTXO set.
-		self.blockchain.validate_tx(&tx)?;
-
 		// Check the tx lock_time is valid based on current chain state.
 		self.blockchain.verify_tx_lock_height(&tx)?;
 

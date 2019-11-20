@@ -19,7 +19,7 @@ use self::chain::store::ChainStore;
 use self::chain::types::Tip;
 use self::core::core::hash::{Hash, Hashed};
 use self::core::core::verifier_cache::VerifierCache;
-use self::core::core::{Block, BlockHeader, BlockSums, Committed, Transaction};
+use self::core::core::{Block, BlockHeader, BlockSums, Committed, Output, Transaction};
 use self::core::libtx;
 use self::keychain::{ExtKeychain, Keychain};
 use self::pool::types::*;
@@ -31,14 +31,14 @@ use gotts_core as core;
 use gotts_keychain as keychain;
 use gotts_pool as pool;
 use gotts_util as util;
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::fs;
 use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct ChainAdapter {
 	pub store: Arc<RwLock<ChainStore>>,
-	pub utxo: Arc<RwLock<HashSet<Commitment>>>,
+	pub utxo: Arc<RwLock<HashMap<Commitment, Output>>>,
 }
 
 impl ChainAdapter {
@@ -47,7 +47,7 @@ impl ChainAdapter {
 		let chain_store = ChainStore::new(&target_dir)
 			.map_err(|e| format!("failed to init chain_store, {:?}", e))?;
 		let store = Arc::new(RwLock::new(chain_store));
-		let utxo = Arc::new(RwLock::new(HashSet::new()));
+		let utxo = Arc::new(RwLock::new(HashMap::new()));
 
 		Ok(ChainAdapter { store, utxo })
 	}
@@ -92,7 +92,7 @@ impl ChainAdapter {
 				utxo.remove(&x.commitment());
 			}
 			for x in block.outputs() {
-				utxo.insert(x.commitment());
+				utxo.insert(x.commitment(), x.clone());
 			}
 		}
 	}
@@ -119,17 +119,23 @@ impl BlockChain for ChainAdapter {
 
 	fn validate_tx(&self, tx: &Transaction) -> Result<(), pool::PoolError> {
 		let utxo = self.utxo.read();
+		let mut sum = 0i64;
 
 		for x in tx.outputs() {
-			if utxo.contains(&x.commitment()) {
+			if utxo.contains_key(&x.commitment()) {
 				return Err(PoolError::Other(format!("output commitment not unique")));
 			}
+			sum = sum.saturating_sub(x.value as i64);
 		}
 
 		for x in tx.inputs() {
-			if !utxo.contains(&x.commitment()) {
+			if !utxo.contains_key(&x.commitment()) {
 				return Err(PoolError::Other(format!("not in utxo set")));
 			}
+			sum = sum.saturating_add(utxo.get(&x.commitment()).unwrap().value as i64);
+		}
+		if sum != tx.overage() {
+			return Err(PoolError::Other(format!("transaction sum mismatch")))?;
 		}
 
 		Ok(())
@@ -215,14 +221,43 @@ where
 
 	for input_value in input_values {
 		let key_id = ExtKeychain::derive_key_id(1, input_value as u32, 0, 0, 0);
-		//todo: change the 0u64 here when secp library support i64 value.
 		tx_elements.push(libtx::build::input(input_value, 0i64, key_id));
 	}
 
 	for output_value in output_values {
 		let key_id = ExtKeychain::derive_key_id(1, output_value as u32, 0, 0, 0);
-		//todo: change the 0u64 here when secp library support i64 value.
 		tx_elements.push(libtx::build::output(output_value, Some(0i64), key_id));
+	}
+	tx_elements.push(libtx::build::with_fee(fees as u64));
+
+	libtx::build::transaction(tx_elements, keychain, &libtx::ProofBuilder::new(keychain)).unwrap()
+}
+
+pub fn test_bad_transaction<K>(
+	keychain: &K,
+	input_values: Vec<u64>,
+	output_values: Vec<u64>,
+) -> Transaction
+where
+	K: Keychain,
+{
+	let input_sum = input_values.iter().sum::<u64>() as i64;
+	let output_sum = output_values.iter().sum::<u64>() as i64;
+
+	let fees: i64 = input_sum - output_sum;
+	assert!(fees >= 0);
+
+	let mut tx_elements = Vec::new();
+
+	for input_value in input_values {
+		let key_id = ExtKeychain::derive_key_id(1, input_value as u32, 0, 0, 0);
+		tx_elements.push(libtx::build::input(input_value, 0i64, key_id));
+	}
+
+	for output_value in output_values {
+		let key_id = ExtKeychain::derive_key_id(1, output_value as u32, 0, 0, 0);
+		// output_value + 1 here is a bad output value which has an inflation!
+		tx_elements.push(libtx::build::output(output_value + 1, Some(0i64), key_id));
 	}
 	tx_elements.push(libtx::build::with_fee(fees as u64));
 
