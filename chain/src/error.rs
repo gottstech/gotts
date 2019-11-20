@@ -87,6 +87,9 @@ pub enum ErrorKind {
 	/// Attempt to spend a coinbase output before it sufficiently matures.
 	#[fail(display = "Attempt to spend immature coinbase")]
 	ImmatureCoinbase,
+	/// Attempt to spend a SigLocked output before it sufficiently matures.
+	#[fail(display = "Attempt to spend immature SigLocked")]
+	ImmatureSigLocked,
 	/// Error validating a Merkle proof (coinbase output)
 	#[fail(display = "Error validating merkle proof")]
 	MerkleProof,

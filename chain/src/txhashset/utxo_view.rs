@@ -59,8 +59,9 @@ impl<'a> UTXOView<'a> {
 			self.validate_output(output)?;
 		}
 
+		let next_block_height = block.header.height + 1;
 		for input in block.inputs() {
-			self.validate_input(&input)?;
+			self.validate_input(&input, next_block_height)?;
 		}
 		Ok(())
 	}
@@ -68,7 +69,7 @@ impl<'a> UTXOView<'a> {
 	/// Validate a transaction against the current UTXO set.
 	/// Every input must spend an output that currently exists in the UTXO set.
 	/// No duplicate outputs.
-	pub fn validate_tx(&self, tx: &Transaction) -> Result<(), Error> {
+	pub fn validate_tx(&self, tx: &Transaction, next_block_height: u64) -> Result<(), Error> {
 		let mut sum = 0i64;
 
 		for output in tx.outputs() {
@@ -77,7 +78,7 @@ impl<'a> UTXOView<'a> {
 		}
 
 		for input in tx.inputs() {
-			let input_value = self.validate_input(&input)?;
+			let input_value = self.validate_input(&input, next_block_height)?;
 			sum = sum.saturating_add(input_value as i64);
 		}
 
@@ -120,7 +121,7 @@ impl<'a> UTXOView<'a> {
 	// Input is valid if it is spending an (unspent) output
 	// that currently exists in the output MMR.
 	// Compare the hash in the output MMR at the expected pos.
-	fn validate_input(&self, input: &Input) -> Result<u64, Error> {
+	fn validate_input(&self, input: &Input, next_block_height: u64) -> Result<u64, Error> {
 		if let Ok(ofph) = self.batch.get_output_pos_height(&input.commitment()) {
 			match ofph.features {
 				OutputFeatures::Plain | OutputFeatures::Coinbase => {
@@ -140,7 +141,18 @@ impl<'a> UTXOView<'a> {
 							if hash == output.hash_with_index(ofph.position - 1)
 								&& output.id.commit == input.commit
 							{
-								return Ok(output.value);
+								// Find the "cutoff" height.
+								let cutoff_height = next_block_height
+									.checked_sub(output.locker.relative_lock_height as u64)
+									.unwrap_or(0);
+
+								// If input height exceed the cutoff_height
+								// we know they have not yet sufficiently matured.
+								if ofph.height > cutoff_height {
+									return Err(ErrorKind::ImmatureCoinbase.into());
+								} else {
+									return Ok(output.value);
+								}
 							}
 						}
 					}

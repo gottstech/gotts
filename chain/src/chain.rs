@@ -512,8 +512,9 @@ impl Chain {
 	pub fn validate_tx(&self, tx: &Transaction) -> Result<(), Error> {
 		let header_pmmr = self.header_pmmr.read();
 		let txhashset = self.txhashset.read();
+		let next_block_height = self.next_block_height()?;
 		txhashset::utxo_view(&header_pmmr, &txhashset, |utxo| {
-			utxo.validate_tx(tx)?;
+			utxo.validate_tx(tx, next_block_height)?;
 			Ok(())
 		})
 	}

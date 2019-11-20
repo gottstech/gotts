@@ -1366,6 +1366,10 @@ impl Input {
 		self.features.is_plain()
 	}
 
+	/// Is this a SigLocked input?
+	pub fn is_siglocked(&self) -> bool {
+		self.features.is_siglocked()
+	}
 	/// Create an InputEx from an Input
 	pub fn to_input_ex(&self) -> InputEx {
 		InputEx::SingleInput(self.clone())
@@ -1665,6 +1669,11 @@ impl OutputFeatures {
 	/// Is this a plain output?
 	pub fn is_plain(&self) -> bool {
 		*self == OutputFeatures::Plain
+	}
+
+	/// Is this a SigLocked output?
+	pub fn is_siglocked(&self) -> bool {
+		*self == OutputFeatures::SigLocked
 	}
 }
 
