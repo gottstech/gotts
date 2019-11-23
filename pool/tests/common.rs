@@ -92,12 +92,13 @@ impl ChainAdapter {
 				utxo.remove(&x.commitment());
 			}
 			for x in block.outputs() {
-				utxo.insert(x.commitment(),
-							OutputEx {
-								output: x.clone(),
-								height: header.height,
-								mmr_index: 0, // not used here
-							}
+				utxo.insert(
+					x.commitment(),
+					OutputEx {
+						output: x.clone(),
+						height: header.height,
+						mmr_index: 0, // not used here
+					},
 				);
 			}
 		}
@@ -147,7 +148,10 @@ impl BlockChain for ChainAdapter {
 		Ok(())
 	}
 
-	fn get_complete_inputs(&self, inputs: &Vec<Input>) -> Result<HashMap<Commitment, OutputEx>, pool::PoolError> {
+	fn get_complete_inputs(
+		&self,
+		inputs: &Vec<Input>,
+	) -> Result<HashMap<Commitment, OutputEx>, pool::PoolError> {
 		let utxo = self.utxo.read();
 		let mut complete_inputs: HashMap<Commitment, OutputEx> = HashMap::new();
 		for input in inputs {
@@ -159,7 +163,7 @@ impl BlockChain for ChainAdapter {
 						output: output_ex.output.clone(),
 						height: output_ex.height,
 						mmr_index: output_ex.mmr_index,
-					}
+					},
 				);
 			}
 		}

@@ -106,7 +106,11 @@ impl TransactionPool {
 				let tx = transaction::deaggregate(entry.tx, txs)?;
 
 				// Validate this deaggregated tx "as tx", subject to regular tx weight limits.
-				tx.validate(Weighting::AsTransaction, self.verifier_cache.clone(), header.height)?;
+				tx.validate(
+					Weighting::AsTransaction,
+					self.verifier_cache.clone(),
+					header.height,
+				)?;
 
 				entry.tx = tx;
 				entry.src = TxSource::Deaggregate;
@@ -161,9 +165,23 @@ impl TransactionPool {
 			for input in inputs {
 				if !complete_inputs.contains_key(&input.commit) {
 					if let Some(o) = self.txpool.retrieve_output_by_input(&input) {
-						complete_inputs.insert(input.commit.clone(), OutputEx { output: o, height: 0, mmr_index: 0 });
+						complete_inputs.insert(
+							input.commit.clone(),
+							OutputEx {
+								output: o,
+								height: 0,
+								mmr_index: 0,
+							},
+						);
 					} else if let Some(o) = self.stempool.retrieve_output_by_input(&input) {
-						complete_inputs.insert(input.commit.clone(), OutputEx { output: o, height: 0, mmr_index: 0 });
+						complete_inputs.insert(
+							input.commit.clone(),
+							OutputEx {
+								output: o,
+								height: 0,
+								mmr_index: 0,
+							},
+						);
 					} else {
 						return Err(PoolError::InvalidTx(transaction::Error::InputNotExist));
 					}
@@ -174,8 +192,12 @@ impl TransactionPool {
 
 		// Make sure the transaction is valid before anything else.
 		// Validate tx accounting for max tx weight.
-		tx.validate(Weighting::AsTransaction, self.verifier_cache.clone(), header.height)
-			.map_err(PoolError::InvalidTx)?;
+		tx.validate(
+			Weighting::AsTransaction,
+			self.verifier_cache.clone(),
+			header.height,
+		)
+		.map_err(PoolError::InvalidTx)?;
 
 		// Check the tx lock_time is valid based on current chain state.
 		self.blockchain.verify_tx_lock_height(&tx)?;

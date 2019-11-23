@@ -617,8 +617,7 @@ impl TransactionBody {
 
 	/// Get the Inputs number
 	pub fn get_inputs_number(&self) -> usize {
-		self
-			.inputs
+		self.inputs
 			.iter()
 			.fold(0usize, |t, inputs| t + inputs.len())
 	}
@@ -904,9 +903,14 @@ impl TransactionBody {
 				let commits = input_ex.commitments();
 				let mut outputs_to_spent: Vec<OutputEx> = Vec::with_capacity(commits.len());
 				for commit in &commits {
-					let output_ex = complete_inputs.get(commit).ok_or(Error::InputNotExist)?.clone();
+					let output_ex = complete_inputs
+						.get(commit)
+						.ok_or(Error::InputNotExist)?
+						.clone();
 					if height < output_ex.output.get_rlh().unwrap() as u64 + output_ex.height {
-						return Err(Error::InputUnlocker("relative_lock_height limited".to_string()));
+						return Err(Error::InputUnlocker(
+							"relative_lock_height limited".to_string(),
+						));
 					}
 					outputs_to_spent.push(output_ex);
 				}
@@ -964,7 +968,10 @@ impl Writeable for Transaction {
 impl Readable for Transaction {
 	fn read(reader: &mut dyn Reader) -> Result<Transaction, ser::Error> {
 		let body = TransactionBody::read(reader)?;
-		let tx = Transaction { complete_inputs: None, body };
+		let tx = Transaction {
+			complete_inputs: None,
+			body,
+		};
 
 		// Now "lightweight" validation of the tx.
 		// Treat any validation issues as data corruption.
@@ -1012,7 +1019,10 @@ impl Transaction {
 		let body =
 			TransactionBody::init(inputs, outputs, kernels, false).expect("sorting, not verifying");
 
-		Transaction { complete_inputs: None, body }
+		Transaction {
+			complete_inputs: None,
+			body,
+		}
 	}
 
 	/// Builds a new transaction with the provided inputs added. Existing
@@ -1087,7 +1097,7 @@ impl Transaction {
 
 	/// Get output by commit
 	pub fn find_output_by_commit(&self, commit: &Commitment) -> Option<&Output> {
-		self.body.outputs.iter().find(|o| &o.commitment() == commit )
+		self.body.outputs.iter().find(|o| &o.commitment() == commit)
 	}
 
 	/// Get outputs mutable
@@ -1147,13 +1157,20 @@ impl Transaction {
 		} else {
 			&empty
 		};
-		self.body.validate(weighting, verifier, complete_inputs, height)?;
+		self.body
+			.validate(weighting, verifier, complete_inputs, height)?;
 		self.body.verify_features()?;
 
 		// validate the public value balance.
 		if let Some(complete_inputs) = &self.complete_inputs {
-			let mut sum: i64 = complete_inputs.values().fold(0i64, |acc, x| acc.saturating_add(x.output.value as i64));
-			sum = self.body.outputs.iter().fold(sum, |acc, x| acc.saturating_sub(x.value as i64));
+			let mut sum: i64 = complete_inputs
+				.values()
+				.fold(0i64, |acc, x| acc.saturating_add(x.output.value as i64));
+			sum = self
+				.body
+				.outputs
+				.iter()
+				.fold(sum, |acc, x| acc.saturating_sub(x.value as i64));
 			if sum != self.overage() {
 				return Err(Error::TransactionSumMismatch)?;
 			}
@@ -1598,10 +1615,7 @@ impl InputEx {
 	/// max height of the 'outputs_to_spent', the block timestamp at that height.
 	/// 2. 'check_sig_only' must be false on production. 'true' only for test.
 	///
-	pub fn verify(
-		&self,
-		outputs_to_spent: &Vec<OutputEx>,
-	) -> Result<(), Error> {
+	pub fn verify(&self, outputs_to_spent: &Vec<OutputEx>) -> Result<(), Error> {
 		if !self.is_unlocker() {
 			return Err(Error::InputUnlocker("wrong Input type".to_string()));
 		}

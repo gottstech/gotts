@@ -412,7 +412,9 @@ fn validate_block(
 ) -> Result<(), Error> {
 	let ref mut extension = ext.extension;
 	let ref mut header_extension = ext.header_extension;
-	let complete_inputs = extension.utxo_view(header_extension).get_complete_inputs(&block.inputs())?;
+	let complete_inputs = extension
+		.utxo_view(header_extension)
+		.get_complete_inputs(&block.inputs())?;
 
 	block
 		.validate(verifier_cache, &complete_inputs)

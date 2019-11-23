@@ -188,13 +188,24 @@ impl<'a> UTXOView<'a> {
 	}
 
 	/// Find the complete input/s info, use chain database data according to inputs
-	pub fn get_complete_inputs(&self, inputs: &Vec<Input>) -> Result<HashMap<Commitment, OutputEx>, Error> {
+	pub fn get_complete_inputs(
+		&self,
+		inputs: &Vec<Input>,
+	) -> Result<HashMap<Commitment, OutputEx>, Error> {
 		let mut complete_inputs: HashMap<Commitment, OutputEx> = HashMap::new();
 		for input in inputs {
 			if let Ok(ofph) = self.batch.get_output_pos_height(&input.commitment()) {
 				let output = match ofph.features {
-					OutputFeatures::Plain | OutputFeatures::Coinbase => self.output_i_pmmr.get_data(ofph.position).unwrap().into_output(),
-					OutputFeatures::SigLocked => self.output_ii_pmmr.get_data(ofph.position).unwrap().into_output(),
+					OutputFeatures::Plain | OutputFeatures::Coinbase => self
+						.output_i_pmmr
+						.get_data(ofph.position)
+						.unwrap()
+						.into_output(),
+					OutputFeatures::SigLocked => self
+						.output_ii_pmmr
+						.get_data(ofph.position)
+						.unwrap()
+						.into_output(),
 				};
 				if output.id().commitment() == input.commitment() {
 					complete_inputs.insert(
@@ -203,7 +214,7 @@ impl<'a> UTXOView<'a> {
 							output,
 							height: ofph.height,
 							mmr_index: ofph.position,
-						}
+						},
 					);
 				}
 			}

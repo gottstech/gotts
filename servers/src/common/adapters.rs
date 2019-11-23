@@ -36,8 +36,8 @@ use crate::core::{core, global};
 use crate::p2p;
 use crate::p2p::types::PeerInfo;
 use crate::pool;
-use crate::util::OneTime;
 use crate::util::secp::pedersen::Commitment;
+use crate::util::OneTime;
 use chrono::prelude::*;
 use chrono::Duration;
 use rand::prelude::*;
@@ -216,7 +216,10 @@ impl p2p::ChainAdapter for NetToChainAdapter {
 
 			if let Ok(_prev) = self.chain().get_previous_header(&cb.header) {
 				let complete_inputs = self.chain().get_complete_inputs(&block.inputs())?;
-				if block.validate(self.verifier_cache.clone(), &complete_inputs).is_ok() {
+				if block
+					.validate(self.verifier_cache.clone(), &complete_inputs)
+					.is_ok()
+				{
 					debug!("successfully hydrated block from tx pool!");
 					self.process_block(block, peer_info, false)
 				} else {
@@ -938,7 +941,10 @@ impl pool::BlockChain for PoolToChainAdapter {
 			.map_err(|_| pool::PoolError::Other(format!("failed to validate tx")))
 	}
 
-	fn get_complete_inputs(&self, inputs: &Vec<Input>) -> Result<HashMap<Commitment, OutputEx>, pool::PoolError> {
+	fn get_complete_inputs(
+		&self,
+		inputs: &Vec<Input>,
+	) -> Result<HashMap<Commitment, OutputEx>, pool::PoolError> {
 		self.chain()
 			.get_complete_inputs(inputs)
 			.map_err(|e| pool::PoolError::Other(format!("failed to get_complete_inputs for {}", e)))

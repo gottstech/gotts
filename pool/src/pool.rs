@@ -166,7 +166,11 @@ impl Pool {
 		let tx = transaction::aggregate(txs)?;
 
 		// Validate the single aggregate transaction "as pool", not subject to tx weight limits.
-		tx.validate(Weighting::NoLimit, self.verifier_cache.clone(), self.blockchain.chain_head()?.height)?;
+		tx.validate(
+			Weighting::NoLimit,
+			self.verifier_cache.clone(),
+			self.blockchain.chain_head()?.height,
+		)?;
 
 		Ok(Some(tx))
 	}

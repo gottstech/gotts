@@ -17,18 +17,18 @@ pub mod common;
 
 use self::core::core::hash::Hash;
 use self::core::core::verifier_cache::LruVerifierCache;
-use self::core::core::{BlockHeader, BlockSums, Transaction, Input, OutputEx};
+use self::core::core::{BlockHeader, BlockSums, Input, OutputEx, Transaction};
 use self::keychain::{ExtKeychain, Keychain};
 use self::pool::types::{BlockChain, PoolError};
-use self::util::RwLock;
 use self::util::secp::pedersen::Commitment;
+use self::util::RwLock;
 use crate::common::*;
 use gotts_core as core;
 use gotts_keychain as keychain;
 use gotts_pool as pool;
 use gotts_util as util;
-use std::sync::Arc;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct CoinbaseMaturityErrorChainAdapter {}
@@ -56,7 +56,10 @@ impl BlockChain for CoinbaseMaturityErrorChainAdapter {
 		unimplemented!();
 	}
 
-	fn get_complete_inputs(&self, _inputs: &Vec<Input>) -> Result<HashMap<Commitment, OutputEx>, pool::PoolError> {
+	fn get_complete_inputs(
+		&self,
+		_inputs: &Vec<Input>,
+	) -> Result<HashMap<Commitment, OutputEx>, pool::PoolError> {
 		Ok(HashMap::new())
 	}
 

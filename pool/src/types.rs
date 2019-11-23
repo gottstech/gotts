@@ -27,8 +27,8 @@ use self::core::{consensus, global};
 use self::util::secp::pedersen::Commitment;
 use failure::Fail;
 use gotts_core as core;
-use gotts_util as util;
 use gotts_keychain as keychain;
+use gotts_util as util;
 use std::collections::HashMap;
 
 /// Dandelion "epoch" length.
@@ -257,7 +257,10 @@ impl From<committed::Error> for PoolError {
 /// Interface that the pool requires from a blockchain implementation.
 pub trait BlockChain: Sync + Send {
 	/// Find the complete input/s info, use chain database data according to inputs
-	fn get_complete_inputs(&self, inputs: &Vec<Input>) -> Result<HashMap<Commitment, OutputEx>, PoolError>;
+	fn get_complete_inputs(
+		&self,
+		inputs: &Vec<Input>,
+	) -> Result<HashMap<Commitment, OutputEx>, PoolError>;
 
 	/// Verify any coinbase outputs being spent
 	/// have matured sufficiently.

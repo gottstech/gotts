@@ -26,9 +26,9 @@ use crate::common::*;
 use gotts_core as core;
 use gotts_keychain as keychain;
 use gotts_pool as pool;
+use gotts_pool::BlockChain;
 use gotts_util as util;
 use std::sync::Arc;
-use gotts_pool::BlockChain;
 
 /// Test we can add some txs to the pool (both stempool and txpool).
 #[test]
@@ -232,7 +232,11 @@ fn test_the_transaction_pool() {
 		let agg_tx = transaction::aggregate(vec![tx1.clone(), tx2.clone(), tx4]).unwrap();
 
 		agg_tx
-			.validate(Weighting::AsTransaction, verifier_cache.clone(), chain.chain_head().unwrap().height)
+			.validate(
+				Weighting::AsTransaction,
+				verifier_cache.clone(),
+				chain.chain_head().unwrap().height,
+			)
 			.unwrap();
 
 		write_pool
@@ -442,7 +446,11 @@ fn test_the_transaction_pool() {
 			let agg_tx = transaction::aggregate(vec![tx1.clone(), tx2.clone(), tx4]).unwrap();
 
 			agg_tx
-				.validate(Weighting::AsTransaction, verifier_cache.clone(), chain.chain_head().unwrap().height)
+				.validate(
+					Weighting::AsTransaction,
+					verifier_cache.clone(),
+					chain.chain_head().unwrap().height,
+				)
 				.unwrap();
 
 			write_pool

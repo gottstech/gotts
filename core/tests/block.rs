@@ -35,8 +35,8 @@ use gotts_core as core;
 use gotts_core::global::ChainTypes;
 use gotts_keychain as keychain;
 use gotts_util as util;
-use std::sync::Arc;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 fn verifier_cache() -> Arc<RwLock<dyn VerifierCache>> {
 	Arc::new(RwLock::new(LruVerifierCache::new()))
