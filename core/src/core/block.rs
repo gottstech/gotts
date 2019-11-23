@@ -18,7 +18,7 @@
 use crate::util::RwLock;
 use chrono::naive::{MAX_DATE, MIN_DATE};
 use chrono::prelude::{DateTime, NaiveDateTime, Utc};
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use std::fmt;
 use std::iter::FromIterator;
 use std::sync::Arc;
@@ -29,7 +29,7 @@ use crate::core::compact_block::{CompactBlock, CompactBlockBody};
 use crate::core::hash::{DefaultHashable, Hash, Hashed, ZERO_HASH};
 use crate::core::verifier_cache::VerifierCache;
 use crate::core::{
-	transaction, Commitment, Input, InputEx, KernelFeatures, Output, Transaction, TransactionBody,
+	transaction, Commitment, Input, InputEx, KernelFeatures, Output, OutputEx, Transaction, TransactionBody,
 	TxKernel, Weighting,
 };
 
@@ -610,11 +610,7 @@ impl Block {
 
 	/// Get inputs
 	pub fn inputs(&self) -> Vec<Input> {
-		let mut inputs: Vec<Input> = vec![];
-		for input_ex in &self.body.inputs {
-			inputs.extend_from_slice(&input_ex.inputs());
-		}
-		inputs
+		self.body.inputs()
 	}
 
 	/// Get inputs
@@ -687,8 +683,8 @@ impl Block {
 	/// Validates all the elements in a block that can be checked without
 	/// additional data. Includes commitment sums and kernels, Merkle
 	/// trees, reward, etc.
-	pub fn validate(&self, verifier: Arc<RwLock<dyn VerifierCache>>) -> Result<Commitment, Error> {
-		self.body.validate(Weighting::AsBlock, verifier)?;
+	pub fn validate(&self, verifier: Arc<RwLock<dyn VerifierCache>>, complete_inputs: &HashMap<Commitment, OutputEx>) -> Result<Commitment, Error> {
+		self.body.validate(Weighting::AsBlock, verifier, complete_inputs, self.header.height)?;
 
 		self.verify_kernel_lock_heights()?;
 		self.verify_coinbase()?;

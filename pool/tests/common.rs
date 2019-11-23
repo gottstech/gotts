@@ -19,7 +19,7 @@ use self::chain::store::ChainStore;
 use self::chain::types::Tip;
 use self::core::core::hash::{Hash, Hashed};
 use self::core::core::verifier_cache::VerifierCache;
-use self::core::core::{Block, BlockHeader, BlockSums, Committed, Output, Transaction};
+use self::core::core::{Block, BlockHeader, BlockSums, Committed, Input, OutputEx, Transaction};
 use self::core::libtx;
 use self::keychain::{ExtKeychain, Keychain};
 use self::pool::types::*;
@@ -38,7 +38,7 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct ChainAdapter {
 	pub store: Arc<RwLock<ChainStore>>,
-	pub utxo: Arc<RwLock<HashMap<Commitment, Output>>>,
+	pub utxo: Arc<RwLock<HashMap<Commitment, OutputEx>>>,
 }
 
 impl ChainAdapter {
@@ -92,7 +92,13 @@ impl ChainAdapter {
 				utxo.remove(&x.commitment());
 			}
 			for x in block.outputs() {
-				utxo.insert(x.commitment(), x.clone());
+				utxo.insert(x.commitment(),
+							OutputEx {
+								output: x.clone(),
+								height: header.height,
+								mmr_index: 0, // not used here
+							}
+				);
 			}
 		}
 	}
@@ -132,13 +138,32 @@ impl BlockChain for ChainAdapter {
 			if !utxo.contains_key(&x.commitment()) {
 				return Err(PoolError::Other(format!("not in utxo set")));
 			}
-			sum = sum.saturating_add(utxo.get(&x.commitment()).unwrap().value as i64);
+			sum = sum.saturating_add(utxo.get(&x.commitment()).unwrap().output.value as i64);
 		}
 		if sum != tx.overage() {
 			return Err(PoolError::Other(format!("transaction sum mismatch")))?;
 		}
 
 		Ok(())
+	}
+
+	fn get_complete_inputs(&self, inputs: &Vec<Input>) -> Result<HashMap<Commitment, OutputEx>, pool::PoolError> {
+		let utxo = self.utxo.read();
+		let mut complete_inputs: HashMap<Commitment, OutputEx> = HashMap::new();
+		for input in inputs {
+			if utxo.contains_key(&input.commitment()) {
+				let output_ex = utxo.get(&input.commitment()).unwrap();
+				complete_inputs.insert(
+					input.commitment().clone(),
+					OutputEx {
+						output: output_ex.output.clone(),
+						height: output_ex.height,
+						mmr_index: output_ex.mmr_index,
+					}
+				);
+			}
+		}
+		Ok(complete_inputs)
 	}
 
 	// Mocking this check out for these tests.

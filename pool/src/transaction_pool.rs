@@ -21,7 +21,7 @@
 use self::core::core::hash::{Hash, Hashed};
 use self::core::core::id::ShortId;
 use self::core::core::verifier_cache::VerifierCache;
-use self::core::core::{transaction, Block, BlockHeader, Transaction, Weighting};
+use self::core::core::{transaction, Block, BlockHeader, OutputEx, Transaction, Weighting};
 use self::util::RwLock;
 use crate::pool::Pool;
 use crate::types::{BlockChain, PoolAdapter, PoolConfig, PoolEntry, PoolError, TxSource};
@@ -106,7 +106,7 @@ impl TransactionPool {
 				let tx = transaction::deaggregate(entry.tx, txs)?;
 
 				// Validate this deaggregated tx "as tx", subject to regular tx weight limits.
-				tx.validate(Weighting::AsTransaction, self.verifier_cache.clone())?;
+				tx.validate(Weighting::AsTransaction, self.verifier_cache.clone(), header.height)?;
 
 				entry.tx = tx;
 				entry.src = TxSource::Deaggregate;
@@ -128,18 +128,18 @@ impl TransactionPool {
 	pub fn add_to_pool(
 		&mut self,
 		src: TxSource,
-		tx: Transaction,
+		tx_body: Transaction,
 		stem: bool,
 		header: &BlockHeader,
 	) -> Result<(), PoolError> {
 		// Quick check to deal with common case of seeing the *same* tx
 		// broadcast from multiple peers simultaneously.
-		if !stem && self.txpool.contains_tx(tx.hash()) {
+		if !stem && self.txpool.contains_tx(tx_body.hash()) {
 			return Err(PoolError::DuplicateTx);
 		}
 
 		// Do we have the capacity to accept this transaction?
-		let acceptability = self.is_acceptable(&tx, stem);
+		let acceptability = self.is_acceptable(&tx_body, stem);
 		let mut evict = false;
 		if !stem && acceptability.as_ref().err() == Some(&PoolError::OverCapacity) {
 			evict = true;
@@ -147,9 +147,34 @@ impl TransactionPool {
 			return acceptability;
 		}
 
+		// Get a local copy to fill the complete input info for SigLocked input/s
+		let mut tx = tx_body.clone();
+
+		// Before further processing, query the chain database to find those complete inputs info,
+		// the SigLocked input need the info for signature verification.
+		let mut complete_inputs = self.blockchain.get_complete_inputs(&tx.inputs())?;
+
+		// In case an input is spending an output in the transaction pool, we can only fill these output/s
+		// info from the pool instead of the chain database.
+		if complete_inputs.len() < tx.body.get_inputs_number() {
+			let inputs = tx.inputs();
+			for input in inputs {
+				if !complete_inputs.contains_key(&input.commit) {
+					if let Some(o) = self.txpool.retrieve_output_by_input(&input) {
+						complete_inputs.insert(input.commit.clone(), OutputEx { output: o, height: 0, mmr_index: 0 });
+					} else if let Some(o) = self.stempool.retrieve_output_by_input(&input) {
+						complete_inputs.insert(input.commit.clone(), OutputEx { output: o, height: 0, mmr_index: 0 });
+					} else {
+						return Err(PoolError::InvalidTx(transaction::Error::InputNotExist));
+					}
+				}
+			}
+		}
+		tx.complete_inputs = Some(complete_inputs);
+
 		// Make sure the transaction is valid before anything else.
 		// Validate tx accounting for max tx weight.
-		tx.validate(Weighting::AsTransaction, self.verifier_cache.clone())
+		tx.validate(Weighting::AsTransaction, self.verifier_cache.clone(), header.height)
 			.map_err(PoolError::InvalidTx)?;
 
 		// Check the tx lock_time is valid based on current chain state.

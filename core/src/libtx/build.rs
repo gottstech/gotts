@@ -441,7 +441,7 @@ mod test {
 		)
 		.unwrap();
 
-		tx.validate(Weighting::AsTransaction, vc.clone()).unwrap();
+		tx.validate(Weighting::AsTransaction, vc.clone(), 0).unwrap();
 	}
 
 	#[test]
@@ -466,7 +466,7 @@ mod test {
 		)
 		.unwrap();
 
-		tx.validate(Weighting::AsTransaction, vc.clone()).unwrap();
+		tx.validate(Weighting::AsTransaction, vc.clone(), 0).unwrap();
 	}
 
 	#[test]
@@ -489,6 +489,6 @@ mod test {
 		)
 		.unwrap();
 
-		tx.validate(Weighting::AsTransaction, vc.clone()).unwrap();
+		tx.validate(Weighting::AsTransaction, vc.clone(), 0).unwrap();
 	}
 }

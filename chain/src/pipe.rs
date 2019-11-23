@@ -110,17 +110,18 @@ pub fn process_block(b: &Block, ctx: &mut BlockContext<'_>) -> Result<Option<Tip
 	// as we may have processed it "header first" and not yet processed the full block.
 	process_block_header(&b.header, ctx)?;
 
-	// Validate the block itself, make sure it is internally consistent.
-	// Use the verifier_cache for verifying rangeproofs and kernel signatures.
-	validate_block(b, ctx)?;
-
 	// Start a chain extension unit of work dependent on the success of the
 	// internal validation and saving operations
 	let ref mut header_pmmr = &mut ctx.header_pmmr;
 	let ref mut txhashset = &mut ctx.txhashset;
 	let ref mut batch = &mut ctx.batch;
+	let verifier_cache = ctx.verifier_cache.clone();
 	let block_sums = txhashset::extending(header_pmmr, txhashset, batch, |ext| {
 		rewind_and_apply_fork(&prev, ext)?;
+
+		// Validate the block itself, make sure it is internally consistent.
+		// Use the verifier_cache for verifying rangeproofs and kernel signatures.
+		validate_block(b, verifier_cache, ext)?;
 
 		// Check any coinbase being spent have matured sufficiently.
 		// This needs to be done within the context of a potentially
@@ -404,10 +405,17 @@ fn validate_header(header: &BlockHeader, ctx: &mut BlockContext<'_>) -> Result<(
 	Ok(())
 }
 
-fn validate_block(block: &Block, ctx: &mut BlockContext<'_>) -> Result<(), Error> {
-	let _prev = ctx.batch.get_previous_header(&block.header)?;
+fn validate_block(
+	block: &Block,
+	verifier_cache: Arc<RwLock<dyn VerifierCache>>,
+	ext: &mut txhashset::ExtensionPair<'_>,
+) -> Result<(), Error> {
+	let ref mut extension = ext.extension;
+	let ref mut header_extension = ext.header_extension;
+	let complete_inputs = extension.utxo_view(header_extension).get_complete_inputs(&block.inputs())?;
+
 	block
-		.validate(ctx.verifier_cache.clone())
+		.validate(verifier_cache, &complete_inputs)
 		.map_err(|e| ErrorKind::InvalidBlockProof(e))?;
 	Ok(())
 }
