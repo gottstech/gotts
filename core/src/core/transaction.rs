@@ -195,6 +195,8 @@ pub enum Error {
 	InvalidInputSigMsg,
 	/// Signature verification error.
 	IncorrectSignature,
+	/// Signature verification error, public key hash not match.
+	IncorrectPubkey,
 	/// Input does not exist among UTXO sets.
 	InputNotExist,
 	/// Spend time is earlier than output timestamp.
@@ -885,12 +887,22 @@ impl TransactionBody {
 	) -> Result<(), Error> {
 		self.validate_read(weighting)?;
 
-		// Find all the InputEx that have not had their InputUnlocker verified.
+		// Collect all InputUnlocker(s)
+		let inputs: Vec<InputEx> = self
+			.inputs
+			.iter()
+			.filter(|i| i.is_unlocker())
+			.cloned()
+			.collect();
+
 		// Find all the kernels that have not yet been verified.
-		let kernels = {
+		// Find all the InputEx that have not had their InputUnlocker verified.
+		let (kernels, inputs) = {
 			let mut verifier = verifier.write();
-			//verifier.filter_unlocker_unverified(&self.inputs);
-			verifier.filter_kernel_sig_unverified(&self.kernels)
+			(
+				verifier.filter_kernel_sig_unverified(&self.kernels),
+				verifier.filter_unlocker_unverified(&inputs),
+			)
 		};
 
 		// Verify the unverified InputUnlocker.
@@ -898,7 +910,7 @@ impl TransactionBody {
 		// Verify the unverified tx kernels.
 		TxKernel::batch_sig_verify(&kernels)?;
 
-		for input_ex in &self.inputs {
+		for input_ex in &inputs {
 			if input_ex.is_unlocker() {
 				let commits = input_ex.commitments();
 				let mut outputs_to_spent: Vec<OutputEx> = Vec::with_capacity(commits.len());
@@ -923,8 +935,8 @@ impl TransactionBody {
 		// todo: failed verification result no need to cache?
 		{
 			let mut verifier = verifier.write();
-			//verifier.add_inputunlocker_verified(unlockers);
 			verifier.add_kernel_sig_verified(kernels);
+			verifier.add_unlocker_verified(inputs);
 		}
 		Ok(())
 	}
@@ -1610,11 +1622,6 @@ impl InputEx {
 
 	/// Verify the transaction proof validity. Entails checking the signature verifies with
 	/// the ([(features || commit || value), ...] || nonce) as message.
-	/// Caution:
-	/// 1. It's the caller's responsibility to make sure 'max_timestamp' came from the
-	/// max height of the 'outputs_to_spent', the block timestamp at that height.
-	/// 2. 'check_sig_only' must be false on production. 'true' only for test.
-	///
 	pub fn verify(&self, outputs_to_spent: &Vec<OutputEx>) -> Result<(), Error> {
 		if !self.is_unlocker() {
 			return Err(Error::InputUnlocker("wrong Input type".to_string()));
@@ -1628,9 +1635,6 @@ impl InputEx {
 
 		// All Inputs exist in 'outputs_to_spent'
 		let commits_in = self.commitments();
-		if commits_in.len() != outputs_to_spent.len() {
-			return Err(Error::InputNotExist);
-		}
 		let commits_out: Vec<Commitment> = outputs_to_spent
 			.iter()
 			.map(|o| o.output.commit.clone())
@@ -1646,9 +1650,10 @@ impl InputEx {
 		let p2pkh = unlocker.pub_key.serialize_vec(true).hash();
 		let mut msg_to_sign: Vec<u8> = Vec::with_capacity(outputs_to_spent.len() * SINGLE_MSG_SIZE);
 
+		// Assemble the signature msg from the outputs to spent, and verify the public key hash
 		for output_ex in outputs_to_spent {
 			if output_ex.output.pkh_locked() != Ok(p2pkh) {
-				return Err(Error::IncorrectSignature);
+				return Err(Error::IncorrectPubkey);
 			}
 			msg_to_sign.extend_from_slice(&output_ex.output.msg_to_sign()?);
 		}
@@ -2018,7 +2023,7 @@ impl Output {
 
 	/// The msg signed as part of the Input with a signature.
 	/// 	msg = hash(features || commit || value || timestamp) for single input
-	/// 	msg = hash((features || commit || value) || (...) || timestamp) for multiple inputs
+	/// 	msg = hash((features || commit || value) || (...) || nonce) for multiple inputs
 	/// Leave to caller to execute the final hash.
 	pub fn msg_to_sign(&self) -> Result<Vec<u8>, Error> {
 		match self.features {
