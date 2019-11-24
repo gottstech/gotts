@@ -867,7 +867,7 @@ impl TransactionBody {
 
 	/// "Lightweight" validation that we can perform quickly during read/deserialization.
 	/// Subset of full validation that skips expensive verification steps, specifically -
-	/// * rangeproof verification
+	/// * InputUnlocker signature verification
 	/// * kernel signature verification
 	pub fn validate_read(&self, weighting: Weighting) -> Result<(), Error> {
 		self.verify_weight(weighting)?;
@@ -905,29 +905,47 @@ impl TransactionBody {
 			)
 		};
 
-		// Verify the unverified InputUnlocker.
-		//InputEx::batch_sig_verify(&unlockers)?;
 		// Verify the unverified tx kernels.
 		TxKernel::batch_sig_verify(&kernels)?;
 
-		for input_ex in &inputs {
-			if input_ex.is_unlocker() {
-				let commits = input_ex.commitments();
-				let mut outputs_to_spent: Vec<OutputEx> = Vec::with_capacity(commits.len());
-				for commit in &commits {
-					let output_ex = complete_inputs
-						.get(commit)
-						.ok_or(Error::InputNotExist)?
-						.clone();
-					if height < output_ex.output.get_rlh().unwrap() as u64 + output_ex.height {
-						return Err(Error::InputUnlocker(
-							"relative_lock_height limited".to_string(),
-						));
-					}
-					outputs_to_spent.push(output_ex);
-				}
+		// Verify the unverified InputUnlocker.
+		if !inputs.is_empty() {
+			let len = inputs.len();
+			let mut sigs: Vec<secp::Signature> = Vec::with_capacity(len);
+			let mut pubkeys: Vec<secp::key::PublicKey> = Vec::with_capacity(len);
+			let mut msgs: Vec<secp::Message> = Vec::with_capacity(len);
 
-				input_ex.verify(&outputs_to_spent)?;
+			for input_ex in &inputs {
+				if input_ex.is_unlocker() {
+					// Collect all related outputs to spent
+					let commits = input_ex.commitments();
+					let mut outputs_to_spent: Vec<OutputEx> = Vec::with_capacity(commits.len());
+					for commit in &commits {
+						let output_ex = complete_inputs
+							.get(commit)
+							.ok_or(Error::InputNotExist)?
+							.clone();
+						// Verify the Relative Lock Height
+						if height < output_ex.output.get_rlh().unwrap() as u64 + output_ex.height {
+							return Err(Error::InputUnlocker(
+								"relative_lock_height limited".to_string(),
+							));
+						}
+						outputs_to_spent.push(output_ex);
+					}
+
+					let (sig, msg, pubkey) = input_ex.verify(&outputs_to_spent)?;
+					sigs.push(sig);
+					pubkeys.push(pubkey);
+					msgs.push(msg);
+				}
+			}
+
+			let secp = static_secp_instance();
+			let secp = secp.lock();
+
+			if !secp::aggsig::verify_batch(&secp, &sigs, &msgs, &pubkeys) {
+				return Err(Error::IncorrectSignature);
 			}
 		}
 
@@ -1622,7 +1640,12 @@ impl InputEx {
 
 	/// Verify the transaction proof validity. Entails checking the signature verifies with
 	/// the ([(features || commit || value), ...] || nonce) as message.
-	pub fn verify(&self, outputs_to_spent: &Vec<OutputEx>) -> Result<(), Error> {
+	///
+	/// Note: for the efficient signature batch verification, leave signature verification to the outside.
+	pub fn verify(
+		&self,
+		outputs_to_spent: &Vec<OutputEx>,
+	) -> Result<(secp::Signature, secp::Message, secp::key::PublicKey), Error> {
 		if !self.is_unlocker() {
 			return Err(Error::InputUnlocker("wrong Input type".to_string()));
 		}
@@ -1645,8 +1668,6 @@ impl InputEx {
 			}
 		}
 
-		let secp = static_secp_instance();
-		let secp = secp.lock();
 		let p2pkh = unlocker.pub_key.serialize_vec(true).hash();
 		let mut msg_to_sign: Vec<u8> = Vec::with_capacity(outputs_to_spent.len() * SINGLE_MSG_SIZE);
 
@@ -1662,19 +1683,7 @@ impl InputEx {
 		let hash = (msg_to_sign, unlocker.timestamp.timestamp()).hash();
 		let msg = secp::Message::from_slice(&hash.as_bytes())?;
 
-		if !secp::aggsig::verify_single(
-			&secp,
-			&unlocker.sig,
-			&msg,
-			None,
-			&unlocker.pub_key,
-			Some(&unlocker.pub_key),
-			None,
-			false,
-		) {
-			return Err(Error::IncorrectSignature);
-		}
-		Ok(())
+		Ok((unlocker.sig, msg, unlocker.pub_key))
 	}
 }
 
