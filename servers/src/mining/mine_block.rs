@@ -181,7 +181,8 @@ fn build_block(
 	let mut b = core::Block::from_reward(&head, txs, output, kernel, difficulty.difficulty)?;
 
 	// making sure we're not spending time mining a useless block
-	b.validate(verifier_cache)?;
+	let complete_inputs = chain.get_complete_inputs(&b.inputs())?;
+	b.validate(verifier_cache, &complete_inputs)?;
 
 	b.header.pow.nonce = thread_rng().gen();
 	b.header.pow.secondary_scaling = difficulty.secondary_scaling;

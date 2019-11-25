@@ -147,7 +147,9 @@ fn test_transaction_pool_block_building() {
 			// Add this bad tx to the pool.
 			assert_eq!(
 				write_pool.add_to_pool(test_source(), bad_tx_1.clone(), false, &header),
-				Err(PoolError::Other(format!("transaction sum mismatch"))),
+				Err(PoolError::InvalidTx(
+					core::core::transaction::Error::TransactionSumMismatch
+				)),
 			);
 			assert_eq!(write_pool.total_size(), 0);
 
@@ -158,7 +160,9 @@ fn test_transaction_pool_block_building() {
 				.unwrap();
 			assert_eq!(
 				write_pool.add_to_pool(test_source(), bad_tx_2.clone(), false, &header),
-				Err(PoolError::Other(format!("transaction sum mismatch"))),
+				Err(PoolError::InvalidTx(
+					core::core::transaction::Error::TransactionSumMismatch
+				)),
 			);
 			assert_eq!(write_pool.total_size(), 1);
 		}

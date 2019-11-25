@@ -35,6 +35,7 @@ use gotts_core as core;
 use gotts_core::global::ChainTypes;
 use gotts_keychain as keychain;
 use gotts_util as util;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 fn verifier_cache() -> Arc<RwLock<dyn VerifierCache>> {
@@ -67,7 +68,8 @@ fn too_large_block() {
 	let prev = BlockHeader::default();
 	let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 	let b = new_block(vec![&tx], &keychain, &builder, &prev, &key_id);
-	assert!(b.validate(verifier_cache()).is_err());
+	let complete_inputs = HashMap::new();
+	assert!(b.validate(verifier_cache(), &complete_inputs).is_err());
 }
 
 #[test]
@@ -113,9 +115,9 @@ fn block_with_cut_through() {
 		&key_id,
 	);
 
-	// block should have been automatically compacted (including reward
-	// output) and should still be valid
-	b.validate(verifier_cache()).unwrap();
+	// block should have been automatically compacted (including reward output) and should still be valid
+	let complete_inputs = HashMap::new();
+	b.validate(verifier_cache(), &complete_inputs).unwrap();
 	assert_eq!(b.inputs().len(), 3);
 	assert_eq!(b.outputs().len(), 3);
 }
@@ -148,9 +150,9 @@ fn empty_block_with_coinbase_is_valid() {
 		.collect::<Vec<_>>();
 	assert_eq!(coinbase_kernels.len(), 1);
 
-	// the block should be valid here (single coinbase output with corresponding
-	// txn kernel)
-	assert!(b.validate(verifier_cache()).is_ok());
+	// the block should be valid here (single coinbase output with corresponding txn kernel)
+	let complete_inputs = HashMap::new();
+	assert!(b.validate(verifier_cache(), &complete_inputs).is_ok());
 }
 
 #[test]
@@ -171,8 +173,9 @@ fn remove_coinbase_output_flag() {
 
 	assert_eq!(b.verify_coinbase(), Err(Error::CoinbaseSumMismatch));
 	assert!(b.verify_kernel_sums().is_ok());
+	let complete_inputs = HashMap::new();
 	assert_eq!(
-		b.validate(verifier_cache()),
+		b.validate(verifier_cache(), &complete_inputs),
 		Err(Error::CoinbaseSumMismatch)
 	);
 }
@@ -195,8 +198,9 @@ fn remove_coinbase_kernel_flag() {
 
 	// Also results in the block no longer validating correctly
 	// because the message being signed on each tx kernel includes the kernel features.
+	let complete_inputs = HashMap::new();
 	assert_eq!(
-		b.validate(verifier_cache()),
+		b.validate(verifier_cache(), &complete_inputs),
 		Err(Error::Transaction(transaction::Error::IncorrectSignature))
 	);
 }

@@ -40,6 +40,7 @@ use chrono::prelude::{DateTime, NaiveDateTime, Utc};
 use enum_primitive::FromPrimitive;
 use std::cmp::Ordering;
 use std::cmp::{max, min};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::u32;
 use std::{error, fmt};
@@ -163,6 +164,8 @@ pub enum Error {
 	/// The sum of output minus input commitments does not
 	/// match the sum of kernel commitments
 	KernelSumMismatch,
+	/// Transaction public value sums do not match.
+	TransactionSumMismatch,
 	/// Restrict tx total weight.
 	TooHeavy,
 	/// Error originating from an invalid lock-height
@@ -190,8 +193,12 @@ pub enum Error {
 	InvalidKernelFeatures,
 	/// Validation error relating to input signature message.
 	InvalidInputSigMsg,
-	/// Signature verification error.
+	/// TxKernel Signature verification error.
 	IncorrectSignature,
+	/// InputUnlocker Signature verification error.
+	UnlockerIncorrectSignature,
+	/// Signature verification error, public key hash not match.
+	IncorrectPubkey,
 	/// Input does not exist among UTXO sets.
 	InputNotExist,
 	/// Spend time is earlier than output timestamp.
@@ -612,23 +619,21 @@ impl TransactionBody {
 		}
 	}
 
-	/// Get the Input vector
-	pub fn get_inputs_vec(&self) -> Vec<Input> {
-		let total = self
-			.inputs
+	/// Get the Inputs number
+	pub fn get_inputs_number(&self) -> usize {
+		self.inputs
 			.iter()
-			.fold(0usize, |t, inputs| t + inputs.len());
-		let mut result: Vec<Input> = Vec::with_capacity(total);
+			.fold(0usize, |t, inputs| t + inputs.len())
+	}
+
+	/// Get inputs
+	pub fn inputs(&self) -> Vec<Input> {
+		let total = self.get_inputs_number();
+		let mut inputs: Vec<Input> = Vec::with_capacity(total);
 		for input_ex in &self.inputs {
-			match input_ex {
-				InputEx::SingleInput(input) => result.push(input.clone()),
-				InputEx::InputsWithUnlocker {
-					inputs,
-					unlocker: _,
-				} => result.extend_from_slice(inputs),
-			}
+			inputs.extend_from_slice(&input_ex.inputs());
 		}
-		result
+		inputs
 	}
 
 	/// Sort the inputs|outputs|kernels.
@@ -864,7 +869,7 @@ impl TransactionBody {
 
 	/// "Lightweight" validation that we can perform quickly during read/deserialization.
 	/// Subset of full validation that skips expensive verification steps, specifically -
-	/// * rangeproof verification
+	/// * InputUnlocker signature verification
 	/// * kernel signature verification
 	pub fn validate_read(&self, weighting: Weighting) -> Result<(), Error> {
 		self.verify_weight(weighting)?;
@@ -873,33 +878,85 @@ impl TransactionBody {
 		Ok(())
 	}
 
-	/// Validates all relevant parts of a transaction body. Checks the
-	/// excess value against the signature as well as range proofs for each
-	/// output.
+	/// Validates all relevant parts of a transaction body. Checks the excess value against the signature,
+	/// and the InputUnlocker signature if this transaction has SigLocked input.
 	pub fn validate(
 		&self,
 		weighting: Weighting,
 		verifier: Arc<RwLock<dyn VerifierCache>>,
+		complete_inputs: &HashMap<Commitment, OutputEx>,
+		height: u64,
 	) -> Result<(), Error> {
 		self.validate_read(weighting)?;
 
-		// Find all the outputs that have not had their InputUnlocker verified.
-		//todo: add cache for InputUnlocker signature verification
+		// Collect all InputUnlocker(s)
+		let inputs: Vec<InputEx> = self
+			.inputs
+			.iter()
+			.filter(|i| i.is_unlocker())
+			.cloned()
+			.collect();
 
 		// Find all the kernels that have not yet been verified.
-		let kernels = {
+		// Find all the InputEx that have not had their InputUnlocker verified.
+		let (kernels, inputs) = {
 			let mut verifier = verifier.write();
-			verifier.filter_kernel_sig_unverified(&self.kernels)
+			(
+				verifier.filter_kernel_sig_unverified(&self.kernels),
+				verifier.filter_unlocker_unverified(&inputs),
+			)
 		};
 
 		// Verify the unverified tx kernels.
 		TxKernel::batch_sig_verify(&kernels)?;
 
-		// Cache the successful verification results for the new outputs and kernels.
+		// Verify the unverified InputUnlocker.
+		if !inputs.is_empty() {
+			let len = inputs.len();
+			let mut sigs: Vec<secp::Signature> = Vec::with_capacity(len);
+			let mut pubkeys: Vec<secp::key::PublicKey> = Vec::with_capacity(len);
+			let mut msgs: Vec<secp::Message> = Vec::with_capacity(len);
+
+			for input_ex in &inputs {
+				if input_ex.is_unlocker() {
+					// Collect all related outputs to spent
+					let commits = input_ex.commitments();
+					let mut outputs_to_spent: Vec<OutputEx> = Vec::with_capacity(commits.len());
+					for commit in &commits {
+						let output_ex = complete_inputs
+							.get(commit)
+							.ok_or(Error::InputNotExist)?
+							.clone();
+						// Verify the Relative Lock Height
+						if height < output_ex.output.get_rlh().unwrap() as u64 + output_ex.height {
+							return Err(Error::InputUnlocker(
+								"relative_lock_height limited".to_string(),
+							));
+						}
+						outputs_to_spent.push(output_ex);
+					}
+
+					let (sig, msg, pubkey) = input_ex.verify(&outputs_to_spent)?;
+					sigs.push(sig);
+					pubkeys.push(pubkey);
+					msgs.push(msg);
+				}
+			}
+
+			let secp = static_secp_instance();
+			let secp = secp.lock();
+
+			if !secp::aggsig::verify_batch(&secp, &sigs, &msgs, &pubkeys) {
+				return Err(Error::UnlockerIncorrectSignature);
+			}
+		}
+
+		// Cache the successful verification results.
+		// todo: failed verification result no need to cache?
 		{
 			let mut verifier = verifier.write();
-			//todo: verifier.add_inputunlocker_verified(outputs);
 			verifier.add_kernel_sig_verified(kernels);
+			verifier.add_unlocker_verified(inputs);
 		}
 		Ok(())
 	}
@@ -908,6 +965,8 @@ impl TransactionBody {
 /// A transaction
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Transaction {
+	/// The complete inputs which can be loaded locally from the chain data, only for SigLocked inputs.
+	pub complete_inputs: Option<HashMap<Commitment, OutputEx>>,
 	/// The transaction body - inputs/outputs/kernels
 	pub body: TransactionBody,
 }
@@ -941,7 +1000,10 @@ impl Writeable for Transaction {
 impl Readable for Transaction {
 	fn read(reader: &mut dyn Reader) -> Result<Transaction, ser::Error> {
 		let body = TransactionBody::read(reader)?;
-		let tx = Transaction { body };
+		let tx = Transaction {
+			complete_inputs: None,
+			body,
+		};
 
 		// Now "lightweight" validation of the tx.
 		// Treat any validation issues as data corruption.
@@ -977,6 +1039,7 @@ impl Transaction {
 	/// Creates a new empty transaction (no inputs or outputs, zero fee).
 	pub fn empty() -> Transaction {
 		Transaction {
+			complete_inputs: None,
 			body: Default::default(),
 		}
 	}
@@ -988,7 +1051,10 @@ impl Transaction {
 		let body =
 			TransactionBody::init(inputs, outputs, kernels, false).expect("sorting, not verifying");
 
-		Transaction { body }
+		Transaction {
+			complete_inputs: None,
+			body,
+		}
 	}
 
 	/// Builds a new transaction with the provided inputs added. Existing
@@ -1043,11 +1109,7 @@ impl Transaction {
 
 	/// Get inputs
 	pub fn inputs(&self) -> Vec<Input> {
-		let mut inputs: Vec<Input> = vec![];
-		for input_ex in &self.body.inputs {
-			inputs.extend_from_slice(&input_ex.inputs());
-		}
-		inputs
+		self.body.inputs()
 	}
 
 	/// Get inputs
@@ -1063,6 +1125,11 @@ impl Transaction {
 	/// Get outputs
 	pub fn outputs(&self) -> &Vec<Output> {
 		&self.body.outputs
+	}
+
+	/// Get output by commit
+	pub fn find_output_by_commit(&self, commit: &Commitment) -> Option<&Output> {
+		self.body.outputs.iter().find(|o| &o.commitment() == commit)
 	}
 
 	/// Get outputs mutable
@@ -1106,23 +1173,40 @@ impl Transaction {
 		Ok(())
 	}
 
-	/// Validates all relevant parts of a fully built transaction. Checks the
-	/// excess value against the signature as well as range proofs for each
-	/// output.
+	/// Validates all relevant parts of a fully built transaction.
+	/// - Checks the excess value against the signature
+	/// - Checks the unlocker signature and p2pkh match
+	/// - Checks the public value balance.
 	pub fn validate(
 		&self,
 		weighting: Weighting,
 		verifier: Arc<RwLock<dyn VerifierCache>>,
+		height: u64,
 	) -> Result<(), Error> {
-		self.body.validate(weighting, verifier)?;
+		let empty = HashMap::new();
+		let complete_inputs = if let Some(ci) = &self.complete_inputs {
+			ci
+		} else {
+			&empty
+		};
+		self.body
+			.validate(weighting, verifier, complete_inputs, height)?;
 		self.body.verify_features()?;
-		let _overage = self.overage();
-		// todo: no way to easily validate the public value balance?
-		// let mut sum: i64 = self.body.inputs.iter().fold(0i64, |acc, x| acc.saturating_add(x.value));
-		// sum = self.body.outputs.iter().fold(sum, |acc, x| acc.saturating_sub(x.value as i64));
-		// if sum != overage {
-		//     return Err(ErrorKind::KernelSumMismatch)?;
-		// }
+
+		// validate the public value balance.
+		if let Some(complete_inputs) = &self.complete_inputs {
+			let mut sum: i64 = complete_inputs
+				.values()
+				.fold(0i64, |acc, x| acc.saturating_add(x.output.value as i64));
+			sum = self
+				.body
+				.outputs
+				.iter()
+				.fold(sum, |acc, x| acc.saturating_sub(x.value as i64));
+			if sum != self.overage() {
+				return Err(Error::TransactionSumMismatch)?;
+			}
+		}
 		self.verify_kernel_sums()?;
 		Ok(())
 	}
@@ -1557,18 +1641,13 @@ impl InputEx {
 	}
 
 	/// Verify the transaction proof validity. Entails checking the signature verifies with
-	/// the ([(features || commit || value), ...] || timestamp) as message.
-	/// Caution:
-	/// 1. It's the caller's responsibility to make sure 'max_timestamp' came from the
-	/// max height of the 'outputs_to_spent', the block timestamp at that height.
-	/// 2. 'check_sig_only' must be false on production. 'true' only for test.
+	/// the ([(features || commit || value), ...] || nonce) as message.
 	///
+	/// Note: for the efficient signature batch verification, leave signature verification to the outside.
 	pub fn verify(
 		&self,
 		outputs_to_spent: &Vec<OutputEx>,
-		max_timestamp: DateTime<Utc>,
-		check_sig_only: bool,
-	) -> Result<(), Error> {
+	) -> Result<(secp::Signature, secp::Message, secp::key::PublicKey), Error> {
 		if !self.is_unlocker() {
 			return Err(Error::InputUnlocker("wrong Input type".to_string()));
 		}
@@ -1578,16 +1657,9 @@ impl InputEx {
 		}
 
 		let unlocker = self.get_unlocker().unwrap();
-		// First checking: timestamp must not earlier than any input
-		if !check_sig_only && unlocker.timestamp <= max_timestamp {
-			return Err(Error::IncorrectTimestamp);
-		}
 
-		// Second checking: All Inputs exist in 'outputs_to_spent'
+		// All Inputs exist in 'outputs_to_spent'
 		let commits_in = self.commitments();
-		if commits_in.len() != outputs_to_spent.len() {
-			return Err(Error::InputNotExist);
-		}
 		let commits_out: Vec<Commitment> = outputs_to_spent
 			.iter()
 			.map(|o| o.output.commit.clone())
@@ -1598,14 +1670,13 @@ impl InputEx {
 			}
 		}
 
-		let secp = static_secp_instance();
-		let secp = secp.lock();
 		let p2pkh = unlocker.pub_key.serialize_vec(true).hash();
 		let mut msg_to_sign: Vec<u8> = Vec::with_capacity(outputs_to_spent.len() * SINGLE_MSG_SIZE);
 
+		// Assemble the signature msg from the outputs to spent, and verify the public key hash
 		for output_ex in outputs_to_spent {
 			if output_ex.output.pkh_locked() != Ok(p2pkh) {
-				return Err(Error::IncorrectSignature);
+				return Err(Error::IncorrectPubkey);
 			}
 			msg_to_sign.extend_from_slice(&output_ex.output.msg_to_sign()?);
 		}
@@ -1614,19 +1685,7 @@ impl InputEx {
 		let hash = (msg_to_sign, unlocker.timestamp.timestamp()).hash();
 		let msg = secp::Message::from_slice(&hash.as_bytes())?;
 
-		if !secp::aggsig::verify_single(
-			&secp,
-			&unlocker.sig,
-			&msg,
-			None,
-			&unlocker.pub_key,
-			Some(&unlocker.pub_key),
-			None,
-			false,
-		) {
-			return Err(Error::IncorrectSignature);
-		}
-		Ok(())
+		Ok((unlocker.sig, msg, unlocker.pub_key))
 	}
 }
 
@@ -1946,6 +2005,16 @@ impl Output {
 		}
 	}
 
+	/// Get the relative lock height if it's SigLocked Output
+	pub fn get_rlh(&self) -> Result<u32, Error> {
+		match self.features {
+			OutputFeaturesEx::Plain { .. } | OutputFeaturesEx::Coinbase { .. } => {
+				Err(Error::OutputLocker("output w/o locker".to_owned()))
+			}
+			OutputFeaturesEx::SigLocked { locker } => Ok(locker.relative_lock_height),
+		}
+	}
+
 	/// PathMessage for the output
 	pub fn path_message(&self, rewind_hash: &Hash) -> Result<PathMessage, Error> {
 		let rewind_nonce =
@@ -1965,7 +2034,7 @@ impl Output {
 
 	/// The msg signed as part of the Input with a signature.
 	/// 	msg = hash(features || commit || value || timestamp) for single input
-	/// 	msg = hash((features || commit || value) || (...) || timestamp) for multiple inputs
+	/// 	msg = hash((features || commit || value) || (...) || nonce) for multiple inputs
 	/// Leave to caller to execute the final hash.
 	pub fn msg_to_sign(&self) -> Result<Vec<u8>, Error> {
 		match self.features {

@@ -17,15 +17,17 @@ pub mod common;
 
 use self::core::core::hash::Hash;
 use self::core::core::verifier_cache::LruVerifierCache;
-use self::core::core::{BlockHeader, BlockSums, Transaction};
+use self::core::core::{BlockHeader, BlockSums, Input, OutputEx, Transaction};
 use self::keychain::{ExtKeychain, Keychain};
 use self::pool::types::{BlockChain, PoolError};
+use self::util::secp::pedersen::Commitment;
 use self::util::RwLock;
 use crate::common::*;
 use gotts_core as core;
 use gotts_keychain as keychain;
 use gotts_pool as pool;
 use gotts_util as util;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -52,6 +54,13 @@ impl BlockChain for CoinbaseMaturityErrorChainAdapter {
 
 	fn validate_tx(&self, _tx: &Transaction) -> Result<(), PoolError> {
 		unimplemented!();
+	}
+
+	fn get_complete_inputs(
+		&self,
+		_inputs: &Vec<Input>,
+	) -> Result<HashMap<Commitment, OutputEx>, pool::PoolError> {
+		Ok(HashMap::new())
 	}
 
 	// Returns an ImmatureCoinbase for every tx we pass in.
@@ -81,6 +90,7 @@ fn test_coinbase_maturity() {
 		let tx = test_transaction(&keychain, vec![50], vec![49]);
 		match write_pool.add_to_pool(test_source(), tx.clone(), true, &BlockHeader::default()) {
 			Err(PoolError::ImmatureCoinbase) => {}
+			Err(PoolError::InvalidTx(core::core::transaction::Error::InputNotExist)) => {}
 			_ => panic!("Expected an immature coinbase error here."),
 		}
 	}

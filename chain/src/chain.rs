@@ -20,8 +20,8 @@ use crate::core::core::hash::{Hash, Hashed, ZERO_HASH};
 use crate::core::core::merkle_proof::MerkleProof;
 use crate::core::core::verifier_cache::VerifierCache;
 use crate::core::core::{
-	Block, BlockHeader, BlockSums, Committed, Output, OutputFeatures, OutputI, OutputIdentifier,
-	Transaction, TxKernel, TxKernelApiEntry,
+	Block, BlockHeader, BlockSums, Committed, Input, Output, OutputEx, OutputFeatures, OutputI,
+	OutputIdentifier, Transaction, TxKernel, TxKernelApiEntry,
 };
 use crate::core::global;
 use crate::core::pow;
@@ -522,6 +522,19 @@ impl Chain {
 	fn next_block_height(&self) -> Result<u64, Error> {
 		let bh = self.head_header()?;
 		Ok(bh.height + 1)
+	}
+
+	/// Find the complete input/s info, use chain database data according to inputs
+	pub fn get_complete_inputs(
+		&self,
+		inputs: &Vec<Input>,
+	) -> Result<HashMap<Commitment, OutputEx>, Error> {
+		let header_pmmr = self.header_pmmr.read();
+		let txhashset = self.txhashset.read();
+		let complete_inputs = txhashset::utxo_view(&header_pmmr, &txhashset, |utxo| {
+			Ok(utxo.get_complete_inputs(inputs)?)
+		})?;
+		Ok(complete_inputs)
 	}
 
 	/// Verify we are not attempting to spend a coinbase output

@@ -109,7 +109,7 @@ pub enum ErrorKind {
 	#[fail(display = "Block sum mismatch")]
 	BlockSumMismatch,
 	/// Transaction public value sums do not match.
-	#[fail(display = "Transaction sum mismatch")]
+	#[fail(display = "Transaction input/output value sum mismatch")]
 	TransactionSumMismatch,
 	/// Invalid block version, either a mistake or outdated software
 	#[fail(display = "Invalid Block Version: {:?}", _0)]

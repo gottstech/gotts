@@ -21,7 +21,7 @@ use self::core::core::id::{ShortId, ShortIdentifiable};
 use self::core::core::transaction;
 use self::core::core::verifier_cache::VerifierCache;
 use self::core::core::{
-	Block, BlockHeader, BlockSums, Committed, Transaction, TxKernel, Weighting,
+	Block, BlockHeader, BlockSums, Committed, Input, Output, Transaction, TxKernel, Weighting,
 };
 use self::util::RwLock;
 use crate::types::{BlockChain, PoolEntry, PoolError};
@@ -73,6 +73,16 @@ impl Pool {
 				if k.hash() == hash {
 					return Some(x.tx.clone());
 				}
+			}
+		}
+		None
+	}
+
+	/// Query the tx pool for an individual input.
+	pub fn retrieve_output_by_input(&self, input: &Input) -> Option<Output> {
+		for x in &self.entries {
+			if let Some(o) = x.tx.find_output_by_commit(&input.commit) {
+				return Some(o.clone());
 			}
 		}
 		None
@@ -156,7 +166,11 @@ impl Pool {
 		let tx = transaction::aggregate(txs)?;
 
 		// Validate the single aggregate transaction "as pool", not subject to tx weight limits.
-		tx.validate(Weighting::NoLimit, self.verifier_cache.clone())?;
+		tx.validate(
+			Weighting::NoLimit,
+			self.verifier_cache.clone(),
+			self.blockchain.chain_head()?.height,
+		)?;
 
 		Ok(Some(tx))
 	}
@@ -223,7 +237,7 @@ impl Pool {
 	) -> Result<BlockSums, PoolError> {
 		// Validate the tx, conditionally checking against weight limits,
 		// based on weight verification type.
-		tx.validate(weighting, self.verifier_cache.clone())?;
+		tx.validate(weighting, self.verifier_cache.clone(), header.height)?;
 
 		// Validate the tx against current chain state.
 		// Check all inputs are in the current UTXO set.
@@ -368,6 +382,7 @@ impl Pool {
 						entry.tx.clone(),
 						weighting,
 						self.verifier_cache.clone(),
+						self.blockchain.chain_head().unwrap().height,
 					) {
 						if new_bucket.fee_to_weight >= bucket.fee_to_weight {
 							// Only aggregate if it would not reduce the fee_to_weight ratio.
@@ -478,14 +493,15 @@ impl Bucket {
 		new_tx: Transaction,
 		weighting: Weighting,
 		verifier_cache: Arc<RwLock<dyn VerifierCache>>,
+		height: u64,
 	) -> Result<Bucket, PoolError> {
 		let mut raw_txs = self.raw_txs.clone();
 		raw_txs.push(new_tx);
 		let agg_tx = transaction::aggregate(raw_txs.clone())?;
-		agg_tx.validate(weighting, verifier_cache)?;
+		agg_tx.validate(weighting, verifier_cache, height)?;
 		Ok(Bucket {
 			fee_to_weight: agg_tx.fee_to_weight(),
-			raw_txs: raw_txs,
+			raw_txs,
 			age_idx: self.age_idx,
 		})
 	}

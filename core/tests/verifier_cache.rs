@@ -15,53 +15,74 @@
 
 pub mod common;
 
-//use self::core::core::verifier_cache::{LruVerifierCache, VerifierCache};
-//use self::core::libtx::proof;
-//use self::core::core::{Output, OutputFeatures};
-//use self::keychain::{ExtKeychain, Keychain};
-//use self::util::RwLock;
-//use gotts_core as core;
-//use gotts_keychain as keychain;
-//use gotts_util as util;
-//use std::sync::Arc;
+use self::core::core::verifier_cache::{LruVerifierCache, VerifierCache};
+use self::core::core::{Output, OutputFeaturesEx};
+use self::core::libtx::{build, proof};
+use self::keychain::{ExtKeychain, Keychain};
+use self::util::secp::PublicKey;
+use self::util::RwLock;
+use gotts_core as core;
+use gotts_keychain as keychain;
+use gotts_util as util;
+use rand::{thread_rng, Rng};
+use std::sync::Arc;
+use std::u32;
 
-//fn verifier_cache() -> Arc<RwLock<dyn VerifierCache>> {
-//	Arc::new(RwLock::new(LruVerifierCache::new()))
-//}
+fn verifier_cache() -> Arc<RwLock<dyn VerifierCache>> {
+	Arc::new(RwLock::new(LruVerifierCache::new()))
+}
 
-//todo: change this as test_verifier_cache_kernels().
-//#[test]
-//fn test_verifier_cache_rangeproofs() {
-//	let cache = verifier_cache();
-//
-//	let keychain = ExtKeychain::from_random_seed(false).unwrap();
-//	let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
-//	let commit = keychain.commit(5, &key_id).unwrap();
-//	let proof = proof::create(&keychain, 5, &key_id, commit, None).unwrap();
-//
-//	let out = Output {
-//		features: OutputFeatures::Plain,
-//		commit: commit,
-//		proof: proof,
-//	};
-//
-//	// Check our output is not verified according to the cache.
-//	{
-//		let mut cache = cache.write();
-//		let unverified = cache.filter_rangeproof_unverified(&vec![out]);
-//		assert_eq!(unverified, vec![out]);
-//	}
-//
-//	// Add our output to the cache.
-//	{
-//		let mut cache = cache.write();
-//		cache.add_rangeproof_verified(vec![out]);
-//	}
-//
-//	// Check it shows as verified according to the cache.
-//	{
-//		let mut cache = cache.write();
-//		let unverified = cache.filter_rangeproof_unverified(&vec![out]);
-//		assert_eq!(unverified, vec![]);
-//	}
-//}
+#[test]
+fn test_verifier_cache_unlocker() {
+	let cache = verifier_cache();
+
+	let keychain = ExtKeychain::from_random_seed(false).unwrap();
+	let builder = proof::ProofBuilder::new(&keychain);
+
+	let key_id = ExtKeychain::derive_key_id(4, u32::MAX, u32::MAX, 0, 0);
+	let w: i64 = thread_rng().gen();
+
+	let recipient_prikey = keychain.derive_key(&key_id).unwrap();
+	let recipient_pubkey = PublicKey::from_secret_key(keychain.secp(), &recipient_prikey).unwrap();
+	let (commit, locker, ephemeral_key_q) =
+		proof::create_output_locker(&keychain, 5, &recipient_pubkey, w, 1, true).unwrap();
+	let _out = Output {
+		features: OutputFeaturesEx::SigLocked { locker },
+		commit,
+		value: 5,
+	};
+
+	let mut input_build_parm: Vec<build::InputExBuildParm> = vec![];
+	input_build_parm.push(build::InputExBuildParm {
+		value: 5,
+		w,
+		key_id,
+		ephemeral_key: ephemeral_key_q,
+		p2pkh: locker.p2pkh,
+	});
+	let mut parts = vec![];
+	parts.push(build::siglocked_input(input_build_parm));
+
+	let (tx, _blind) = build::partial_transaction(parts, &keychain, &builder).unwrap();
+	let inputs = tx.inputs_ex();
+
+	// Check our output is not verified according to the cache.
+	{
+		let mut cache = cache.write();
+		let unverified = cache.filter_unlocker_unverified(inputs);
+		assert_eq!(&unverified, inputs);
+	}
+
+	// Add our inputs to the cache.
+	{
+		let mut cache = cache.write();
+		cache.add_unlocker_verified(inputs.clone());
+	}
+
+	// Check it shows as verified according to the cache.
+	{
+		let mut cache = cache.write();
+		let unverified = cache.filter_unlocker_unverified(inputs);
+		assert_eq!(unverified, vec![]);
+	}
+}

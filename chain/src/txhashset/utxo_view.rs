@@ -18,13 +18,15 @@
 use crate::core::core::hash::{Hash, Hashed};
 use crate::core::core::pmmr::{self, ReadonlyPMMR};
 use crate::core::core::{
-	Block, BlockHeader, Input, Output, OutputFeatures, OutputI, OutputII, Transaction,
+	Block, BlockHeader, Input, Output, OutputEx, OutputFeatures, OutputI, OutputII, Transaction,
 };
 use crate::core::global;
 use crate::core::ser::PMMRIndexHashable;
 use crate::error::{Error, ErrorKind};
 use crate::store::Batch;
+use crate::util::secp::pedersen::Commitment;
 use gotts_store::pmmr::PMMRBackend;
+use std::collections::HashMap;
 
 /// Readonly view of the UTXO set (based on output MMR).
 pub struct UTXOView<'a> {
@@ -183,6 +185,41 @@ impl<'a> UTXOView<'a> {
 			}
 		}
 		Ok(())
+	}
+
+	/// Find the complete input/s info, use chain database data according to inputs
+	pub fn get_complete_inputs(
+		&self,
+		inputs: &Vec<Input>,
+	) -> Result<HashMap<Commitment, OutputEx>, Error> {
+		let mut complete_inputs: HashMap<Commitment, OutputEx> = HashMap::new();
+		for input in inputs {
+			if let Ok(ofph) = self.batch.get_output_pos_height(&input.commitment()) {
+				let output = match ofph.features {
+					OutputFeatures::Plain | OutputFeatures::Coinbase => self
+						.output_i_pmmr
+						.get_data(ofph.position)
+						.unwrap()
+						.into_output(),
+					OutputFeatures::SigLocked => self
+						.output_ii_pmmr
+						.get_data(ofph.position)
+						.unwrap()
+						.into_output(),
+				};
+				if output.id().commitment() == input.commitment() {
+					complete_inputs.insert(
+						input.commitment().clone(),
+						OutputEx {
+							output,
+							height: ofph.height,
+							mmr_index: ofph.position,
+						},
+					);
+				}
+			}
+		}
+		Ok(complete_inputs)
 	}
 
 	/// Verify we are not attempting to spend any coinbase outputs

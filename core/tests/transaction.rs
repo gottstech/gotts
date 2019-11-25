@@ -17,15 +17,22 @@
 
 pub mod common;
 
-use self::core::core::{Output, OutputFeaturesEx, OutputI, OutputII};
-use self::core::libtx::proof;
+use self::core::core::transaction::Weighting;
+use self::core::core::verifier_cache::{LruVerifierCache, VerifierCache};
+use self::core::core::{Output, OutputEx, OutputFeaturesEx, OutputI, OutputII};
+use self::core::libtx::{build, proof};
 use self::core::ser;
 use self::keychain::{ExtKeychain, Keychain};
 use gotts_core as core;
 use gotts_keychain as keychain;
+use gotts_util::init_test_logger;
 use gotts_util::secp::key::{PublicKey, SecretKey};
-use gotts_util::to_hex;
+use gotts_util::secp::pedersen::Commitment;
+use gotts_util::{to_hex, RwLock};
 use rand::{thread_rng, Rng};
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::u32;
 
 #[test]
 fn test_output_ser_deser() {
@@ -185,5 +192,83 @@ fn test_output_blake2b_hash() {
 	assert_eq!(
 		Hash::from_hex("4504a1f255a39cd67de0a56ec8fc4abe6f8556451399b62a7c3a466884d9a3d0").unwrap(),
 		vec_ii.hash()
+	);
+}
+
+fn verifier_cache() -> Arc<RwLock<dyn VerifierCache>> {
+	Arc::new(RwLock::new(LruVerifierCache::new()))
+}
+
+#[test]
+fn test_siglocked_input_validate() {
+	init_test_logger();
+
+	let keychain = ExtKeychain::from_random_seed(false).unwrap();
+	let builder = proof::ProofBuilder::new(&keychain);
+
+	let key_id = ExtKeychain::derive_key_id(4, u32::MAX, u32::MAX, 0, 0);
+	let mut w: i64 = thread_rng().gen();
+	w = w / 4;
+
+	let recipient_prikey = keychain.derive_key(&key_id).unwrap();
+	let recipient_pubkey = PublicKey::from_secret_key(keychain.secp(), &recipient_prikey).unwrap();
+	let (commit, locker, ephemeral_key_q) =
+		proof::create_output_locker(&keychain, 6, &recipient_pubkey, w, 1, true).unwrap();
+	let out = Output {
+		features: OutputFeaturesEx::SigLocked { locker },
+		commit,
+		value: 6,
+	};
+	println!(
+		"A SigLocked output: {}",
+		serde_json::to_string_pretty(&out).unwrap()
+	);
+
+	// build an InputEx with InputUnlocker to spend above output
+	let mut input_build_parm: Vec<build::InputExBuildParm> = vec![];
+	input_build_parm.push(build::InputExBuildParm {
+		value: 6,
+		w,
+		key_id,
+		ephemeral_key: ephemeral_key_q,
+		p2pkh: locker.p2pkh,
+	});
+	let mut parts = vec![];
+	parts.push(build::siglocked_input(input_build_parm));
+
+	// build a change output
+	let mut change_w: i64 = thread_rng().gen();
+	change_w = change_w / 4;
+	let change_key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
+	parts.push(build::output(2, Some(change_w), change_key_id));
+
+	// build the receiver output
+	let receiver_w = w - change_w;
+	let receiver_key_id = ExtKeychain::derive_key_id(1, 2, 0, 0, 0);
+	parts.push(build::output(3, Some(receiver_w), receiver_key_id));
+
+	// build the kernel
+	parts.push(build::with_fee(1));
+
+	let mut tx = build::transaction(parts, &keychain, &builder).unwrap();
+	let vc = verifier_cache();
+
+	let mut complete_inputs: HashMap<Commitment, OutputEx> = HashMap::new();
+	complete_inputs.insert(
+		out.commit.clone(),
+		OutputEx {
+			output: out,
+			height: 0,
+			mmr_index: 1,
+		},
+	);
+	tx.complete_inputs = Some(complete_inputs);
+	println!(
+		"InputEx with InputUnlocker to spend a SigLocked output: {}",
+		serde_json::to_string_pretty(&tx.body.inputs).unwrap()
+	);
+	assert_eq!(
+		tx.validate(Weighting::AsTransaction, vc.clone(), 1).is_ok(),
+		true
 	);
 }

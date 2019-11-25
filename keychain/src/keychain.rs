@@ -182,12 +182,16 @@ impl Keychain for ExtKeychain {
 			.map_err(|e| Error::RangeProof(format!("Unable to create nonce: {:?}", e).to_string()))
 	}
 
+	/// ECDSA Signature.
+	/// Note: only used for test. For production, we use Schnorr Signature instead.
 	fn sign(&self, msg: &Message, id: &Identifier) -> Result<Signature, Error> {
 		let skey = self.derive_key(id)?;
 		let sig = self.secp.sign(msg, &skey)?;
 		Ok(sig)
 	}
 
+	/// ECDSA Signature.
+	/// Note: only used for test. For production, we use Schnorr Signature instead.
 	fn sign_with_blinding(
 		&self,
 		msg: &Message,
@@ -208,7 +212,7 @@ mod test {
 	use crate::keychain::ExtKeychain;
 	use crate::types::{BlindSum, BlindingFactor, ExtKeychainPath, Keychain};
 	use crate::util::secp;
-	use crate::util::secp::key::SecretKey;
+	use crate::util::secp::key::{PublicKey, SecretKey};
 
 	#[test]
 	fn test_key_derivation() {
@@ -229,6 +233,32 @@ mod test {
 		// now check we can use our key to verify a signature from this zero commitment
 		let sig = keychain.sign(&msg, &key_id).unwrap();
 		secp.verify_from_commit(&msg, &sig, &commit).unwrap();
+
+		// check derive_key and derive_pub_key
+		let key_id = ExtKeychain::derive_key_id(4, 5, 5, 0, 0);
+		let prikey = keychain.derive_key(&key_id).unwrap();
+		let pubkey = PublicKey::from_secret_key(keychain.secp(), &prikey).unwrap();
+		assert_eq!(pubkey, keychain.derive_pub_key(&key_id).unwrap());
+		// use them for ECDSA Signature
+		let sig = keychain.sign(&msg, &key_id).unwrap();
+		assert_eq!(secp.verify(&msg, &sig, &pubkey).is_ok(), true);
+		// use them for Schnorr Signature
+		let sig =
+			secp::aggsig::sign_single(&secp, &msg, &prikey, None, None, None, Some(&pubkey), None)
+				.unwrap();
+		assert_eq!(
+			secp::aggsig::verify_single(
+				&secp,
+				&sig,
+				&msg,
+				None,
+				&pubkey,
+				Some(&pubkey),
+				None,
+				false,
+			),
+			true
+		);
 	}
 
 	// We plan to "offset" the key used in the kernel commitment

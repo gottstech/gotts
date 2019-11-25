@@ -21,12 +21,15 @@ use chrono::prelude::{DateTime, Utc};
 use self::core::core::block;
 use self::core::core::committed;
 use self::core::core::hash::Hash;
-use self::core::core::transaction::{self, Transaction};
+use self::core::core::transaction::{self, Input, OutputEx, Transaction};
 use self::core::core::{BlockHeader, BlockSums};
 use self::core::{consensus, global};
+use self::util::secp::pedersen::Commitment;
 use failure::Fail;
 use gotts_core as core;
 use gotts_keychain as keychain;
+use gotts_util as util;
+use std::collections::HashMap;
 
 /// Dandelion "epoch" length.
 const DANDELION_EPOCH_SECS: u16 = 600;
@@ -253,6 +256,12 @@ impl From<committed::Error> for PoolError {
 
 /// Interface that the pool requires from a blockchain implementation.
 pub trait BlockChain: Sync + Send {
+	/// Find the complete input/s info, use chain database data according to inputs
+	fn get_complete_inputs(
+		&self,
+		inputs: &Vec<Input>,
+	) -> Result<HashMap<Commitment, OutputEx>, PoolError>;
+
 	/// Verify any coinbase outputs being spent
 	/// have matured sufficiently.
 	fn verify_coinbase_maturity(&self, tx: &transaction::Transaction) -> Result<(), PoolError>;
