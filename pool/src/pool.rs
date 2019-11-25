@@ -169,6 +169,7 @@ impl Pool {
 		tx.validate(
 			Weighting::NoLimit,
 			self.verifier_cache.clone(),
+			None,
 			self.blockchain.chain_head()?.height,
 		)?;
 
@@ -237,7 +238,7 @@ impl Pool {
 	) -> Result<BlockSums, PoolError> {
 		// Validate the tx, conditionally checking against weight limits,
 		// based on weight verification type.
-		tx.validate(weighting, self.verifier_cache.clone(), header.height)?;
+		tx.validate(weighting, self.verifier_cache.clone(), None, header.height)?;
 
 		// Validate the tx against current chain state.
 		// Check all inputs are in the current UTXO set.
@@ -498,7 +499,11 @@ impl Bucket {
 		let mut raw_txs = self.raw_txs.clone();
 		raw_txs.push(new_tx);
 		let agg_tx = transaction::aggregate(raw_txs.clone())?;
-		agg_tx.validate(weighting, verifier_cache, height)?;
+
+		// Regarding the 'complete_inputs' parameter for this 'validate':
+		//  1. let's keep it as 'None' at this moment, to avoid too much duplication validation
+		//  2. there's no light way to retrieve the 'complete_inputs' here.
+		agg_tx.validate(weighting, verifier_cache, None, height)?;
 		Ok(Bucket {
 			fee_to_weight: agg_tx.fee_to_weight(),
 			raw_txs,

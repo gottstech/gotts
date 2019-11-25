@@ -21,14 +21,15 @@
 use self::core::core::hash::{Hash, Hashed};
 use self::core::core::id::ShortId;
 use self::core::core::verifier_cache::VerifierCache;
-use self::core::core::{transaction, Block, BlockHeader, OutputEx, Transaction, Weighting};
+use self::core::core::{transaction, Block, BlockHeader, Input, OutputEx, Transaction, Weighting};
+use self::util::secp::pedersen::Commitment;
 use self::util::RwLock;
 use crate::pool::Pool;
 use crate::types::{BlockChain, PoolAdapter, PoolConfig, PoolEntry, PoolError, TxSource};
 use chrono::prelude::*;
 use gotts_core as core;
 use gotts_util as util;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
 /// Transaction pool implementation.
@@ -94,74 +95,16 @@ impl TransactionPool {
 		debug!("added tx to reorg_cache: size now {}", cache.len());
 	}
 
-	fn add_to_txpool(
-		&mut self,
-		mut entry: PoolEntry,
-		header: &BlockHeader,
-	) -> Result<(), PoolError> {
-		// First deaggregate the tx based on current txpool txs.
-		if entry.tx.kernels().len() > 1 {
-			let txs = self.txpool.find_matching_transactions(entry.tx.kernels());
-			if !txs.is_empty() {
-				let tx = transaction::deaggregate(entry.tx, txs)?;
-
-				// Validate this deaggregated tx "as tx", subject to regular tx weight limits.
-				tx.validate(
-					Weighting::AsTransaction,
-					self.verifier_cache.clone(),
-					header.height,
-				)?;
-
-				entry.tx = tx;
-				entry.src = TxSource::Deaggregate;
-			}
-		}
-		self.txpool.add_to_pool(entry.clone(), vec![], header)?;
-
-		// We now need to reconcile the stempool based on the new state of the txpool.
-		// Some stempool txs may no longer be valid and we need to evict them.
-		{
-			let txpool_tx = self.txpool.all_transactions_aggregate()?;
-			self.stempool.reconcile(txpool_tx, header)?;
-		}
-		Ok(())
-	}
-
-	/// Add the given tx to the pool, directing it to either the stempool or
-	/// txpool based on stem flag provided.
-	pub fn add_to_pool(
-		&mut self,
-		src: TxSource,
-		tx_body: Transaction,
-		stem: bool,
-		header: &BlockHeader,
-	) -> Result<(), PoolError> {
-		// Quick check to deal with common case of seeing the *same* tx
-		// broadcast from multiple peers simultaneously.
-		if !stem && self.txpool.contains_tx(tx_body.hash()) {
-			return Err(PoolError::DuplicateTx);
-		}
-
-		// Do we have the capacity to accept this transaction?
-		let acceptability = self.is_acceptable(&tx_body, stem);
-		let mut evict = false;
-		if !stem && acceptability.as_ref().err() == Some(&PoolError::OverCapacity) {
-			evict = true;
-		} else if acceptability.is_err() {
-			return acceptability;
-		}
-
-		// Get a local copy to fill the complete input info for SigLocked input/s
-		let mut tx = tx_body.clone();
-
-		// Before further processing, query the chain database to find those complete inputs info,
+	/// Find the complete input/s info, use chain database data according to inputs
+	pub fn get_complete_inputs(
+		&self,
+		inputs: &Vec<Input>,
+	) -> Result<HashMap<Commitment, OutputEx>, PoolError> {
+		// query the chain database to find those complete inputs info,
 		// the SigLocked input need the info for signature verification.
-		let mut complete_inputs = self.blockchain.get_complete_inputs(&tx.inputs())?;
+		let mut complete_inputs = self.blockchain.get_complete_inputs(inputs)?;
 
-		// In case an input is spending an output in the transaction pool, we can only fill these output/s
-		// info from the pool instead of the chain database.
-		if complete_inputs.len() < tx.body.get_inputs_number() {
-			let inputs = tx.inputs();
+		if complete_inputs.len() < inputs.len() {
 			for input in inputs {
 				if !complete_inputs.contains_key(&input.commit) {
 					if let Some(o) = self.txpool.retrieve_output_by_input(&input) {
@@ -188,13 +131,77 @@ impl TransactionPool {
 				}
 			}
 		}
-		tx.complete_inputs = Some(complete_inputs);
+		Ok(complete_inputs)
+	}
+
+	fn add_to_txpool(
+		&mut self,
+		mut entry: PoolEntry,
+		header: &BlockHeader,
+	) -> Result<(), PoolError> {
+		// First deaggregate the tx based on current txpool txs.
+		if entry.tx.kernels().len() > 1 {
+			let txs = self.txpool.find_matching_transactions(entry.tx.kernels());
+			if !txs.is_empty() {
+				let tx = transaction::deaggregate(entry.tx, txs)?;
+
+				let complete_inputs = self.get_complete_inputs(&tx.inputs())?;
+				// Validate this deaggregated tx "as tx", subject to regular tx weight limits.
+				tx.validate(
+					Weighting::AsTransaction,
+					self.verifier_cache.clone(),
+					Some(&complete_inputs),
+					header.height,
+				)?;
+
+				entry.tx = tx;
+				entry.src = TxSource::Deaggregate;
+			}
+		}
+		self.txpool.add_to_pool(entry.clone(), vec![], header)?;
+
+		// We now need to reconcile the stempool based on the new state of the txpool.
+		// Some stempool txs may no longer be valid and we need to evict them.
+		{
+			let txpool_tx = self.txpool.all_transactions_aggregate()?;
+			self.stempool.reconcile(txpool_tx, header)?;
+		}
+		Ok(())
+	}
+
+	/// Add the given tx to the pool, directing it to either the stempool or
+	/// txpool based on stem flag provided.
+	pub fn add_to_pool(
+		&mut self,
+		src: TxSource,
+		tx: Transaction,
+		stem: bool,
+		header: &BlockHeader,
+	) -> Result<(), PoolError> {
+		// Quick check to deal with common case of seeing the *same* tx
+		// broadcast from multiple peers simultaneously.
+		if !stem && self.txpool.contains_tx(tx.hash()) {
+			return Err(PoolError::DuplicateTx);
+		}
+
+		// Do we have the capacity to accept this transaction?
+		let acceptability = self.is_acceptable(&tx, stem);
+		let mut evict = false;
+		if !stem && acceptability.as_ref().err() == Some(&PoolError::OverCapacity) {
+			evict = true;
+		} else if acceptability.is_err() {
+			return acceptability;
+		}
+
+		// Before further processing, query the chain database to find those complete inputs info
+		let complete_inputs = self.get_complete_inputs(&tx.inputs())?;
 
 		// Make sure the transaction is valid before anything else.
 		// Validate tx accounting for max tx weight.
 		tx.validate(
 			Weighting::AsTransaction,
 			self.verifier_cache.clone(),
+			Some(&complete_inputs),
 			header.height,
 		)
 		.map_err(PoolError::InvalidTx)?;

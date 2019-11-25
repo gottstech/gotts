@@ -250,7 +250,7 @@ fn test_siglocked_input_validate() {
 	// build the kernel
 	parts.push(build::with_fee(1));
 
-	let mut tx = build::transaction(parts, &keychain, &builder).unwrap();
+	let tx = build::transaction(parts, &keychain, &builder).unwrap();
 	let vc = verifier_cache();
 
 	let mut complete_inputs: HashMap<Commitment, OutputEx> = HashMap::new();
@@ -262,13 +262,18 @@ fn test_siglocked_input_validate() {
 			mmr_index: 1,
 		},
 	);
-	tx.complete_inputs = Some(complete_inputs);
 	println!(
 		"InputEx with InputUnlocker to spend a SigLocked output: {}",
 		serde_json::to_string_pretty(&tx.body.inputs).unwrap()
 	);
 	assert_eq!(
-		tx.validate(Weighting::AsTransaction, vc.clone(), 1).is_ok(),
+		tx.validate(
+			Weighting::AsTransaction,
+			vc.clone(),
+			Some(&complete_inputs),
+			1
+		)
+		.is_ok(),
 		true
 	);
 }

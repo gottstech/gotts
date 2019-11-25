@@ -143,9 +143,12 @@ fn process_fluff_phase(
 	);
 
 	let agg_tx = transaction::aggregate(fluffable_txs)?;
+	// todo: put 'complete_inputs' parameter as None at this moment, to check whether need so many
+	//  duplications on this validation, since 'tx_pool.stempool.validate_raw_txs' just did it.
 	agg_tx.validate(
 		transaction::Weighting::AsTransaction,
 		verifier_cache.clone(),
+		None,
 		header.height,
 	)?;
 

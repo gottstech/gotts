@@ -21,7 +21,7 @@ use self::core::core::block::BlockHeader;
 use self::core::core::block::Error::KernelLockHeight;
 use self::core::core::hash::{Hashed, ZERO_HASH};
 use self::core::core::verifier_cache::{LruVerifierCache, VerifierCache};
-use self::core::core::{aggregate, deaggregate, KernelFeatures, Transaction, Weighting};
+use self::core::core::{aggregate, deaggregate, KernelFeatures, OutputEx, Transaction, Weighting};
 use self::core::libtx::build::{
 	self, initial_tx, input, output, with_excess, with_fee, with_lock_height,
 };
@@ -30,6 +30,7 @@ use self::core::ser;
 use self::keychain::{ExtKeychain, Keychain};
 use self::util::RwLock;
 use crate::common::{new_block, tx1i1o, tx1i2o, tx2i1o};
+use crate::util::secp::pedersen::Commitment;
 use gotts_core as core;
 use gotts_keychain as keychain;
 use gotts_util as util;
@@ -113,6 +114,19 @@ fn build_tx_kernel() {
 	let key_id2 = ExtKeychain::derive_key_id(1, 2, 0, 0, 0);
 	let key_id3 = ExtKeychain::derive_key_id(1, 3, 0, 0, 0);
 
+	let mut complete_inputs: HashMap<Commitment, OutputEx> = HashMap::new();
+	let (pre_tx, _) =
+		build::partial_transaction(vec![output(10, Some(0i64), key_id1)], &keychain, &builder)
+			.unwrap();
+	complete_inputs.insert(
+		pre_tx.body.outputs[0].commit,
+		OutputEx {
+			output: pre_tx.body.outputs[0],
+			height: 0,
+			mmr_index: 1,
+		},
+	);
+
 	// first build a valid tx with corresponding blinding factor
 	let tx = build::transaction(
 		vec![
@@ -127,8 +141,13 @@ fn build_tx_kernel() {
 	.unwrap();
 
 	// check the tx is valid
-	tx.validate(Weighting::AsTransaction, verifier_cache(), 0)
-		.unwrap();
+	tx.validate(
+		Weighting::AsTransaction,
+		verifier_cache(),
+		Some(&complete_inputs),
+		1,
+	)
+	.unwrap();
 
 	// check the kernel is also itself valid
 	assert_eq!(tx.kernels().len(), 1);
@@ -147,10 +166,10 @@ fn transaction_cut_through() {
 	let tx2 = tx2i1o();
 
 	assert!(tx1
-		.validate(Weighting::AsTransaction, verifier_cache(), 0)
+		.validate(Weighting::AsTransaction, verifier_cache(), None, 1)
 		.is_ok());
 	assert!(tx2
-		.validate(Weighting::AsTransaction, verifier_cache(), 0)
+		.validate(Weighting::AsTransaction, verifier_cache(), None, 1)
 		.is_ok());
 
 	let vc = verifier_cache();
@@ -159,7 +178,7 @@ fn transaction_cut_through() {
 	let tx3 = aggregate(vec![tx1, tx2]).unwrap();
 
 	assert!(tx3
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 1)
 		.is_ok());
 }
 
@@ -174,16 +193,16 @@ fn multi_kernel_transaction_deaggregation() {
 	let vc = verifier_cache();
 
 	assert!(tx1
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert!(tx2
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert!(tx3
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert!(tx4
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 
 	let tx1234 = aggregate(vec![tx1.clone(), tx2.clone(), tx3.clone(), tx4.clone()]).unwrap();
@@ -191,25 +210,25 @@ fn multi_kernel_transaction_deaggregation() {
 	let tx34 = aggregate(vec![tx3.clone(), tx4.clone()]).unwrap();
 
 	assert!(tx1234
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert!(tx12
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert!(tx34
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 
 	let deaggregated_tx34 = deaggregate(tx1234.clone(), vec![tx12.clone()]).unwrap();
 	assert!(deaggregated_tx34
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert_eq!(tx34, deaggregated_tx34);
 
 	let deaggregated_tx12 = deaggregate(tx1234.clone(), vec![tx34.clone()]).unwrap();
 
 	assert!(deaggregated_tx12
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert_eq!(tx12, deaggregated_tx12);
 }
@@ -223,28 +242,28 @@ fn multi_kernel_transaction_deaggregation_2() {
 	let vc = verifier_cache();
 
 	assert!(tx1
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert!(tx2
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert!(tx3
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 
 	let tx123 = aggregate(vec![tx1.clone(), tx2.clone(), tx3.clone()]).unwrap();
 	let tx12 = aggregate(vec![tx1.clone(), tx2.clone()]).unwrap();
 
 	assert!(tx123
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert!(tx12
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 
 	let deaggregated_tx3 = deaggregate(tx123.clone(), vec![tx12.clone()]).unwrap();
 	assert!(deaggregated_tx3
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert_eq!(tx3, deaggregated_tx3);
 }
@@ -258,13 +277,13 @@ fn multi_kernel_transaction_deaggregation_3() {
 	let vc = verifier_cache();
 
 	assert!(tx1
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert!(tx2
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert!(tx3
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 
 	let tx123 = aggregate(vec![tx1.clone(), tx2.clone(), tx3.clone()]).unwrap();
@@ -272,15 +291,15 @@ fn multi_kernel_transaction_deaggregation_3() {
 	let tx2 = aggregate(vec![tx2.clone()]).unwrap();
 
 	assert!(tx123
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert!(tx2
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 
 	let deaggregated_tx13 = deaggregate(tx123.clone(), vec![tx2.clone()]).unwrap();
 	assert!(deaggregated_tx13
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert_eq!(tx13, deaggregated_tx13);
 }
@@ -296,19 +315,19 @@ fn multi_kernel_transaction_deaggregation_4() {
 	let vc = verifier_cache();
 
 	assert!(tx1
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert!(tx2
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert!(tx3
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert!(tx4
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert!(tx5
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 
 	let tx12345 = aggregate(vec![
@@ -320,7 +339,7 @@ fn multi_kernel_transaction_deaggregation_4() {
 	])
 	.unwrap();
 	assert!(tx12345
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 
 	let deaggregated_tx5 = deaggregate(
@@ -329,7 +348,7 @@ fn multi_kernel_transaction_deaggregation_4() {
 	)
 	.unwrap();
 	assert!(deaggregated_tx5
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert_eq!(tx5, deaggregated_tx5);
 }
@@ -345,19 +364,19 @@ fn multi_kernel_transaction_deaggregation_5() {
 	let vc = verifier_cache();
 
 	assert!(tx1
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert!(tx2
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert!(tx3
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert!(tx4
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert!(tx5
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 
 	let tx12345 = aggregate(vec![
@@ -372,12 +391,12 @@ fn multi_kernel_transaction_deaggregation_5() {
 	let tx34 = aggregate(vec![tx3.clone(), tx4.clone()]).unwrap();
 
 	assert!(tx12345
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 
 	let deaggregated_tx5 = deaggregate(tx12345.clone(), vec![tx12.clone(), tx34.clone()]).unwrap();
 	assert!(deaggregated_tx5
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert_eq!(tx5, deaggregated_tx5);
 }
@@ -391,30 +410,30 @@ fn basic_transaction_deaggregation() {
 	let vc = verifier_cache();
 
 	assert!(tx1
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert!(tx2
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 
 	// now build a "cut_through" tx from tx1 and tx2
 	let tx3 = aggregate(vec![tx1.clone(), tx2.clone()]).unwrap();
 
 	assert!(tx3
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 
 	let deaggregated_tx1 = deaggregate(tx3.clone(), vec![tx2.clone()]).unwrap();
 
 	assert!(deaggregated_tx1
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert_eq!(tx1, deaggregated_tx1);
 
 	let deaggregated_tx2 = deaggregate(tx3.clone(), vec![tx1.clone()]).unwrap();
 
 	assert!(deaggregated_tx2
-		.validate(Weighting::AsTransaction, vc.clone(), 0)
+		.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.is_ok());
 	assert_eq!(tx2, deaggregated_tx2);
 }
@@ -448,7 +467,7 @@ fn hash_output() {
 fn blind_tx() {
 	let btx = tx2i1o();
 	assert!(btx
-		.validate(Weighting::AsTransaction, verifier_cache(), 0)
+		.validate(Weighting::AsTransaction, verifier_cache(), None, 0)
 		.is_ok());
 }
 
@@ -505,7 +524,7 @@ fn tx_build_exchange() {
 	.unwrap();
 
 	tx_final
-		.validate(Weighting::AsTransaction, verifier_cache(), 0)
+		.validate(Weighting::AsTransaction, verifier_cache(), None, 0)
 		.unwrap();
 }
 
@@ -519,10 +538,9 @@ fn reward_empty_block() {
 
 	let b = new_block(vec![], &keychain, &builder, &previous_header, &key_id);
 
-	let complete_inputs = HashMap::new();
 	b.cut_through()
 		.unwrap()
-		.validate(verifier_cache(), &complete_inputs)
+		.validate(verifier_cache(), None)
 		.unwrap();
 }
 
@@ -535,7 +553,7 @@ fn reward_with_tx_block() {
 	let vc = verifier_cache();
 
 	let mut tx1 = tx2i1o();
-	tx1.validate(Weighting::AsTransaction, vc.clone(), 0)
+	tx1.validate(Weighting::AsTransaction, vc.clone(), None, 0)
 		.unwrap();
 
 	let previous_header = BlockHeader::default();
@@ -547,11 +565,10 @@ fn reward_with_tx_block() {
 		&previous_header,
 		&key_id,
 	);
-	let complete_inputs = HashMap::new();
 	block
 		.cut_through()
 		.unwrap()
-		.validate(vc.clone(), &complete_inputs)
+		.validate(vc.clone(), None)
 		.unwrap();
 }
 
@@ -575,8 +592,7 @@ fn simple_block() {
 		&key_id,
 	);
 
-	let complete_inputs = HashMap::new();
-	b.validate(vc.clone(), &complete_inputs).unwrap();
+	b.validate(vc.clone(), None).unwrap();
 }
 
 #[test]
@@ -612,8 +628,7 @@ fn test_block_with_timelocked_tx() {
 		&previous_header,
 		&key_id3.clone(),
 	);
-	let complete_inputs = HashMap::new();
-	b.validate(vc.clone(), &complete_inputs).unwrap();
+	b.validate(vc.clone(), None).unwrap();
 
 	// now try adding a timelocked tx where lock height is greater than current
 	// block height
@@ -638,7 +653,7 @@ fn test_block_with_timelocked_tx() {
 		&key_id3.clone(),
 	);
 
-	match b.validate(vc.clone(), &complete_inputs) {
+	match b.validate(vc.clone(), None) {
 		Err(KernelLockHeight(height)) => {
 			assert_eq!(height, 2);
 		}
@@ -649,13 +664,13 @@ fn test_block_with_timelocked_tx() {
 #[test]
 pub fn test_verify_1i1o_sig() {
 	let tx = tx1i1o();
-	tx.validate(Weighting::AsTransaction, verifier_cache(), 0)
+	tx.validate(Weighting::AsTransaction, verifier_cache(), None, 0)
 		.unwrap();
 }
 
 #[test]
 pub fn test_verify_2i1o_sig() {
 	let tx = tx2i1o();
-	tx.validate(Weighting::AsTransaction, verifier_cache(), 0)
+	tx.validate(Weighting::AsTransaction, verifier_cache(), None, 0)
 		.unwrap();
 }

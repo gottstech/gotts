@@ -686,7 +686,7 @@ impl Block {
 	pub fn validate(
 		&self,
 		verifier: Arc<RwLock<dyn VerifierCache>>,
-		complete_inputs: &HashMap<Commitment, OutputEx>,
+		complete_inputs: Option<&HashMap<Commitment, OutputEx>>,
 	) -> Result<Commitment, Error> {
 		self.body.validate(
 			Weighting::AsBlock,

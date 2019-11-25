@@ -182,7 +182,7 @@ fn build_block(
 
 	// making sure we're not spending time mining a useless block
 	let complete_inputs = chain.get_complete_inputs(&b.inputs())?;
-	b.validate(verifier_cache, &complete_inputs)?;
+	b.validate(verifier_cache, Some(&complete_inputs))?;
 
 	b.header.pow.nonce = thread_rng().gen();
 	b.header.pow.secondary_scaling = difficulty.secondary_scaling;
