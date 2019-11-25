@@ -235,6 +235,7 @@ fn test_the_transaction_pool() {
 			.validate(
 				Weighting::AsTransaction,
 				verifier_cache.clone(),
+				None,
 				chain.chain_head().unwrap().height,
 			)
 			.unwrap();
@@ -449,6 +450,7 @@ fn test_the_transaction_pool() {
 				.validate(
 					Weighting::AsTransaction,
 					verifier_cache.clone(),
+					None,
 					chain.chain_head().unwrap().height,
 				)
 				.unwrap();

@@ -417,7 +417,7 @@ fn validate_block(
 		.get_complete_inputs(&block.inputs())?;
 
 	block
-		.validate(verifier_cache, &complete_inputs)
+		.validate(verifier_cache, Some(&complete_inputs))
 		.map_err(|e| ErrorKind::InvalidBlockProof(e))?;
 	Ok(())
 }

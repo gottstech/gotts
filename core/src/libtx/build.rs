@@ -417,11 +417,13 @@ where
 // Just a simple test, most exhaustive tests in the core.
 #[cfg(test)]
 mod test {
+	use crate::util::secp::pedersen::Commitment;
 	use crate::util::RwLock;
+	use std::collections::HashMap;
 	use std::sync::Arc;
 
 	use super::*;
-	use crate::core::transaction::Weighting;
+	use crate::core::transaction::{OutputEx, Weighting};
 	use crate::core::verifier_cache::{LruVerifierCache, VerifierCache};
 	use crate::keychain::{ExtKeychain, ExtKeychainPath};
 	use crate::libtx::ProofBuilder;
@@ -440,6 +442,33 @@ mod test {
 
 		let vc = verifier_cache();
 
+		let mut complete_inputs: HashMap<Commitment, OutputEx> = HashMap::new();
+		let (pre_tx, _) = partial_transaction(
+			vec![
+				output(10, Some(0i64), key_id1),
+				output(12, Some(0i64), key_id2),
+			],
+			&keychain,
+			&builder,
+		)
+		.unwrap();
+		complete_inputs.insert(
+			pre_tx.body.outputs[0].commit,
+			OutputEx {
+				output: pre_tx.body.outputs[0],
+				height: 0,
+				mmr_index: 1,
+			},
+		);
+		complete_inputs.insert(
+			pre_tx.body.outputs[1].commit,
+			OutputEx {
+				output: pre_tx.body.outputs[1],
+				height: 0,
+				mmr_index: 2,
+			},
+		);
+
 		let tx = transaction(
 			vec![
 				input(10, 0i64, key_id1),
@@ -452,34 +481,13 @@ mod test {
 		)
 		.unwrap();
 
-		tx.validate(Weighting::AsTransaction, vc.clone(), 0)
-			.unwrap();
-	}
-
-	#[test]
-	fn blind_simple_tx_with_offset() {
-		let keychain = ExtKeychain::from_random_seed(false).unwrap();
-		let builder = ProofBuilder::new(&keychain);
-		let key_id1 = ExtKeychainPath::new(1, 1, 0, 0, 0).to_identifier();
-		let key_id2 = ExtKeychainPath::new(1, 2, 0, 0, 0).to_identifier();
-		let key_id3 = ExtKeychainPath::new(1, 3, 0, 0, 0).to_identifier();
-
-		let vc = verifier_cache();
-
-		let tx = transaction(
-			vec![
-				input(10, 0i64, key_id1),
-				input(12, 0i64, key_id2),
-				output(20, Some(0i64), key_id3),
-				with_fee(2),
-			],
-			&keychain,
-			&builder,
+		tx.validate(
+			Weighting::AsTransaction,
+			vc.clone(),
+			Some(&complete_inputs),
+			1,
 		)
 		.unwrap();
-
-		tx.validate(Weighting::AsTransaction, vc.clone(), 0)
-			.unwrap();
 	}
 
 	#[test]
@@ -490,6 +498,18 @@ mod test {
 		let key_id2 = ExtKeychainPath::new(1, 2, 0, 0, 0).to_identifier();
 
 		let vc = verifier_cache();
+
+		let mut complete_inputs: HashMap<Commitment, OutputEx> = HashMap::new();
+		let (pre_tx, _) =
+			partial_transaction(vec![output(6, Some(0i64), key_id1)], &keychain, &builder).unwrap();
+		complete_inputs.insert(
+			pre_tx.body.outputs[0].commit,
+			OutputEx {
+				output: pre_tx.body.outputs[0],
+				height: 0,
+				mmr_index: 1,
+			},
+		);
 
 		let tx = transaction(
 			vec![
@@ -502,7 +522,12 @@ mod test {
 		)
 		.unwrap();
 
-		tx.validate(Weighting::AsTransaction, vc.clone(), 0)
-			.unwrap();
+		tx.validate(
+			Weighting::AsTransaction,
+			vc.clone(),
+			Some(&complete_inputs),
+			1,
+		)
+		.unwrap();
 	}
 }

@@ -884,7 +884,7 @@ impl TransactionBody {
 		&self,
 		weighting: Weighting,
 		verifier: Arc<RwLock<dyn VerifierCache>>,
-		complete_inputs: &HashMap<Commitment, OutputEx>,
+		complete_inputs: Option<&HashMap<Commitment, OutputEx>>,
 		height: u64,
 	) -> Result<(), Error> {
 		self.validate_read(weighting)?;
@@ -912,42 +912,52 @@ impl TransactionBody {
 
 		// Verify the unverified InputUnlocker.
 		if !inputs.is_empty() {
-			let len = inputs.len();
-			let mut sigs: Vec<secp::Signature> = Vec::with_capacity(len);
-			let mut pubkeys: Vec<secp::key::PublicKey> = Vec::with_capacity(len);
-			let mut msgs: Vec<secp::Message> = Vec::with_capacity(len);
+			if complete_inputs.is_none() {
+				// Caution:
+				//  1. 'complete_inputs' parameter should be Some for validation on InputUnlocker signature.
+				//  2. 'None' only for the case of avoid those duplicated validation on this.
+				//return Err(Error::InputNotExist);
+			} else {
+				let complete_inputs = complete_inputs.unwrap();
+				let len = inputs.len();
+				let mut sigs: Vec<secp::Signature> = Vec::with_capacity(len);
+				let mut pubkeys: Vec<secp::key::PublicKey> = Vec::with_capacity(len);
+				let mut msgs: Vec<secp::Message> = Vec::with_capacity(len);
 
-			for input_ex in &inputs {
-				if input_ex.is_unlocker() {
-					// Collect all related outputs to spent
-					let commits = input_ex.commitments();
-					let mut outputs_to_spent: Vec<OutputEx> = Vec::with_capacity(commits.len());
-					for commit in &commits {
-						let output_ex = complete_inputs
-							.get(commit)
-							.ok_or(Error::InputNotExist)?
-							.clone();
-						// Verify the Relative Lock Height
-						if height < output_ex.output.get_rlh().unwrap() as u64 + output_ex.height {
-							return Err(Error::InputUnlocker(
-								"relative_lock_height limited".to_string(),
-							));
+				for input_ex in &inputs {
+					if input_ex.is_unlocker() {
+						// Collect all related outputs to spent
+						let commits = input_ex.commitments();
+						let mut outputs_to_spent: Vec<OutputEx> = Vec::with_capacity(commits.len());
+						for commit in &commits {
+							let output_ex = complete_inputs
+								.get(commit)
+								.ok_or(Error::InputNotExist)?
+								.clone();
+							// Verify the Relative Lock Height
+							if height
+								< output_ex.output.get_rlh().unwrap() as u64 + output_ex.height
+							{
+								return Err(Error::InputUnlocker(
+									"relative_lock_height limited".to_string(),
+								));
+							}
+							outputs_to_spent.push(output_ex);
 						}
-						outputs_to_spent.push(output_ex);
+
+						let (sig, msg, pubkey) = input_ex.verify(&outputs_to_spent)?;
+						sigs.push(sig);
+						pubkeys.push(pubkey);
+						msgs.push(msg);
 					}
-
-					let (sig, msg, pubkey) = input_ex.verify(&outputs_to_spent)?;
-					sigs.push(sig);
-					pubkeys.push(pubkey);
-					msgs.push(msg);
 				}
-			}
 
-			let secp = static_secp_instance();
-			let secp = secp.lock();
+				let secp = static_secp_instance();
+				let secp = secp.lock();
 
-			if !secp::aggsig::verify_batch(&secp, &sigs, &msgs, &pubkeys) {
-				return Err(Error::UnlockerIncorrectSignature);
+				if !secp::aggsig::verify_batch(&secp, &sigs, &msgs, &pubkeys) {
+					return Err(Error::UnlockerIncorrectSignature);
+				}
 			}
 		}
 
@@ -965,8 +975,6 @@ impl TransactionBody {
 /// A transaction
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Transaction {
-	/// The complete inputs which can be loaded locally from the chain data, only for SigLocked inputs.
-	pub complete_inputs: Option<HashMap<Commitment, OutputEx>>,
 	/// The transaction body - inputs/outputs/kernels
 	pub body: TransactionBody,
 }
@@ -1000,10 +1008,7 @@ impl Writeable for Transaction {
 impl Readable for Transaction {
 	fn read(reader: &mut dyn Reader) -> Result<Transaction, ser::Error> {
 		let body = TransactionBody::read(reader)?;
-		let tx = Transaction {
-			complete_inputs: None,
-			body,
-		};
+		let tx = Transaction { body };
 
 		// Now "lightweight" validation of the tx.
 		// Treat any validation issues as data corruption.
@@ -1039,7 +1044,6 @@ impl Transaction {
 	/// Creates a new empty transaction (no inputs or outputs, zero fee).
 	pub fn empty() -> Transaction {
 		Transaction {
-			complete_inputs: None,
 			body: Default::default(),
 		}
 	}
@@ -1051,10 +1055,7 @@ impl Transaction {
 		let body =
 			TransactionBody::init(inputs, outputs, kernels, false).expect("sorting, not verifying");
 
-		Transaction {
-			complete_inputs: None,
-			body,
-		}
+		Transaction { body }
 	}
 
 	/// Builds a new transaction with the provided inputs added. Existing
@@ -1181,20 +1182,18 @@ impl Transaction {
 		&self,
 		weighting: Weighting,
 		verifier: Arc<RwLock<dyn VerifierCache>>,
+		complete_inputs: Option<&HashMap<Commitment, OutputEx>>,
 		height: u64,
 	) -> Result<(), Error> {
-		let empty = HashMap::new();
-		let complete_inputs = if let Some(ci) = &self.complete_inputs {
-			ci
-		} else {
-			&empty
-		};
 		self.body
 			.validate(weighting, verifier, complete_inputs, height)?;
 		self.body.verify_features()?;
 
 		// validate the public value balance.
-		if let Some(complete_inputs) = &self.complete_inputs {
+		// Caution:
+		//  1. 'complete_inputs' parameter should be Some for validation on sum balance.
+		//  2. 'None' only for the case of avoid those duplicated validation on this.
+		if let Some(complete_inputs) = complete_inputs {
 			let mut sum: i64 = complete_inputs
 				.values()
 				.fold(0i64, |acc, x| acc.saturating_add(x.output.value as i64));
@@ -1207,6 +1206,7 @@ impl Transaction {
 				return Err(Error::TransactionSumMismatch)?;
 			}
 		}
+
 		self.verify_kernel_sums()?;
 		Ok(())
 	}
