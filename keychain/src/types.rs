@@ -478,8 +478,15 @@ pub trait Keychain: Sync + Send + Clone {
 	fn commit_raw(&self, w: i64, key: &SecretKey) -> Result<Commitment, Error>;
 	fn blind_sum(&self, blind_sum: &BlindSum) -> Result<BlindingFactor, Error>;
 	fn rewind_nonce(&self, commit: &Commitment) -> Result<SecretKey, Error>;
+
+	/// ECDSA Signature.
+	/// Note: only used for test. For production, we use Schnorr Signature instead.
 	fn sign(&self, msg: &Message, id: &Identifier) -> Result<Signature, Error>;
+
+	/// ECDSA Signature.
+	/// Note: only used for test. For production, we use Schnorr Signature instead.
 	fn sign_with_blinding(&self, _: &Message, _: &BlindingFactor) -> Result<Signature, Error>;
+
 	fn secp(&self) -> &Secp256k1;
 }
 

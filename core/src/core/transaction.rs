@@ -193,8 +193,10 @@ pub enum Error {
 	InvalidKernelFeatures,
 	/// Validation error relating to input signature message.
 	InvalidInputSigMsg,
-	/// Signature verification error.
+	/// TxKernel Signature verification error.
 	IncorrectSignature,
+	/// InputUnlocker Signature verification error.
+	UnlockerIncorrectSignature,
 	/// Signature verification error, public key hash not match.
 	IncorrectPubkey,
 	/// Input does not exist among UTXO sets.
@@ -945,7 +947,7 @@ impl TransactionBody {
 			let secp = secp.lock();
 
 			if !secp::aggsig::verify_batch(&secp, &sigs, &msgs, &pubkeys) {
-				return Err(Error::IncorrectSignature);
+				return Err(Error::UnlockerIncorrectSignature);
 			}
 		}
 

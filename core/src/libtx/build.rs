@@ -36,7 +36,7 @@ use crate::keychain::{BlindSum, BlindingFactor, Identifier, Keychain};
 use crate::libtx::proof::ProofBuild;
 use crate::libtx::secp_ser;
 use crate::libtx::{aggsig, proof, Error};
-use crate::util::secp::{Commitment, Message, SecretKey};
+use crate::util::secp::{self, Commitment, Message, SecretKey};
 use chrono::prelude::*;
 use rand::{thread_rng, Rng};
 use serde::{self, Deserialize};
@@ -179,7 +179,18 @@ where
 			// Hashing to get the final msg for signature
 			let hash = (msg_to_sign, now.timestamp()).hash();
 			let msg = Message::from_slice(&hash.as_bytes()).unwrap();
-			let sig = build.keychain.sign(&msg, &key_id).unwrap();
+			let pub_key = build.keychain.derive_pub_key(&key_id).unwrap();
+			let sig = secp::aggsig::sign_single(
+				build.keychain.secp(),
+				&msg,
+				&build.keychain.derive_key(&key_id).unwrap(),
+				None,
+				None,
+				None,
+				Some(&pub_key),
+				None,
+			)
+			.unwrap();
 
 			(
 				tx.with_input_ex(InputEx::InputsWithUnlocker {
@@ -187,7 +198,7 @@ where
 					unlocker: InputUnlocker {
 						timestamp: now,
 						sig,
-						pub_key: build.keychain.derive_pub_key(&key_id).unwrap(),
+						pub_key,
 					},
 				}),
 				kern,
