@@ -947,8 +947,8 @@ impl<'a> Extension<'a> {
 
 		for input in b.inputs() {
 			self.apply_input(&input)?;
-			// Delete the (output_pos,height) index from the spent output.
-			self.batch.delete_output_pos_height(&input.commitment())?;
+			// todo: Delete the (output_pos,height) index from the spent output.
+			//self.batch.delete_output_pos_height(&input.commitment())?;
 		}
 
 		for kernel in b.kernels() {

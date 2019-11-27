@@ -540,7 +540,7 @@ fn spend_in_fork_and_compact() {
 
 		let mut fork_head = prev;
 
-		// mine the first block and keep track of the block_hash
+		// mine the first block #1 and keep track of the block_hash
 		// so we can spend the coinbase later
 		let b = prepare_block(&kc, &fork_head, &chain, 2);
 		let out_id = OutputIdentifier::from_output(&b.outputs()[0]);
@@ -550,19 +550,20 @@ fn spend_in_fork_and_compact() {
 			.process_block(b.clone(), chain::Options::SKIP_POW)
 			.unwrap();
 
-		// now mine three further blocks
+		// now mine three further blocks: #2, #3, #4
 		for n in 3..6 {
 			let b = prepare_block(&kc, &fork_head, &chain, n);
 			fork_head = b.header.clone();
 			chain.process_block(b, chain::Options::SKIP_POW).unwrap();
 		}
 
-		// Check the height of the "fork block".
+		// Check the height of the "fork block" at #4.
 		assert_eq!(fork_head.height, 4);
 		let key_id2 = ExtKeychainPath::new(1, 2, 0, 0, 0).to_identifier();
 		let key_id30 = ExtKeychainPath::new(1, 30, 0, 0, 0).to_identifier();
 		let key_id31 = ExtKeychainPath::new(1, 31, 0, 0, 0).to_identifier();
 
+		// create a transaction to spend the coinbase output in block #1
 		let tx1 = build::transaction(
 			vec![
 				build::coinbase_input(consensus::REWARD, key_id2.clone()),
@@ -574,6 +575,7 @@ fn spend_in_fork_and_compact() {
 		)
 		.unwrap();
 
+		// mine block #5 with above transaction
 		let next = prepare_block_tx(&kc, &fork_head, &chain, 7, vec![&tx1]);
 		let prev_main = next.header.clone();
 		chain
@@ -581,7 +583,11 @@ fn spend_in_fork_and_compact() {
 			.unwrap();
 		chain.validate(false).unwrap();
 
+		// save the tx1 output position index
 		let out1 = tx1.outputs().last().unwrap();
+		let tx1_ofph = chain.store().get_output_pos_height(&out1.commit).unwrap();
+		// the mmr position is either 8 or 9 depending on the sorting of block #5 coinbase output and this out1
+		assert_eq!(tx1_ofph.position == 8 || tx1_ofph.position == 9, true);
 		let out1_path_msg = proof::rewind(
 			kc.secp(),
 			&pb,
@@ -589,6 +595,9 @@ fn spend_in_fork_and_compact() {
 			&out1.features.get_spath().unwrap(),
 		)
 		.unwrap();
+		assert_eq!(out1_path_msg.w, 0i64);
+
+		// create another transaction to spend the plain output in tx1
 		let tx2 = build::transaction(
 			vec![
 				build::input(consensus::REWARD - 20000, out1_path_msg.w, key_id30.clone()),
@@ -604,44 +613,78 @@ fn spend_in_fork_and_compact() {
 		)
 		.unwrap();
 
+		// mine block #6 with tx2
 		let next = prepare_block_tx(&kc, &prev_main, &chain, 9, vec![&tx2]);
 		let prev_main = next.header.clone();
 		chain.process_block(next, chain::Options::SKIP_POW).unwrap();
 
 		// Full chain validation for completeness.
 		chain.validate(false).unwrap();
+		// create a transaction with more outputs, to give 90% probability changing the output mmr position of tx1 output
+		let key_id3 = ExtKeychainPath::new(1, 3, 0, 0, 0).to_identifier();
+		let key_id4 = ExtKeychainPath::new(1, 4, 0, 0, 0).to_identifier();
+		let key_id60 = ExtKeychainPath::new(1, 60, 0, 0, 0).to_identifier();
+		let key_id100 = ExtKeychainPath::new(1, 100, 0, 0, 0).to_identifier();
+		let tx3 = build::transaction(
+			vec![
+				build::coinbase_input(consensus::REWARD, key_id4.clone()),
+				build::output(consensus::REWARD - 20000, Some(0i64), key_id100.clone()),
+				build::with_fee(20000),
+			],
+			&kc,
+			&pb,
+		)
+		.unwrap();
+		// create a transaction to spend coinbase output of block #2
+		let tx4 = build::transaction(
+			vec![
+				build::coinbase_input(consensus::REWARD, key_id3.clone()),
+				build::output(consensus::REWARD - 20000, Some(0i64), key_id60.clone()),
+				build::with_fee(20000),
+			],
+			&kc,
+			&pb,
+		)
+		.unwrap();
 
-		// mine 2 forked blocks from the first
-		let fork = prepare_block_tx(&kc, &fork_head, &chain, 6, vec![&tx1]);
+		// mine 1 forked block #5 from the block #4 with tx4 (to force the tx1.output position different)
+		let fork = prepare_block_tx(&kc, &fork_head, &chain, 6, vec![&tx4]);
 		let prev_fork = fork.header.clone();
 		chain.process_block(fork, chain::Options::SKIP_POW).unwrap();
 
-		let fork_next = prepare_block_tx(&kc, &prev_fork, &chain, 8, vec![&tx2]);
-		let prev_fork = fork_next.header.clone();
-		chain
-			.process_block(fork_next, chain::Options::SKIP_POW)
-			.unwrap();
+		// mine 1 forked block #6 from the block #5, with tx1 and tx3
+		let fork = prepare_block_tx(&kc, &prev_fork, &chain, 8, vec![&tx1, &tx3]);
+		let prev_fork = fork.header.clone();
+		chain.process_block(fork, chain::Options::SKIP_POW).unwrap();
 
-		chain.validate(false).unwrap();
+		// the output position index of tx1 output already changed on the fork, but before the fork win, the chain
+		//  will keep use the main(original) index.
+		let tx1_ofph_fork = chain.store().get_output_pos_height(&out1.commit).unwrap();
+		assert_eq!(tx1_ofph_fork.position, tx1_ofph.position);
 
-		// check state
+		// check state:
+		//  1. the chain head is still on original block #6
+		//  2. tx2 is unspent output
+		//  3. tx1 is spent output		let head = chain.head_header().unwrap();
 		let head = chain.head_header().unwrap();
 		assert_eq!(head.height, 6);
 		assert_eq!(head.hash(), prev_main.hash());
-		assert!(chain
-			.is_unspent(&OutputIdentifier::from_output(&tx2.outputs()[0]).commit)
-			.is_ok());
+
 		assert!(chain
 			.is_unspent(&OutputIdentifier::from_output(&tx1.outputs()[0]).commit)
 			.is_err());
 
-		// make the fork win
-		let fork_next = prepare_block(&kc, &prev_fork, &chain, 10);
+		// mine 2nd forked block #7 based on the forked block #6, with tx2, to make the fork win
+		let fork_next = prepare_block_tx(&kc, &prev_fork, &chain, 10, vec![&tx2]);
 		let prev_fork = fork_next.header.clone();
 		chain
 			.process_block(fork_next, chain::Options::SKIP_POW)
 			.unwrap();
+
 		chain.validate(false).unwrap();
+		assert!(chain
+			.is_unspent(&OutputIdentifier::from_output(&tx2.outputs()[0]).commit)
+			.is_ok());
 
 		// check state
 		let head = chain.head_header().unwrap();
@@ -653,6 +696,14 @@ fn spend_in_fork_and_compact() {
 		assert!(chain
 			.is_unspent(&OutputIdentifier::from_output(&tx1.outputs()[0]).commit)
 			.is_err());
+
+		// check the output position index of tx1 output change to the win fork
+		let tx1_ofph_fork = chain.store().get_output_pos_height(&out1.commit).unwrap();
+		assert_ne!(tx1_ofph_fork.position, tx1_ofph.position);
+		println!(
+			"tx1 output position now: {}, original: {}",
+			tx1_ofph_fork.position, tx1_ofph.position
+		);
 
 		// add 20 blocks to go past the test horizon
 		let mut prev = prev_fork;
