@@ -1432,6 +1432,14 @@ impl Input {
 		}
 	}
 
+	/// From Identifier
+	pub fn from_id(id: &OutputIdentifier) -> Input {
+		Input {
+			features: id.features,
+			commit: id.commit,
+		}
+	}
+
 	/// The input commitment which _partially_ identifies the output being
 	/// spent. In the presence of a fork we need additional info to uniquely
 	/// identify the output. Specifically the block hash (to correctly

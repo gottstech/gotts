@@ -199,12 +199,12 @@ impl<'a> UTXOView<'a> {
 					OutputFeatures::Plain | OutputFeatures::Coinbase => self
 						.output_i_pmmr
 						.get_data(ofph.position)
-						.unwrap()
+						.ok_or(ErrorKind::AlreadySpent(input.commitment()))?
 						.into_output(),
 					OutputFeatures::SigLocked => self
 						.output_ii_pmmr
 						.get_data(ofph.position)
-						.unwrap()
+						.ok_or(ErrorKind::AlreadySpent(input.commitment()))?
 						.into_output(),
 				};
 				if output.id().commitment() == input.commitment() {

@@ -297,6 +297,12 @@ impl<'a> Batch<'a> {
 		)
 	}
 
+	/// Delete output_pos and block height from index.
+	pub fn delete_output_pos_height(&self, commit: &Commitment) -> Result<(), Error> {
+		self.db
+			.delete(&to_key(COMMIT_POS_HGT_PREFIX, &mut commit.as_ref().to_vec())[..])
+	}
+
 	/// Get output_pos from index.
 	pub fn get_output_pos(&self, commit: &Commitment) -> Result<u64, Error> {
 		let res: Result<Option<OutputFeaturePosHeight>, Error> = self.db.get_ser(&to_key(
