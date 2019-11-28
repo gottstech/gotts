@@ -13,15 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use failure::Fail;
 use rand::thread_rng;
 use std::cmp::min;
-use std::io::Cursor;
-use std::ops::Add;
 /// Keychain trait and its main supporting types. The Identifier is a
 /// semi-opaque structure (just bytes) to track keys within the Keychain.
 /// BlindingFactor is a useful wrapper around a private key to help with
 /// commitment generation.
-use std::{error, fmt};
+use std::fmt;
+use std::io::Cursor;
+use std::ops::Add;
 
 use crate::extkey_bip32::{self, ChildNumber};
 use serde::{de, ser}; //TODO: Convert errors to use ErrorKind
@@ -39,14 +40,28 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 // Size of an identifier in bytes
 pub const IDENTIFIER_SIZE: usize = 17;
 
-#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize, Fail)]
 pub enum Error {
+	/// libsecp internal error
+	#[fail(display = "Keychain libsecp internal error: {}", _0)]
 	Secp(secp::Error),
+	/// KeyDerivation error
+	#[fail(display = "Keychain KeyDerivation error: {}", _0)]
 	KeyDerivation(extkey_bip32::Error),
+	/// InvalidIdentifier error
+	#[fail(display = "Keychain InvalidIdentifier error")]
 	InvalidIdentifier,
+	/// FromHexError error
+	#[fail(display = "Keychain FromHexError error: {}", _0)]
 	FromHexError(String),
+	/// Transaction error
+	#[fail(display = "Keychain Transaction error: {}", _0)]
 	Transaction(String),
+	/// RangeProof error
+	#[fail(display = "Keychain RangeProof error: {}", _0)]
 	RangeProof(String),
+	/// SwitchCommitment error
+	#[fail(display = "Keychain SwitchCommitment error")]
 	SwitchCommitment,
 }
 
@@ -65,22 +80,6 @@ impl From<hex::FromHexError> for Error {
 impl From<extkey_bip32::Error> for Error {
 	fn from(e: extkey_bip32::Error) -> Error {
 		Error::KeyDerivation(e)
-	}
-}
-
-impl error::Error for Error {
-	fn description(&self) -> &str {
-		match *self {
-			_ => "some kind of keychain error",
-		}
-	}
-}
-
-impl fmt::Display for Error {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match *self {
-			_ => write!(f, "some kind of keychain error"),
-		}
 	}
 }
 

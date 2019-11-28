@@ -84,9 +84,10 @@ impl PoolPushHandler {
 				})
 				.and_then(move |tx: Transaction| {
 					let source = pool::TxSource::PushApi;
+					let tx_hash = tx.hash();
 					info!(
 						"Pushing transaction {} to pool (inputs: {}, outputs: {}, kernels: {})",
-						tx.hash(),
+						tx_hash,
 						tx.inputs().len(),
 						tx.outputs().len(),
 						tx.kernels().len(),
@@ -98,10 +99,16 @@ impl PoolPushHandler {
 						.blockchain
 						.chain_head()
 						.context(ErrorKind::Internal("Failed to get chain head".to_owned()))?;
-					let res = tx_pool
-						.add_to_pool(source, tx, !fluff, &header)
-						.context(ErrorKind::Internal("Failed to update pool".to_owned()))?;
-					Ok(res)
+					let res = tx_pool.add_to_pool(source, tx, !fluff, &header);
+					let err_str = if let Err(e) = &res {
+						error!("Pushing transaction {} to pool failed: e = {}", tx_hash, e);
+						format!("Failed to update pool with e = {}", e)
+					} else {
+						String::new()
+					};
+					res.context(ErrorKind::Internal(err_str))?;
+
+					Ok(())
 				}),
 		)
 	}
