@@ -17,7 +17,7 @@ use self::chain::types::{NoopAdapter, Tip};
 use self::chain::Chain;
 use self::core::core::hash::Hashed;
 use self::core::core::verifier_cache::LruVerifierCache;
-use self::core::core::{Block, BlockHeader, OutputIdentifier, Transaction};
+use self::core::core::{Block, BlockHeader, Input, OutputIdentifier, Transaction};
 use self::core::global::ChainTypes;
 use self::core::libtx::{self, build, proof, ProofBuilder};
 use self::core::pow::Difficulty;
@@ -620,6 +620,15 @@ fn spend_in_fork_and_compact() {
 
 		// Full chain validation for completeness.
 		chain.validate(false).unwrap();
+
+		// Check the spent output still has the garbage index in database
+		// todo: refers to PR #25
+		let spent_out1_ofph = chain.store().get_output_pos_height(&out1.commit).unwrap();
+		assert_eq!(spent_out1_ofph.position, tx1_ofph.position);
+		// But that mmr position should be empty
+		let complete_inputs = chain.get_complete_inputs(&vec![Input::from_id(&out1.id())]);
+		assert_eq!(complete_inputs.is_err(), true);
+
 		// create a transaction with more outputs, to give 90% probability changing the output mmr position of tx1 output
 		let key_id3 = ExtKeychainPath::new(1, 3, 0, 0, 0).to_identifier();
 		let key_id4 = ExtKeychainPath::new(1, 4, 0, 0, 0).to_identifier();
@@ -665,7 +674,7 @@ fn spend_in_fork_and_compact() {
 		// check state:
 		//  1. the chain head is still on original block #6
 		//  2. tx2 is unspent output
-		//  3. tx1 is spent output		let head = chain.head_header().unwrap();
+		//  3. tx1 is spent output
 		let head = chain.head_header().unwrap();
 		assert_eq!(head.height, 6);
 		assert_eq!(head.hash(), prev_main.hash());
