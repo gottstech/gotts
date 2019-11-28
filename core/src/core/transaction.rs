@@ -43,7 +43,6 @@ use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::u32;
-use std::{error, fmt};
 
 /// Single output message size. (features || commit || value)
 pub const SINGLE_MSG_SIZE: usize = 1 + secp::PEDERSEN_COMMITMENT_SIZE + 8;
@@ -154,79 +153,87 @@ impl Readable for KernelFeatures {
 }
 
 /// Errors thrown by Transaction validation
-#[derive(Clone, Eq, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Eq, Debug, PartialEq, Serialize, Deserialize, Fail)]
 pub enum Error {
 	/// Underlying Secp256k1 error (signature validation or invalid public key
 	/// typically)
+	#[fail(display = "Transaction libsecp internal error: {}", _0)]
 	Secp(secp::Error),
 	/// Underlying keychain related error
+	#[fail(display = "Transaction keychain internal error: {}", _0)]
 	Keychain(keychain::Error),
 	/// The sum of output minus input commitments does not
 	/// match the sum of kernel commitments
+	#[fail(display = "Transaction KernelSumMismatch error")]
 	KernelSumMismatch,
 	/// Transaction public value sums do not match.
+	#[fail(display = "Transaction TransactionSumMismatch error")]
 	TransactionSumMismatch,
 	/// Restrict tx total weight.
+	#[fail(display = "Transaction TooHeavy error")]
 	TooHeavy,
 	/// Error originating from an invalid lock-height
+	#[fail(display = "Transaction LockHeight error: {}", _0)]
 	LockHeight(u64),
 	/// Range proof validation error
+	#[fail(display = "Transaction RangeProof error")]
 	RangeProof,
 	/// Error originating from an invalid Merkle proof
+	#[fail(display = "Transaction MerkleProof error")]
 	MerkleProof,
 	/// Returns if the value hidden within the a RangeProof message isn't
 	/// repeated 3 times, indicating it's incorrect
+	#[fail(display = "Transaction InvalidProofMessage error")]
 	InvalidProofMessage,
 	/// Error when verifying kernel sums via committed trait.
+	#[fail(display = "Transaction Committed error: {}", _0)]
 	Committed(committed::Error),
 	/// Error when sums do not verify correctly during tx aggregation.
 	/// Likely a "double spend" across two unconfirmed txs.
+	#[fail(display = "Transaction AggregationError error")]
 	AggregationError,
 	/// Validation error relating to cut-through (tx is spending its own
 	/// output).
+	#[fail(display = "Transaction CutThrough error")]
 	CutThrough,
 	/// Validation error relating to output features.
 	/// It is invalid for a transaction to contain a coinbase output, for example.
+	#[fail(display = "Transaction InvalidOutputFeatures error")]
 	InvalidOutputFeatures,
 	/// Validation error relating to kernel features.
 	/// It is invalid for a transaction to contain a coinbase kernel, for example.
+	#[fail(display = "Transaction InvalidKernelFeatures error")]
 	InvalidKernelFeatures,
 	/// Validation error relating to input signature message.
+	#[fail(display = "Transaction InvalidInputSigMsg error")]
 	InvalidInputSigMsg,
 	/// TxKernel Signature verification error.
+	#[fail(display = "Transaction IncorrectSignature error")]
 	IncorrectSignature,
 	/// InputUnlocker Signature verification error.
+	#[fail(display = "Transaction UnlockerIncorrectSignature error")]
 	UnlockerIncorrectSignature,
 	/// Signature verification error, public key hash not match.
+	#[fail(display = "Transaction IncorrectPubkey error")]
 	IncorrectPubkey,
 	/// Input does not exist among UTXO sets.
+	#[fail(display = "Transaction InputNotExist error")]
 	InputNotExist,
 	/// Spend time is earlier than output timestamp.
+	#[fail(display = "Transaction IncorrectTimestamp error")]
 	IncorrectTimestamp,
 	/// Underlying serialization error.
+	#[fail(display = "Transaction Serialization error: {}", _0)]
 	Serialization(ser::Error),
 	/// SecuredPath error.
+	#[fail(display = "Transaction SecuredPath error: {}", _0)]
 	SecuredPath(String),
 	/// OutputLocker error.
+	#[fail(display = "Transaction OutputLocker error: {}", _0)]
 	OutputLocker(String),
 	/// InputUnlocker error.
+	#[fail(display = "Transaction InputUnlocker error: {}", _0)]
 	InputUnlocker(String),
-}
-
-impl error::Error for Error {
-	fn description(&self) -> &str {
-		match *self {
-			_ => "some kind of keychain error",
-		}
-	}
-}
-
-impl fmt::Display for Error {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match *self {
-			_ => write!(f, "some kind of keychain error"),
-		}
-	}
 }
 
 impl From<ser::Error> for Error {

@@ -204,7 +204,7 @@ fn send_request_async(req: Request<Body>) -> Box<dyn Future<Item = String, Error
 			.and_then(|resp| {
 				if !resp.status().is_success() {
 					Either::A(err(ErrorKind::RequestError(format!(
-						"Wrong response code: {} with data {:?}",
+						"Wrong response code: {}, with data: {:?}",
 						resp.status(),
 						resp.body()
 					))
