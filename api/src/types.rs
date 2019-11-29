@@ -19,7 +19,7 @@ use crate::chain;
 use crate::chain::types::OutputFeaturePosHeight;
 use crate::core::core::hash::Hashed;
 use crate::core::core::merkle_proof::MerkleProof;
-use crate::core::core::{KernelFeatures, TxKernel};
+use crate::core::core::TxKernel;
 use crate::core::{core, ser};
 use crate::p2p;
 use crate::util;
@@ -206,34 +206,6 @@ impl OutputPrintable {
 	}
 }
 
-// Printable representation of a block
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct TxKernelPrintable {
-	pub features: String,
-	pub fee: u64,
-	pub lock_height: u64,
-	pub excess: String,
-	pub excess_sig: String,
-}
-
-impl TxKernelPrintable {
-	pub fn from_txkernel(k: &core::TxKernel) -> TxKernelPrintable {
-		let features = k.features.as_string();
-		let (fee, lock_height) = match k.features {
-			KernelFeatures::Plain { fee } => (fee, 0),
-			KernelFeatures::Coinbase => (0, 0),
-			KernelFeatures::HeightLocked { fee, lock_height } => (fee, lock_height),
-		};
-		TxKernelPrintable {
-			features,
-			fee,
-			lock_height,
-			excess: util::to_hex(k.excess.0.to_vec()),
-			excess_sig: util::to_hex(k.excess_sig.to_raw_data().to_vec()),
-		}
-	}
-}
-
 // Just the information required for wallet reconstruction
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BlockHeaderInfo {
@@ -318,7 +290,7 @@ pub struct BlockPrintable {
 	/// A printable version of the outputs
 	pub outputs: Vec<OutputPrintable>,
 	/// A printable version of the transaction kernels
-	pub kernels: Vec<TxKernelPrintable>,
+	pub kernels: Vec<TxKernel>,
 }
 
 impl BlockPrintable {
@@ -345,11 +317,7 @@ impl BlockPrintable {
 			})
 			.collect::<Result<Vec<_>, _>>()?;
 
-		let kernels = block
-			.kernels()
-			.iter()
-			.map(|kernel| TxKernelPrintable::from_txkernel(kernel))
-			.collect();
+		let kernels = block.kernels().clone();
 		Ok(BlockPrintable {
 			header: BlockHeaderPrintable::from_header(&block.header),
 			inputs,
@@ -366,7 +334,7 @@ pub struct CompactBlockPrintable {
 	/// Full outputs, specifically coinbase output(s)
 	pub out_full: Vec<OutputPrintable>,
 	/// Full kernels, specifically coinbase kernel(s)
-	pub kern_full: Vec<TxKernelPrintable>,
+	pub kern_full: Vec<TxKernel>,
 	/// Kernels (hex short_ids)
 	pub kern_ids: Vec<String>,
 }
@@ -384,11 +352,7 @@ impl CompactBlockPrintable {
 			.iter()
 			.map(|x| OutputPrintable::from_output(x, chain.clone(), Some(&block.header), false))
 			.collect::<Result<Vec<_>, _>>()?;
-		let kern_full = cb
-			.kern_full()
-			.iter()
-			.map(|x| TxKernelPrintable::from_txkernel(x))
-			.collect();
+		let kern_full = cb.kern_full().clone();
 		Ok(CompactBlockPrintable {
 			header: BlockHeaderPrintable::from_header(&cb.header),
 			out_full,
