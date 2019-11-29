@@ -1204,12 +1204,16 @@ impl Transaction {
 			let mut sum: i64 = complete_inputs
 				.values()
 				.fold(0i64, |acc, x| acc.saturating_add(x.output.value as i64));
+			let total_inputs_values = sum;
 			sum = self
 				.body
 				.outputs
 				.iter()
 				.fold(sum, |acc, x| acc.saturating_sub(x.value as i64));
 			if sum != self.overage() {
+				debug!("tx {} sum validate fail. total inputs value: {}, total outputs value: {}, fee: {}",
+					  self.hash(), total_inputs_values, total_inputs_values - sum, self.overage(),
+				);
 				return Err(Error::TransactionSumMismatch)?;
 			}
 		}

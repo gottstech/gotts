@@ -235,10 +235,6 @@ impl Handler {
 			"login" => self.handle_login(request.params, worker_id),
 			"submit" => {
 				let res = self.handle_submit(request.params, worker_id);
-				// this key_id has been used now, reset
-				if let Ok((_, true)) = res {
-					self.current_state.write().current_key_id = None;
-				}
 				res.map(|(v, _)| v)
 			}
 			"keepalive" => self.handle_keepalive(),
@@ -358,7 +354,7 @@ impl Handler {
 		// Validate parameters
 		let params: SubmitParams = parse_params(params)?;
 
-		let state = self.current_state.read();
+		let mut state = self.current_state.write();
 		// Find the correct version of the block to match this header
 		let b: Option<&Block> = state.current_block_versions.get(params.job_id as usize);
 		if params.height != state.current_block_versions.last().unwrap().header.height
@@ -429,6 +425,10 @@ impl Handler {
 				return Err(RpcError::cannot_validate());
 			}
 			share_is_block = true;
+			// the key_id has been used now, reset.
+			// todo: this is the only 'write' operation for 'state' in this function, how to optimize it to avoid long lock on share validation?
+			state.current_key_id = None;
+
 			self.workers
 				.update_stats(worker_id, |worker_stats| worker_stats.num_blocks_found += 1);
 			// Log message to make it obvious we found a block
