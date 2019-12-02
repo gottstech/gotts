@@ -38,6 +38,7 @@ use std::sync::Weak;
 
 // UTXO traversal::
 // GET /v1/txhashset/outputs?start_index=1&max=100
+// GET /v1/txhashset/nit-outputs?start_index=1&max=100
 //
 // Build a merkle proof for a given output commitment
 // GET /v1/txhashset/merkleproof?id=xxx
@@ -78,7 +79,30 @@ impl TxHashSetHandler {
 			outputs: outputs
 				.2
 				.iter()
-				.map(|x| OutputPrintable::from_output(x, chain.clone(), None, true))
+				.map(|x| OutputPrintable::from_output(x, chain.clone(), None, false))
+				.collect::<Result<Vec<_>, _>>()
+				.context(ErrorKind::Internal("cain error".to_owned()))?,
+		};
+		Ok(out)
+	}
+
+	// allows traversal of utxo set, non-interactive transaction outputs only.
+	fn nit_outputs(&self, start_index: u64, mut max: u64) -> Result<OutputListing, Error> {
+		//set a limit here
+		if max > 10_000 {
+			max = 10_000;
+		}
+		let chain = w(&self.chain)?;
+		let outputs = chain
+			.nit_unspent_outputs_by_insertion_index(start_index, max)
+			.context(ErrorKind::NotFound)?;
+		let out = OutputListing {
+			last_retrieved_index: outputs.0,
+			highest_index: outputs.1,
+			outputs: outputs
+				.2
+				.iter()
+				.map(|x| OutputPrintable::from_output(x, chain.clone(), None, false))
 				.collect::<Result<Vec<_>, _>>()
 				.context(ErrorKind::Internal("cain error".to_owned()))?,
 		};
@@ -135,6 +159,7 @@ impl Handler for TxHashSetHandler {
 			"lastoutputs" => result_to_response(self.get_last_n_output(last_n)),
 			"lastkernels" => result_to_response(self.get_last_n_kernel(last_n)),
 			"outputs" => result_to_response(self.outputs(start_index, max)),
+			"nit-outputs" => result_to_response(self.nit_outputs(start_index, max)),
 			"merkleproof" => result_to_response(self.get_merkle_proof_for_output(&id, features)),
 			_ => response(StatusCode::BAD_REQUEST, ""),
 		}

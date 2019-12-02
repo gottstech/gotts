@@ -1204,6 +1204,24 @@ impl Chain {
 		}
 	}
 
+	/// outputs by insertion index, non-interactive transaction output only.
+	/// Only used by transaction API for traversal of utxo set.
+	pub fn nit_unspent_outputs_by_insertion_index(
+		&self,
+		start_index: u64,
+		max: u64,
+	) -> Result<(u64, u64, Vec<Output>), Error> {
+		let mut output_vec: Vec<Output> = vec![];
+		let txhashset = self.txhashset.read();
+		let max_ii_index = txhashset.highest_output_ii_insertion_index();
+		// Traversal OutputI firstly, then OutputII.
+		let outputs = txhashset.outputs_ii_by_insertion_index(start_index, max);
+		for x in outputs.1 {
+			output_vec.push(x.into_output());
+		}
+		Ok((outputs.0, max_ii_index, output_vec))
+	}
+
 	/// output by mmr position
 	pub fn unspent_output_by_position(
 		&self,
