@@ -402,26 +402,18 @@ impl TxHashSet {
 		batch.clear_output_pos_height()?;
 
 		let mut outputs_pos: Vec<(OutputIdentifier, u64)> = vec![];
+
+		// search for outputI PMMR
 		for pos in output_i_pmmr.leaf_pos_iter() {
 			if let Some(out) = output_i_pmmr.get_data(pos) {
 				outputs_pos.push((out.id, pos));
 			}
 		}
-		for pos in output_ii_pmmr.leaf_pos_iter() {
-			if let Some(out) = output_ii_pmmr.get_data(pos) {
-				outputs_pos.push((out.id, pos));
-			}
-		}
 		let total_outputs = outputs_pos.len();
-		if total_outputs == 0 {
-			debug!("rebuild_height_pos_index: nothing to be rebuilt");
-			return Ok(());
-		} else {
-			debug!(
-				"rebuild_height_pos_index: rebuilding {} outputs position & height...",
-				total_outputs
-			);
-		}
+		debug!(
+			"rebuild_height_pos_index: rebuilding {} outputI outputs position & height...",
+			total_outputs
+		);
 
 		let max_height = batch.head()?.height;
 
@@ -430,25 +422,57 @@ impl TxHashSet {
 			let hash = header_pmmr.get_header_hash_by_height(search_height + 1)?;
 			let h = batch.get_block_header(&hash)?;
 			while i < total_outputs {
-				let (id, position) = outputs_pos[i].clone();
-				match id.features {
-					OutputFeatures::Plain | OutputFeatures::Coinbase => {
-						if position > h.output_i_mmr_size {
-							break;
-						}
-					}
-					OutputFeatures::SigLocked => {
-						if position > h.output_ii_mmr_size {
-							break;
-						}
-					}
+				let (id, position) = outputs_pos[i];
+				if position > h.output_i_mmr_size {
+					break;
 				}
-				let height = if position == 1 {
-					// Special care about the unspent Genesis output
-					0
-				} else {
-					h.height
-				};
+				// with special care about the unspent Genesis output
+				let height = if position == 1 { 0 } else { h.height };
+				batch.save_output_pos_height(
+					&id.commit,
+					OutputFeaturePosHeight {
+						features: id.features,
+						position,
+						height,
+					},
+				)?;
+				trace!(
+					"rebuild_height_pos_index: {:?}",
+					(id.commit, position, height)
+				);
+				i += 1;
+			}
+		}
+		debug!(
+			"rebuild_height_pos_index: {} OutputI UTXOs, took {}s",
+			total_outputs,
+			now.elapsed().as_secs(),
+		);
+		let now = Instant::now();
+
+		// search for outputII PMMR
+		outputs_pos.clear();
+		for pos in output_ii_pmmr.leaf_pos_iter() {
+			if let Some(out) = output_ii_pmmr.get_data(pos) {
+				outputs_pos.push((out.id, pos));
+			}
+		}
+		let total_outputs = outputs_pos.len();
+		debug!(
+			"rebuild_height_pos_index: rebuilding {} OutputII outputs position & height...",
+			total_outputs
+		);
+
+		let mut i = 0;
+		for search_height in 0..max_height {
+			let hash = header_pmmr.get_header_hash_by_height(search_height + 1)?;
+			let h = batch.get_block_header(&hash)?;
+			while i < total_outputs {
+				let (id, position) = outputs_pos[i];
+				if position > h.output_ii_mmr_size {
+					break;
+				}
+				let height = h.height;
 				batch.save_output_pos_height(
 					&id.commit,
 					OutputFeaturePosHeight {
@@ -466,7 +490,7 @@ impl TxHashSet {
 		}
 
 		debug!(
-			"rebuild_height_pos_index: {} UTXOs, took {}s",
+			"rebuild_height_pos_index: {} OutputII UTXOs, took {}s",
 			total_outputs,
 			now.elapsed().as_secs(),
 		);
