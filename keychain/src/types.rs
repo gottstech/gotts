@@ -391,7 +391,7 @@ impl ExtKeychainPath {
 	/// Return a new chain path with given derivation and depth
 	pub fn new(depth: u8, d0: u32, d1: u32, d2: u32, d3: u32) -> ExtKeychainPath {
 		ExtKeychainPath {
-			depth: depth,
+			depth,
 			path: [
 				ChildNumber::from(d0),
 				ChildNumber::from(d1),
@@ -401,7 +401,7 @@ impl ExtKeychainPath {
 		}
 	}
 
-	/// from an Indentifier [manual deserialization]
+	/// from an Identifier [manual deserialization]
 	pub fn from_identifier(id: &Identifier) -> ExtKeychainPath {
 		let mut rdr = Cursor::new(id.0.to_vec());
 		ExtKeychainPath {

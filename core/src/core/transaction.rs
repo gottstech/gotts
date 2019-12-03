@@ -746,12 +746,20 @@ impl TransactionBody {
 
 	/// Calculate transaction weight
 	pub fn body_weight(&self) -> usize {
-		TransactionBody::weight(self.inputs.len(), self.outputs.len(), self.kernels.len())
+		TransactionBody::weight(
+			self.get_inputs_number(),
+			self.outputs.len(),
+			self.kernels.len(),
+		)
 	}
 
 	/// Calculate weight of transaction using block weighing
 	pub fn body_weight_as_block(&self) -> usize {
-		TransactionBody::weight_as_block(self.inputs.len(), self.outputs.len(), self.kernels.len())
+		TransactionBody::weight_as_block(
+			self.get_inputs_number(),
+			self.outputs.len(),
+			self.kernels.len(),
+		)
 	}
 
 	/// Calculate transaction weight from transaction details. This is non
