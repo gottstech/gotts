@@ -85,6 +85,9 @@ impl Server {
 
 			match listener.accept() {
 				Ok((stream, peer_addr)) => {
+					// Explicitly move the accepted TCP stream into blocking mode.
+					stream.set_nonblocking(false)?;
+
 					let peer_addr = PeerAddr(peer_addr);
 
 					if self.check_undesirable(&stream) {
@@ -330,6 +333,10 @@ impl ChainAdapter for DummyAdapter {
 		_peer_info: &PeerInfo,
 	) -> Result<bool, chain::Error> {
 		Ok(false)
+	}
+
+	fn txhashset_download_fail(&self, _fail_reason: String) {
+		unimplemented!()
 	}
 
 	fn txhashset_download_update(

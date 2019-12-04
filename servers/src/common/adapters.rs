@@ -393,6 +393,13 @@ impl p2p::ChainAdapter for NetToChainAdapter {
 		}
 	}
 
+	fn txhashset_download_fail(&self, fail_reason: String) {
+		self.sync_state.set_sync_error(
+			chain::ErrorKind::TxHashSetErr(format!("txhashset download failed: {}", fail_reason))
+				.into(),
+		);
+	}
+
 	fn txhashset_download_update(
 		&self,
 		start_time: DateTime<Utc>,

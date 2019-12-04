@@ -595,6 +595,10 @@ impl ChainAdapter for TrackingAdapter {
 		self.adapter.txhashset_write(h, txhashset_data, peer_info)
 	}
 
+	fn txhashset_download_fail(&self, fail_reason: String) {
+		self.adapter.txhashset_download_fail(fail_reason);
+	}
+
 	fn txhashset_download_update(
 		&self,
 		start_time: DateTime<Utc>,

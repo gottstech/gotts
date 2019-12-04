@@ -427,6 +427,7 @@ impl MessageHandler for Protocol {
 						"handle_payload: txhashset archive save to file fail. err={:?}",
 						e
 					);
+					self.adapter.txhashset_download_fail(format!("{:?}", e));
 					return Err(e);
 				}
 
