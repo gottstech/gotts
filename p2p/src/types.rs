@@ -580,6 +580,10 @@ pub trait ChainAdapter: Sync + Send {
 	/// state data.
 	fn txhashset_receive_ready(&self) -> bool;
 
+	/// Notify the sync thread the txhashset download has failed, so as to restart
+	/// a new downloading request.
+	fn txhashset_download_fail(&self, fail_reason: String);
+
 	/// Update txhashset downloading progress
 	fn txhashset_download_update(
 		&self,

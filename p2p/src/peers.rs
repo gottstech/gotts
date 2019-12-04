@@ -705,6 +705,10 @@ impl ChainAdapter for Peers {
 		}
 	}
 
+	fn txhashset_download_fail(&self, fail_reason: String) {
+		self.adapter.txhashset_download_fail(fail_reason);
+	}
+
 	fn txhashset_download_update(
 		&self,
 		start_time: DateTime<Utc>,
