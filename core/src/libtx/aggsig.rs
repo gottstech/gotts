@@ -232,7 +232,7 @@ pub fn verify_partial_sig(
 /// use core::libtx::{aggsig, proof};
 /// use core::core::transaction::KernelFeatures;
 /// use core::core::{Output, OutputFeaturesEx};
-/// use keychain::{Keychain, ExtKeychain};
+/// use keychain::{Keychain, Identifier, ExtKeychain};
 /// use rand::{thread_rng, Rng};
 ///
 /// let secp = Secp256k1::with_caps(ContextFlag::Commit);
@@ -242,7 +242,7 @@ pub fn verify_partial_sig(
 /// let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 /// let w: i64 = thread_rng().gen();
 /// let commit = keychain.commit(w, &key_id).unwrap();
-/// let builder = proof::ProofBuilder::new(&keychain);
+/// let builder = proof::ProofBuilder::new(&keychain, &Identifier::zero());
 /// let spath = proof::create_secured_path(&keychain, &builder, w, &key_id, commit);
 /// let output = Output {
 ///		features: OutputFeaturesEx::Plain { spath },
@@ -301,7 +301,7 @@ where
 /// use util::secp::{ContextFlag, Secp256k1};
 /// use core::core::transaction::KernelFeatures;
 /// use core::core::{Output, OutputFeaturesEx};
-/// use keychain::{Keychain, ExtKeychain};
+/// use keychain::{Keychain, ExtKeychain, Identifier};
 /// use rand::{thread_rng, Rng};
 ///
 /// // Create signature
@@ -312,7 +312,7 @@ where
 /// let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 /// let w = 0i64;
 /// let commit = keychain.commit(w, &key_id).unwrap();
-/// let builder = proof::ProofBuilder::new(&keychain);
+/// let builder = proof::ProofBuilder::new(&keychain, &Identifier::zero());
 /// let spath = proof::create_secured_path(&keychain, &builder, w, &key_id, commit);
 /// let output = Output {
 ///		features: OutputFeaturesEx::Coinbase { spath },

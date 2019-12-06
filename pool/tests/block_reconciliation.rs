@@ -20,7 +20,7 @@ use self::core::core::verifier_cache::LruVerifierCache;
 use self::core::core::{Block, BlockHeader};
 use self::core::libtx;
 use self::core::pow::Difficulty;
-use self::keychain::{ExtKeychain, Keychain};
+use self::keychain::{ExtKeychain, Identifier, Keychain};
 use self::util::RwLock;
 use crate::common::ChainAdapter;
 use crate::common::*;
@@ -48,7 +48,7 @@ fn test_transaction_pool_block_reconciliation() {
 			let key_id = ExtKeychain::derive_key_id(1, height as u32, 0, 0, 0);
 			let reward = libtx::reward::output(
 				&keychain,
-				&libtx::ProofBuilder::new(&keychain),
+				&libtx::ProofBuilder::new(&keychain, &Identifier::zero()),
 				&key_id,
 				0,
 				false,
@@ -75,7 +75,7 @@ fn test_transaction_pool_block_reconciliation() {
 			let fees = initial_tx.fee();
 			let reward = libtx::reward::output(
 				&keychain,
-				&libtx::ProofBuilder::new(&keychain),
+				&libtx::ProofBuilder::new(&keychain, &Identifier::zero()),
 				&key_id,
 				fees,
 				false,
@@ -176,7 +176,7 @@ fn test_transaction_pool_block_reconciliation() {
 			let fees = block_txs.iter().map(|tx| tx.fee()).sum();
 			let reward = libtx::reward::output(
 				&keychain,
-				&libtx::ProofBuilder::new(&keychain),
+				&libtx::ProofBuilder::new(&keychain, &Identifier::zero()),
 				&key_id,
 				fees,
 				false,

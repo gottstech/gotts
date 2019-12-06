@@ -22,7 +22,7 @@ use self::core::core::verifier_cache::{LruVerifierCache, VerifierCache};
 use self::core::core::{Output, OutputEx, OutputFeaturesEx, OutputI, OutputII};
 use self::core::libtx::{build, proof};
 use self::core::ser;
-use self::keychain::{ExtKeychain, Keychain};
+use self::keychain::{ExtKeychain, Identifier, Keychain};
 use gotts_core as core;
 use gotts_keychain as keychain;
 use gotts_util::init_test_logger;
@@ -40,7 +40,7 @@ fn test_output_ser_deser() {
 	let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 	let w: i64 = thread_rng().gen();
 	let commit = keychain.commit(w, &key_id).unwrap();
-	let builder = proof::ProofBuilder::new(&keychain);
+	let builder = proof::ProofBuilder::new(&keychain, &Identifier::zero());
 	let spath = proof::create_secured_path(&keychain, &builder, w, &key_id, commit);
 
 	let out = Output {
@@ -67,7 +67,7 @@ fn test_output_std_hash() {
 	let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 	let w: i64 = 100;
 	let commit = keychain.commit(w, &key_id).unwrap();
-	let builder = proof::ProofBuilder::new(&keychain);
+	let builder = proof::ProofBuilder::new(&keychain, &Identifier::zero());
 	let spath = proof::create_secured_path(&keychain, &builder, w, &key_id, commit);
 
 	let out = Output {
@@ -91,14 +91,14 @@ fn test_output_std_hash() {
 	ser::serialize_default(&mut vec, &out).expect("serialized failed");
 	let dout: Output = ser::deserialize_default(&mut &vec[..]).unwrap();
 	assert_eq!(dout.value, out.value);
-	assert_eq!(70, vec.len());
+	assert_eq!(vec.len(), 54);
 	println!("\nOutput   Ser: {}", to_hex(vec.clone()));
 
 	vec.clear();
 	ser::serialize_default(&mut vec, &out_i).expect("serialized failed");
 	let dout_i: OutputI = ser::deserialize_default(&mut &vec[..]).unwrap();
 	assert_eq!(dout_i.value, out.value);
-	assert_eq!(70, vec.len());
+	assert_eq!(vec.len(), 54);
 	println!("\nOutputI  Ser: {}", to_hex(vec.clone()));
 
 	vec.clear();
@@ -117,11 +117,11 @@ fn test_output_std_hash() {
 
 	let mut hasher = DefaultHasher::new();
 	out.hash(&mut hasher);
-	assert_eq!("3b9c793f9b74680f", format!("{:x}", hasher.finish()));
+	assert_eq!("61a637bd439cc7d4", format!("{:x}", hasher.finish()));
 
 	let mut hasher = DefaultHasher::new();
 	out_i.hash(&mut hasher);
-	assert_eq!("3d6c2e69d0335596", format!("{:x}", hasher.finish()));
+	assert_eq!("c084e619005a87c", format!("{:x}", hasher.finish()));
 
 	let mut hasher = DefaultHasher::new();
 	out_ii.hash(&mut hasher);
@@ -136,7 +136,7 @@ fn test_output_blake2b_hash() {
 	let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 	let w: i64 = 100;
 	let commit = keychain.commit(w, &key_id).unwrap();
-	let builder = proof::ProofBuilder::new(&keychain);
+	let builder = proof::ProofBuilder::new(&keychain, &Identifier::zero());
 	let spath = proof::create_secured_path(&keychain, &builder, w, &key_id, commit);
 
 	let out = Output {
@@ -182,16 +182,16 @@ fn test_output_blake2b_hash() {
 
 	// The full serialized vector hash are different
 	assert_eq!(
-		Hash::from_hex("f1a4f13694aae656bbbd7c7b50361f88fc2c02086f7ee55f4924a99087a352ed").unwrap(),
-		vec.hash()
+		vec.hash().to_hex(),
+		"c151f1aac1165064b7a2d48952346cecf2a9e611bfa43b83abd99429e209d1ff",
 	);
 	assert_eq!(
-		Hash::from_hex("a5134feff2bc8a6625a26115220f8ce216be291586514c3aaf9f7850f97b05f3").unwrap(),
-		vec_i.hash()
+		vec_i.hash().to_hex(),
+		"eac681fd2a420171d12f01e354685bdd3f7b60e870f4646952f327852d99f553",
 	);
 	assert_eq!(
-		Hash::from_hex("4504a1f255a39cd67de0a56ec8fc4abe6f8556451399b62a7c3a466884d9a3d0").unwrap(),
-		vec_ii.hash()
+		vec_ii.hash().to_hex(),
+		"4504a1f255a39cd67de0a56ec8fc4abe6f8556451399b62a7c3a466884d9a3d0",
 	);
 }
 
@@ -204,7 +204,7 @@ fn test_siglocked_input_validate() {
 	init_test_logger();
 
 	let keychain = ExtKeychain::from_random_seed(false).unwrap();
-	let builder = proof::ProofBuilder::new(&keychain);
+	let builder = proof::ProofBuilder::new(&keychain, &Identifier::zero());
 
 	let key_id = ExtKeychain::derive_key_id(4, u32::MAX, u32::MAX, 0, 0);
 	let mut w: i64 = thread_rng().gen();

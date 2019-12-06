@@ -432,6 +432,11 @@ impl ExtKeychainPath {
 		Identifier(retval)
 	}
 
+	/// Return path as the &[ChildNumber]
+	pub fn as_ref(&self) -> &[ChildNumber] {
+		&self.path[0..self.depth as usize]
+	}
+
 	/// Last part of the path (for last n_child)
 	pub fn last_path_index(&self) -> u32 {
 		if self.depth == 0 {
@@ -439,6 +444,15 @@ impl ExtKeychainPath {
 		} else {
 			<u32>::from(self.path[self.depth as usize - 1])
 		}
+	}
+
+	/// Extend chain path with a given derivation index
+	pub fn extend(&self, d: u32) -> ExtKeychainPath {
+		let mut extended_path = self.clone();
+		let new_depth = min(4, extended_path.depth + 1);
+		extended_path.depth = new_depth;
+		extended_path.path[new_depth as usize - 1] = ChildNumber::from(d);
+		extended_path
 	}
 }
 
@@ -574,8 +588,17 @@ mod test {
 		let ret_path = id.to_path();
 		assert_eq!(path, ret_path);
 
+		assert_eq!(
+			format!("{:02x?}", path.as_ref()),
+			"[Hardened { index: 7fffffff }]"
+		);
 		println!("id: {:?}", id);
 		println!("ret_path {:?}", ret_path);
+
+		let path = ExtKeychainPath::new(0, 0, 0, 0, 0);
+		assert_eq!(format!("{:02x?}", path.as_ref()), "[]");
+		let path = ExtKeychainPath::new(4, 1, 2, 3, 4);
+		assert_eq!(format!("{:02x?}", path.as_ref()), "[Normal { index: 01 }, Normal { index: 02 }, Normal { index: 03 }, Normal { index: 04 }]");
 
 		let path = ExtKeychainPath::new(3, 0, 0, 10, 0);
 		let id = Identifier::from_path(&path);

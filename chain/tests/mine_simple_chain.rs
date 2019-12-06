@@ -22,7 +22,7 @@ use self::core::global::ChainTypes;
 use self::core::libtx::{self, build, proof, ProofBuilder};
 use self::core::pow::Difficulty;
 use self::core::{consensus, global, pow};
-use self::keychain::{ExtKeychain, ExtKeychainPath, Keychain};
+use self::keychain::{ExtKeychain, ExtKeychainPath, Identifier, Keychain};
 use self::util::RwLock;
 use chrono::Duration;
 use gotts_chain as chain;
@@ -536,7 +536,7 @@ fn spend_in_fork_and_compact() {
 		let chain = init_chain(".gotts6", pow::mine_genesis_block().unwrap());
 		let prev = chain.head_header().unwrap();
 		let kc = ExtKeychain::from_random_seed(false).unwrap();
-		let pb = ProofBuilder::new(&kc);
+		let pb = ProofBuilder::new(&kc, &Identifier::zero());
 
 		let mut fork_head = prev;
 
@@ -588,9 +588,11 @@ fn spend_in_fork_and_compact() {
 		let tx1_ofph = chain.store().get_output_pos_height(&out1.commit).unwrap();
 		// the mmr position is either 8 or 9 depending on the sorting of block #5 coinbase output and this out1
 		assert_eq!(tx1_ofph.position == 8 || tx1_ofph.position == 9, true);
+		let active_key_id = key_id30.parent_path();
 		let out1_path_msg = proof::rewind(
 			kc.secp(),
 			&pb,
+			&active_key_id,
 			&out1.commit,
 			&out1.features.get_spath().unwrap(),
 		)
@@ -754,7 +756,7 @@ fn output_header_mappings() {
 			let pk = ExtKeychainPath::new(1, n as u32, 0, 0, 0).to_identifier();
 			let reward = libtx::reward::output(
 				&keychain,
-				&libtx::ProofBuilder::new(&keychain),
+				&libtx::ProofBuilder::new(&keychain, &Identifier::zero()),
 				&pk,
 				0,
 				false,
@@ -838,8 +840,14 @@ where
 	let key_id = ExtKeychainPath::new(1, diff as u32, 0, 0, 0).to_identifier();
 
 	let fees = txs.iter().map(|tx| tx.fee()).sum();
-	let reward =
-		libtx::reward::output(kc, &libtx::ProofBuilder::new(kc), &key_id, fees, false).unwrap();
+	let reward = libtx::reward::output(
+		kc,
+		&libtx::ProofBuilder::new(kc, &Identifier::zero()),
+		&key_id,
+		fees,
+		false,
+	)
+	.unwrap();
 	let mut b = match core::core::Block::new(
 		prev,
 		txs.into_iter().cloned().collect(),
@@ -858,11 +866,15 @@ where
 #[test]
 #[ignore]
 fn actual_diff_iter_output() {
+	let test_dir = "../.gotts";
+
 	global::set_mining_mode(ChainTypes::AutomatedTesting);
+	clean_output_dir(test_dir);
+
 	let genesis_block = pow::mine_genesis_block().unwrap();
 	let verifier_cache = Arc::new(RwLock::new(LruVerifierCache::new()));
 	let chain = chain::Chain::init(
-		"../.gotts".to_string(),
+		test_dir.to_string(),
 		Arc::new(NoopAdapter {}),
 		genesis_block,
 		pow::verify_size,
@@ -887,4 +899,5 @@ fn actual_diff_iter_output() {
 		);
 		last_time = elem.timestamp;
 	}
+	clean_output_dir(test_dir);
 }

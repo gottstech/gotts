@@ -23,7 +23,7 @@ use self::core::genesis;
 use self::core::global::ChainTypes;
 use self::core::libtx::{self, reward};
 use self::core::{consensus, global, pow};
-use self::keychain::{ExtKeychainPath, Keychain};
+use self::keychain::{ExtKeychainPath, Identifier, Keychain};
 use self::util::RwLock;
 use chrono::Duration;
 use gotts_chain as chain;
@@ -59,7 +59,7 @@ where
 	let key_id = keychain::ExtKeychain::derive_key_id(0, 1, 0, 0, 0);
 	let reward = reward::output(
 		keychain,
-		&libtx::ProofBuilder::new(keychain),
+		&libtx::ProofBuilder::new(keychain, &Identifier::zero()),
 		&key_id,
 		0,
 		false,
@@ -88,9 +88,14 @@ where
 		let prev = chain.head_header().unwrap();
 		let next_header_info = consensus::next_difficulty(1, chain.difficulty_iter().unwrap());
 		let pk = ExtKeychainPath::new(1, n as u32, 0, 0, 0).to_identifier();
-		let reward =
-			libtx::reward::output(keychain, &libtx::ProofBuilder::new(keychain), &pk, 0, false)
-				.unwrap();
+		let reward = libtx::reward::output(
+			keychain,
+			&libtx::ProofBuilder::new(keychain, &Identifier::zero()),
+			&pk,
+			0,
+			false,
+		)
+		.unwrap();
 		let mut b =
 			core::core::Block::new(&prev, vec![], next_header_info.clone().difficulty, reward)
 				.unwrap();

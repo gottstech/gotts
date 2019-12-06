@@ -33,7 +33,7 @@ use grin_miner_plugin as plugin;
 
 use gotts_core::core::hash::Hashed;
 use gotts_core::core::verifier_cache::LruVerifierCache;
-use gotts_keychain::{ExtKeychain, Keychain};
+use gotts_keychain::{ExtKeychain, Identifier, Keychain};
 
 use gotts_wallet_config::WalletConfig;
 use gotts_wallet_impls::WalletSeed;
@@ -89,7 +89,7 @@ fn main() {
 	)
 	.unwrap();
 	let keychain = ExtKeychain::from_seed(&seed.to_vec(), false).unwrap();
-	let builder = core::libtx::ProofBuilder::new(&keychain);
+	let builder = core::libtx::ProofBuilder::new(&keychain, &Identifier::zero());
 	let key_id = ExtKeychain::derive_key_id(3, 1, 0, 0, 0);
 	let reward = core::libtx::reward::output(&keychain, &builder, &key_id, 0, false).unwrap();
 	gen = gen.with_reward(reward.0, reward.1);
@@ -145,7 +145,7 @@ fn main() {
 	assert!(gen.header.pow.is_secondary(), "Not a secondary header");
 	println!("Built genesis:\n{:?}", gen);
 	core::pow::verify_size(&gen.header).unwrap();
-	gen.validate(Arc::new(util::RwLock::new(LruVerifierCache::new())))
+	gen.validate(Arc::new(util::RwLock::new(LruVerifierCache::new())), None)
 		.unwrap();
 
 	println!("\nFinal genesis cyclehash: {}", gen.hash().to_hex());

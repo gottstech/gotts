@@ -20,7 +20,7 @@ use rand::{thread_rng, Rng};
 
 use crate::blake2::blake2b::blake2b;
 
-use crate::extkey_bip32::{BIP32GottsHasher, ExtendedPrivKey, ExtendedPubKey};
+use crate::extkey_bip32::{BIP32GottsHasher, ExtendedPrivKey};
 use crate::types::{BlindSum, BlindingFactor, Error, ExtKeychainPath, Identifier, Keychain};
 use crate::util::secp::key::{PublicKey, SecretKey};
 use crate::util::secp::pedersen::Commitment;
@@ -91,30 +91,22 @@ impl Keychain for ExtKeychain {
 	}
 
 	fn public_root_key(&self) -> PublicKey {
-		let mut hasher = self.hasher.clone();
-		ExtendedPubKey::from_private(&self.secp, &self.master, &mut hasher).public_key
+		PublicKey::from_secret_key(&self.secp, &self.master.secret_key).unwrap()
 	}
 
 	fn derive_key(&self, id: &Identifier) -> Result<SecretKey, Error> {
 		let mut h = self.hasher.clone();
-		let p = id.to_path();
-		let mut ext_key = self.master.clone();
-		for i in 0..p.depth {
-			ext_key = ext_key.ckd_priv(&self.secp, &mut h, p.path[i as usize])?;
-		}
-
-		Ok(ext_key.secret_key)
+		Ok(self
+			.master
+			.derive_priv(&self.secp, &mut h, id.to_path().as_ref())?
+			.secret_key)
 	}
 
 	fn derive_pub_key(&self, id: &Identifier) -> Result<PublicKey, Error> {
-		let mut h = self.hasher.clone();
-		let p = id.to_path();
-		let mut ext_key = self.master.clone();
-		for i in 0..p.depth {
-			ext_key = ext_key.ckd_priv(&self.secp, &mut h, p.path[i as usize])?;
-		}
-
-		Ok(PublicKey::from_secret_key(&self.secp, &ext_key.secret_key)?)
+		Ok(PublicKey::from_secret_key(
+			&self.secp,
+			&self.derive_key(id)?,
+		)?)
 	}
 
 	fn commit(&self, w: i64, id: &Identifier) -> Result<Commitment, Error> {
@@ -259,6 +251,13 @@ mod test {
 			),
 			true
 		);
+
+		// exception cases
+		let key_id = ExtKeychain::derive_key_id(0, 0, 0, 0, 0);
+		let prikey = keychain.derive_key(&key_id).unwrap();
+		assert_eq!(prikey, keychain.master.secret_key);
+		let pubkey = PublicKey::from_secret_key(keychain.secp(), &prikey).unwrap();
+		assert_eq!(pubkey, keychain.derive_pub_key(&key_id).unwrap());
 	}
 
 	// We plan to "offset" the key used in the kernel commitment
