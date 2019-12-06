@@ -19,6 +19,7 @@ use gotts_p2p as p2p;
 use gotts_util as util;
 use gotts_util::StopState;
 
+use std::fs;
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::Arc;
 use std::{thread, time};
@@ -36,11 +37,17 @@ fn open_port() -> u16 {
 	listener.local_addr().unwrap().port()
 }
 
+fn clean_output_dir(test_dir: &str) {
+	let _ = fs::remove_dir_all(test_dir);
+}
+
 // Starts a server and connects a client peer to it to check handshake,
 // followed by a ping/pong exchange to make sure the connection is live.
 #[test]
 fn peer_handshake() {
 	util::init_test_logger();
+	let test_dir = ".gotts";
+	clean_output_dir(test_dir);
 
 	let p2p_config = p2p::P2PConfig {
 		host: "127.0.0.1".parse().unwrap(),
@@ -92,4 +99,5 @@ fn peer_handshake() {
 	let server_peer = server.peers.get_connected_peer(my_addr).unwrap();
 	assert_eq!(server_peer.info.total_difficulty(), Difficulty::min());
 	assert!(server.peers.peer_count() > 0);
+	clean_output_dir(test_dir);
 }

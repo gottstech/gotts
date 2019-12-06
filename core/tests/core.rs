@@ -27,7 +27,7 @@ use self::core::libtx::build::{
 };
 use self::core::libtx::ProofBuilder;
 use self::core::ser;
-use self::keychain::{ExtKeychain, Keychain};
+use self::keychain::{ExtKeychain, Identifier, Keychain};
 use self::util::RwLock;
 use crate::common::{new_block, tx1i1o, tx1i2o, tx2i1o};
 use crate::util::secp::pedersen::Commitment;
@@ -43,14 +43,14 @@ fn simple_tx_ser() {
 	let tx = tx2i1o();
 	let mut vec = Vec::new();
 	ser::serialize_default(&mut vec, &tx).expect("serialization failed");
-	let target_len = 258;
+	let target_len = 242;
 	assert_eq!(vec.len(), target_len,);
 
 	let tx = tx1i2o();
 	println!("tx = {}", serde_json::to_string_pretty(&tx).unwrap());
 	let mut vec = Vec::new();
 	ser::serialize_default(&mut vec, &tx).expect("serialization failed");
-	let target_len = 293;
+	let target_len = 261;
 	println!("tx vec = {:02x?}", vec);
 	assert_eq!(vec.len(), target_len,);
 }
@@ -87,7 +87,7 @@ fn tx_double_ser_deser() {
 #[test]
 fn test_zero_commit_fails() {
 	let keychain = ExtKeychain::from_random_seed(false).unwrap();
-	let builder = ProofBuilder::new(&keychain);
+	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
 	let key_id1 = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 
 	// blinding should fail as signing with a zero r*G shouldn't work
@@ -109,7 +109,7 @@ fn verifier_cache() -> Arc<RwLock<dyn VerifierCache>> {
 #[test]
 fn build_tx_kernel() {
 	let keychain = ExtKeychain::from_random_seed(false).unwrap();
-	let builder = ProofBuilder::new(&keychain);
+	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
 	let key_id1 = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 	let key_id2 = ExtKeychain::derive_key_id(1, 2, 0, 0, 0);
 	let key_id3 = ExtKeychain::derive_key_id(1, 3, 0, 0, 0);
@@ -441,7 +441,7 @@ fn basic_transaction_deaggregation() {
 #[test]
 fn hash_output() {
 	let keychain = ExtKeychain::from_random_seed(false).unwrap();
-	let builder = ProofBuilder::new(&keychain);
+	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
 	let key_id1 = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 	let key_id2 = ExtKeychain::derive_key_id(1, 2, 0, 0, 0);
 	let key_id3 = ExtKeychain::derive_key_id(1, 3, 0, 0, 0);
@@ -486,7 +486,7 @@ fn tx_hash_diff() {
 #[test]
 fn tx_build_exchange() {
 	let keychain = ExtKeychain::from_random_seed(false).unwrap();
-	let builder = ProofBuilder::new(&keychain);
+	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
 	let key_id1 = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 	let key_id2 = ExtKeychain::derive_key_id(1, 2, 0, 0, 0);
 	let key_id3 = ExtKeychain::derive_key_id(1, 3, 0, 0, 0);
@@ -531,7 +531,7 @@ fn tx_build_exchange() {
 #[test]
 fn reward_empty_block() {
 	let keychain = keychain::ExtKeychain::from_random_seed(false).unwrap();
-	let builder = ProofBuilder::new(&keychain);
+	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
 	let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 
 	let previous_header = BlockHeader::default();
@@ -547,7 +547,7 @@ fn reward_empty_block() {
 #[test]
 fn reward_with_tx_block() {
 	let keychain = keychain::ExtKeychain::from_random_seed(false).unwrap();
-	let builder = ProofBuilder::new(&keychain);
+	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
 	let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 
 	let vc = verifier_cache();
@@ -575,7 +575,7 @@ fn reward_with_tx_block() {
 #[test]
 fn simple_block() {
 	let keychain = keychain::ExtKeychain::from_random_seed(false).unwrap();
-	let builder = ProofBuilder::new(&keychain);
+	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
 	let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 
 	let vc = verifier_cache();
@@ -598,7 +598,7 @@ fn simple_block() {
 #[test]
 fn test_block_with_timelocked_tx() {
 	let keychain = keychain::ExtKeychain::from_random_seed(false).unwrap();
-	let builder = ProofBuilder::new(&keychain);
+	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
 	let key_id1 = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 	let key_id2 = ExtKeychain::derive_key_id(1, 2, 0, 0, 0);
 	let key_id3 = ExtKeychain::derive_key_id(1, 3, 0, 0, 0);

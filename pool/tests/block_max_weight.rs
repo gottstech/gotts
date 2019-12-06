@@ -23,7 +23,7 @@ use self::core::core::{Block, BlockHeader, Transaction};
 use self::core::global;
 use self::core::libtx;
 use self::core::pow::Difficulty;
-use self::keychain::{ExtKeychain, Keychain};
+use self::keychain::{ExtKeychain, Identifier, Keychain};
 use self::util::RwLock;
 use crate::common::*;
 use gotts_core as core;
@@ -54,7 +54,7 @@ fn test_block_building_max_weight() {
 				let fee = txs.iter().map(|x| x.fee()).sum();
 				let reward = libtx::reward::output(
 					&keychain,
-					&libtx::ProofBuilder::new(&keychain),
+					&libtx::ProofBuilder::new(&keychain, &Identifier::zero()),
 					&key_id,
 					fee,
 					false,

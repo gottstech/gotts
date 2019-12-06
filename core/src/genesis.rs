@@ -51,13 +51,13 @@ pub fn genesis_dev() -> core::Block {
 pub fn genesis_floo() -> core::Block {
 	let gen = core::Block::with_header(core::BlockHeader {
 		height: 0,
-		timestamp: Utc.ymd(2019, 11, 19).and_hms(11, 5, 57),
+		timestamp: Utc.ymd(2019, 12, 6).and_hms(10, 10, 37),
 		prev_root: Hash::from_hex(
-			"000000000000000000144fd714bfd4ce8d1d4c144e2b16f6159a9917b1570732",
+			"00000000000000000001d9e109f3d6803d7fd5d2140c7ee75258289cc0a8c9dd",
 		)
 		.unwrap(),
 		output_i_root: Hash::from_hex(
-			"8233a3826ac81c5077b01e558aef183ff23e7f4df378276b3f1eeef31b9456b6",
+			"6a996c4bc4498869720a2011f0f5e4e1448c5f69c4e536746019dc198cc99c86",
 		)
 		.unwrap(),
 		output_ii_root: Hash::from_hex(
@@ -65,7 +65,7 @@ pub fn genesis_floo() -> core::Block {
 		)
 		.unwrap(),
 		kernel_root: Hash::from_hex(
-			"fda7320458bec205a2d79de0587d0d8b6c7fdcfa1ebb44128e937662a0d26480",
+			"a7a1066efbdb7c11b308c19c061a5dd3aff71f52a9a5d0b18c89584e1e6fcf74",
 		)
 		.unwrap(),
 		output_i_mmr_size: 1,
@@ -74,15 +74,15 @@ pub fn genesis_floo() -> core::Block {
 		pow: ProofOfWork {
 			total_difficulty: Difficulty::from_num(10_u64.pow(3)),
 			secondary_scaling: 1856,
-			nonce: 10,
+			nonce: 7,
 			proof: Proof {
 				nonces: vec![
-					10041868, 10081004, 27450470, 30164461, 31309253, 52957945, 75520034,
-					149472619, 155698073, 165023110, 169406003, 201178374, 202536961, 206955939,
-					207173826, 207796956, 222586000, 224836028, 236552375, 250069741, 260260498,
-					282179934, 286454758, 303922880, 314959757, 323525307, 331775582, 338127072,
-					347103743, 348610726, 386218307, 409319759, 441701070, 458441174, 477235510,
-					481919117, 493460028, 500169831, 504263775, 508591322, 512244144, 531391596,
+					3693091, 6647809, 8167299, 18449581, 29988755, 76085502, 98400296, 107591918,
+					130175155, 150750946, 153604229, 171111155, 202813214, 210108053, 260775114,
+					282146891, 289372347, 291460826, 295067268, 296005855, 306472220, 307181476,
+					328933928, 361202447, 371668337, 408860544, 420398904, 421354254, 423031020,
+					426206487, 433328203, 437600629, 438818352, 444188167, 445824717, 447764188,
+					479576377, 484019713, 498562620, 508206041, 521593429, 524134681,
 				],
 				edge_bits: 29,
 			},
@@ -92,15 +92,12 @@ pub fn genesis_floo() -> core::Block {
 	let kernel = core::TxKernel {
 		features: core::KernelFeatures::Coinbase,
 		excess: Commitment::from_vec(util::from_hex("098364706891b414a55a91ef8686c51ec70d4b779052977009f625630e17a2f1c3".to_string()).unwrap()),
-		excess_sig: Signature::from_compact(&util::from_hex("0310ae8f5acaede5ebd62cef36a4979eb7e2cb76cee071a47c3876c1976f0b8373ece849ccaee9b23b0a8d29150d0e1df2bc9028cb80b956a3bef3299b9d369a".to_string()).unwrap()).unwrap(),
+		excess_sig: Signature::from_compact(&util::from_hex("aa2ebd4aa20557cd620d75d996683eecde521d77e72d7725fbbd85f141e7ce6b7c9c6f09fb2a4d94a38ddf444ff4ea6815ebf21ede63ad7a7f4d3fd8124eef77".to_string()).unwrap()).unwrap(),
 	};
 	let output = core::Output {
 		features: core::OutputFeaturesEx::Coinbase {
 			spath: SecuredPath::from_vec(
-				util::from_hex(
-					"bd3be4bdd2a8d4a7a8559bbcfb5e4705cec320d0ebc633eaaf403c46".to_string(),
-				)
-				.unwrap(),
+				util::from_hex("bd3be4bdd2a8d4a7a8559bbf".to_string()).unwrap(),
 			),
 		},
 		commit: Commitment::from_vec(
@@ -166,11 +163,11 @@ mod test {
 		println!("floonet genesis full hash: {}\n", gen_bin.hash().to_hex());
 		assert_eq!(
 			gen_hash.to_hex(),
-			"be9f27aa3e8facf0c37f7a0f654dc24c899460fbc7bbd076ffac936407aa2b0e"
+			"1ecf38f5cf17a2734d4bc26251ba990487e360103b46741c49acb685b8e41075"
 		);
 		assert_eq!(
 			gen_bin.hash().to_hex(),
-			"8dcab2576ccb50c76b6604d109224a74aed50a78011c854c5aa6825ca5260ea2"
+			"1ca3d80c48f409e0cc9de0d8382cb958f0b761ea9f5047e80906f48c50b73553"
 		);
 	}
 
@@ -186,7 +183,7 @@ mod test {
 		);
 		assert_eq!(
 			gen_bin.hash().to_hex(),
-			"be10ae6e874475bb29585a4997f8e42b5afe4ac3a131430036c93b5aaceefd3b"
+			"0a6d78ac2ef38ba9373a62e3dd1acde7236bd94d8d370af58755683245a0ad43"
 		);
 	}
 }

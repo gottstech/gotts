@@ -19,7 +19,7 @@ use self::core::core::verifier_cache::LruVerifierCache;
 use self::core::core::{transaction, Block, BlockHeader, Weighting};
 use self::core::libtx;
 use self::core::pow::Difficulty;
-use self::keychain::{ExtKeychain, Keychain};
+use self::keychain::{ExtKeychain, Identifier, Keychain};
 use self::pool::TxSource;
 use self::util::RwLock;
 use crate::common::*;
@@ -50,7 +50,7 @@ fn test_the_transaction_pool() {
 		let key_id = ExtKeychain::derive_key_id(1, height as u32, 0, 0, 0);
 		let reward = libtx::reward::output(
 			&keychain,
-			&libtx::ProofBuilder::new(&keychain),
+			&libtx::ProofBuilder::new(&keychain, &Identifier::zero()),
 			&key_id,
 			0,
 			false,
@@ -264,7 +264,7 @@ fn test_the_transaction_pool() {
 			let key_id = ExtKeychain::derive_key_id(1, height as u32, 0, 0, 0);
 			let reward = libtx::reward::output(
 				&keychain,
-				&libtx::ProofBuilder::new(&keychain),
+				&libtx::ProofBuilder::new(&keychain, &Identifier::zero()),
 				&key_id,
 				0,
 				false,

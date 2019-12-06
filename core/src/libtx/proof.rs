@@ -32,10 +32,8 @@ use rand::thread_rng;
 use std::cmp::min;
 use std::io::Cursor;
 
-/// size of the reserved zero prefix in SecuredPath
-pub const SECURED_PATH_PREFIX_SIZE: usize = 3;
 /// Size of a SecuredPath in bytes.
-pub const SECURED_PATH_SIZE: usize = SECURED_PATH_PREFIX_SIZE + 8 + 17;
+pub const SECURED_PATH_SIZE: usize = 8 + 4;
 /// Size of an OutputLocker in bytes.
 pub const OUTPUT_LOCKER_SIZE: usize = 32 + secp::COMPRESSED_PUBLIC_KEY_SIZE + 8 + 4;
 
@@ -216,12 +214,10 @@ impl SecuredPath {
 
 	/// Create a SecuredPath from the PathMessage
 	pub fn from_path(path_msg: &PathMessage, none: &Hash) -> SecuredPath {
-		let mut bin = [0; SECURED_PATH_SIZE];
-		bin[0..SECURED_PATH_PREFIX_SIZE].copy_from_slice(&path_msg.reserved);
-		let mut wtr = vec![];
-		wtr.write_i64::<LittleEndian>(path_msg.w).unwrap();
-		bin[SECURED_PATH_PREFIX_SIZE..SECURED_PATH_PREFIX_SIZE + 8].copy_from_slice(&wtr);
-		bin[SECURED_PATH_PREFIX_SIZE + 8..].copy_from_slice(path_msg.key_id.as_ref());
+		let mut bin = vec![];
+		bin.write_i64::<LittleEndian>(path_msg.w).unwrap();
+		bin.write_u32::<LittleEndian>(path_msg.key_id_last_path)
+			.unwrap();
 		let encoded: Vec<u8> = bin
 			.iter()
 			.zip(none.to_vec().iter())
@@ -245,12 +241,10 @@ impl SecuredPath {
 /// The key derivation path and the random w of commitment
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PathMessage {
-	/// Reserved at this moment.
-	pub reserved: [u8; SECURED_PATH_PREFIX_SIZE],
 	/// The random 'w' of Pedersen commitment `r*G + w*H`
 	pub w: i64,
-	/// The key identifier
-	pub key_id: Identifier,
+	/// The last path index of the key identifier
+	pub key_id_last_path: u32,
 }
 
 impl PathMessage {
@@ -259,22 +253,15 @@ impl PathMessage {
 		if data.len() != SECURED_PATH_SIZE {
 			return Err(ErrorKind::PathMessage("wrong path message".to_owned()).into());
 		}
-		let mut reserved = [0u8; SECURED_PATH_PREFIX_SIZE];
-		reserved.copy_from_slice(&data[0..SECURED_PATH_PREFIX_SIZE]);
 
-		if reserved.iter().fold(0u32, |acc, x| acc + *x as u32) != 0 {
-			return Err(ErrorKind::PathMessage("wrong path message".to_owned()).into());
-		}
-
-		let mut rdr =
-			Cursor::new((&data[SECURED_PATH_PREFIX_SIZE..SECURED_PATH_PREFIX_SIZE + 8]).clone());
+		let mut rdr = Cursor::new((&data[0..8]).clone());
 		let w = rdr.read_i64::<LittleEndian>().unwrap();
-		let key_id: Identifier = Identifier::from_bytes(&data[SECURED_PATH_PREFIX_SIZE + 8..])?;
+		let mut rdr = Cursor::new((&data[8..]).clone());
+		let key_id_last_path = rdr.read_u32::<LittleEndian>().unwrap();
 
 		Ok(PathMessage {
-			reserved,
 			w,
-			key_id,
+			key_id_last_path,
 		})
 	}
 }
@@ -301,6 +288,7 @@ where
 pub fn rewind<B>(
 	secp: &Secp256k1,
 	b: &B,
+	active_key_id: &Identifier,
 	commit: &Commitment,
 	spath: &SecuredPath,
 ) -> Result<PathMessage, Error>
@@ -311,7 +299,7 @@ where
 	let info = spath.get_path(&nonce)?;
 
 	let _key_id = b
-		.check_output(secp, commit, &info)
+		.check_output(active_key_id, commit, &info)
 		.map_err(|e| ErrorKind::PathMessage(e.to_string()))?;
 
 	Ok(info)
@@ -328,7 +316,7 @@ pub trait ProofBuild: Sync + Send + Clone {
 	/// Check if the output belongs to this keychain
 	fn check_output(
 		&self,
-		secp: &Secp256k1,
+		active_key_id: &Identifier,
 		commit: &Commitment,
 		message: &PathMessage,
 	) -> Result<Identifier, Error>;
@@ -351,8 +339,11 @@ where
 	K: Keychain,
 {
 	/// Creates a new instance of this proof builder
-	pub fn new(keychain: &'a K) -> Self {
-		let public_root_key = keychain.public_root_key().serialize_vec(true);
+	pub fn new(keychain: &'a K, rewind_hash_key_id: &Identifier) -> Self {
+		let public_root_key = keychain
+			.derive_pub_key(rewind_hash_key_id)
+			.unwrap()
+			.serialize_vec(true);
 		let rewind_hash = Hash::from_vec(blake2b(32, &[], &public_root_key[..]).as_bytes());
 
 		Self {
@@ -376,21 +367,24 @@ where
 
 	fn proof_message(&self, _secp: &Secp256k1, w: i64, id: &Identifier) -> PathMessage {
 		PathMessage {
-			reserved: [0u8; SECURED_PATH_PREFIX_SIZE],
 			w,
-			key_id: id.clone(),
+			key_id_last_path: id.to_path().last_path_index(),
 		}
 	}
 
 	fn check_output(
 		&self,
-		_secp: &Secp256k1,
+		active_key_id: &Identifier,
 		commit: &Commitment,
 		message: &PathMessage,
 	) -> Result<Identifier, Error> {
-		let commit_exp = self.keychain.commit(message.w, &message.key_id)?;
+		let key_id = active_key_id
+			.to_path()
+			.extend(message.key_id_last_path)
+			.to_identifier();
+		let commit_exp = self.keychain.commit(message.w, &key_id)?;
 		match commit == &commit_exp {
-			true => Ok(message.key_id.clone()),
+			true => Ok(key_id),
 			false => Err(ErrorKind::PathMessage("check NOK".to_owned()).into()),
 		}
 	}

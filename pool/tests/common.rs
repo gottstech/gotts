@@ -21,7 +21,7 @@ use self::core::core::hash::{Hash, Hashed};
 use self::core::core::verifier_cache::VerifierCache;
 use self::core::core::{Block, BlockHeader, BlockSums, Committed, Input, OutputEx, Transaction};
 use self::core::libtx;
-use self::keychain::{ExtKeychain, Keychain};
+use self::keychain::{ExtKeychain, Identifier, Keychain};
 use self::pool::types::*;
 use self::pool::TransactionPool;
 use self::util::secp::pedersen::Commitment;
@@ -229,7 +229,12 @@ where
 
 	tx_elements.push(libtx::build::with_fee(fees as u64));
 
-	libtx::build::transaction(tx_elements, keychain, &libtx::ProofBuilder::new(keychain)).unwrap()
+	libtx::build::transaction(
+		tx_elements,
+		keychain,
+		&libtx::ProofBuilder::new(keychain, &Identifier::zero()),
+	)
+	.unwrap()
 }
 
 pub fn test_transaction<K>(
@@ -259,7 +264,12 @@ where
 	}
 	tx_elements.push(libtx::build::with_fee(fees as u64));
 
-	libtx::build::transaction(tx_elements, keychain, &libtx::ProofBuilder::new(keychain)).unwrap()
+	libtx::build::transaction(
+		tx_elements,
+		keychain,
+		&libtx::ProofBuilder::new(keychain, &Identifier::zero()),
+	)
+	.unwrap()
 }
 
 pub fn test_bad_transaction<K>(
@@ -290,7 +300,12 @@ where
 	}
 	tx_elements.push(libtx::build::with_fee(fees as u64));
 
-	libtx::build::transaction(tx_elements, keychain, &libtx::ProofBuilder::new(keychain)).unwrap()
+	libtx::build::transaction(
+		tx_elements,
+		keychain,
+		&libtx::ProofBuilder::new(keychain, &Identifier::zero()),
+	)
+	.unwrap()
 }
 
 pub fn test_source() -> TxSource {

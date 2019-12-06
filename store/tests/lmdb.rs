@@ -99,6 +99,7 @@ fn lmdb_allocate() -> Result<(), store::Error> {
 			batch.commit()?;
 		}
 	}
+	clean_output_dir(test_dir);
 
 	Ok(())
 }

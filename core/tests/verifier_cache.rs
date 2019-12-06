@@ -18,7 +18,7 @@ pub mod common;
 use self::core::core::verifier_cache::{LruVerifierCache, VerifierCache};
 use self::core::core::{Output, OutputFeaturesEx};
 use self::core::libtx::{build, proof};
-use self::keychain::{ExtKeychain, Keychain};
+use self::keychain::{ExtKeychain, Identifier, Keychain};
 use self::util::secp::PublicKey;
 use self::util::RwLock;
 use gotts_core as core;
@@ -37,7 +37,7 @@ fn test_verifier_cache_unlocker() {
 	let cache = verifier_cache();
 
 	let keychain = ExtKeychain::from_random_seed(false).unwrap();
-	let builder = proof::ProofBuilder::new(&keychain);
+	let builder = proof::ProofBuilder::new(&keychain, &Identifier::zero());
 
 	let key_id = ExtKeychain::derive_key_id(4, u32::MAX, u32::MAX, 0, 0);
 	let w: i64 = thread_rng().gen();
