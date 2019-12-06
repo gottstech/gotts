@@ -1,6 +1,6 @@
 [package]
 name = "gotts_config"
-version = "0.0.4"
+version = "0.0.5"
 authors = ["Gotts Developers <gotts.tech@lists.launchpad.net>"]
 description = "Configuration for gotts, a simple, private and scalable cryptocurrency implementation based on the MimbleWimble chain format."
 license = "Apache-2.0"
@@ -16,10 +16,10 @@ serde_derive = "1"
 toml = "0.4"
 dirs = "1.0.3"
 
-gotts_core = { path = "../core", version = "0.0.4" }
-gotts_servers = { path = "../servers", version = "0.0.4" }
-gotts_p2p = { path = "../p2p", version = "0.0.4" }
-gotts_util = { path = "../util", version = "0.0.4" }
+gotts_core = { path = "../core", version = "0.0.5" }
+gotts_servers = { path = "../servers", version = "0.0.5" }
+gotts_p2p = { path = "../p2p", version = "0.0.5" }
+gotts_util = { path = "../util", version = "0.0.5" }
 
 [dev-dependencies]
 pretty_assertions = "0.5.1"
