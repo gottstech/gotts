@@ -1,6 +1,6 @@
 [package]
 name = "gotts_core"
-version = "0.0.4"
+version = "0.0.5"
 authors = ["Gotts Developers <gotts.tech@lists.launchpad.net>"]
 description = "Chain implementation for gotts, a simple, private and scalable cryptocurrency implementation based on the MimbleWimble chain format."
 license = "Apache-2.0"
@@ -31,8 +31,8 @@ log = "0.4"
 chrono = { version = "0.4.4", features = ["serde"] }
 zeroize = "0.9"
 
-gotts_keychain = { path = "../keychain", version = "0.0.4" }
-gotts_util = { path = "../util", version = "0.0.4" }
+gotts_keychain = { path = "../keychain", version = "0.0.5" }
+gotts_util = { path = "../util", version = "0.0.5" }
 
 [dev-dependencies]
 serde_json = "1"

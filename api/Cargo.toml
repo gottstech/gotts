@@ -1,6 +1,6 @@
 [package]
 name = "gotts_api"
-version = "0.0.4"
+version = "0.0.5"
 authors = ["Gotts Developers <gotts.tech@lists.launchpad.net>"]
 description = "APIs for gotts, a simple, private and scalable cryptocurrency implementation based on the MimbleWimble chain format."
 license = "Apache-2.0"
@@ -31,9 +31,9 @@ futures = "0.1.21"
 rustls = "0.13"
 url = "1.7.0"
 
-gotts_core = { path = "../core", version = "0.0.4" }
-gotts_chain = { path = "../chain", version = "0.0.4" }
-gotts_p2p = { path = "../p2p", version = "0.0.4" }
-gotts_pool = { path = "../pool", version = "0.0.4" }
-gotts_store = { path = "../store", version = "0.0.4" }
-gotts_util = { path = "../util", version = "0.0.4" }
+gotts_core = { path = "../core", version = "0.0.5" }
+gotts_chain = { path = "../chain", version = "0.0.5" }
+gotts_p2p = { path = "../p2p", version = "0.0.5" }
+gotts_pool = { path = "../pool", version = "0.0.5" }
+gotts_store = { path = "../store", version = "0.0.5" }
+gotts_util = { path = "../util", version = "0.0.5" }

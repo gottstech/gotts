@@ -1,6 +1,6 @@
 [package]
 name = "gotts_chain"
-version = "0.0.4"
+version = "0.0.5"
 authors = ["Gotts Developers <gotts.tech@lists.launchpad.net>"]
 description = "Chain implementation for gotts, a simple, private and scalable cryptocurrency implementation based on the MimbleWimble chain format."
 license = "Apache-2.0"
@@ -23,10 +23,10 @@ lru-cache = "0.1"
 lazy_static = "1"
 regex = "1"
 
-gotts_core = { path = "../core", version = "0.0.4" }
-gotts_keychain = { path = "../keychain", version = "0.0.4" }
-gotts_store = { path = "../store", version = "0.0.4" }
-gotts_util = { path = "../util", version = "0.0.4" }
+gotts_core = { path = "../core", version = "0.0.5" }
+gotts_keychain = { path = "../keychain", version = "0.0.5" }
+gotts_store = { path = "../store", version = "0.0.5" }
+gotts_util = { path = "../util", version = "0.0.5" }
 
 [dev-dependencies]
 env_logger = "0.5"
