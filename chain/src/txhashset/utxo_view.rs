@@ -72,19 +72,27 @@ impl<'a> UTXOView<'a> {
 	/// Every input must spend an output that currently exists in the UTXO set.
 	/// No duplicate outputs.
 	pub fn validate_tx(&self, tx: &Transaction, next_block_height: u64) -> Result<(), Error> {
-		let mut sum = 0i64;
+		let mut total_inputs_value = 0u64;
+		let mut total_outputs_value = 0u64;
 
 		for output in tx.outputs() {
 			self.validate_output(output)?;
-			sum = sum.saturating_sub(output.value as i64);
+			total_outputs_value = total_outputs_value.saturating_add(output.value);
 		}
 
 		for input in tx.inputs() {
 			let input_value = self.validate_input(&input, next_block_height)?;
-			sum = sum.saturating_add(input_value as i64);
+			total_inputs_value = total_inputs_value.saturating_add(input_value);
 		}
 
-		if sum != tx.overage() {
+		if total_inputs_value != total_outputs_value.saturating_add(tx.overage()) {
+			debug!(
+				"validate_tx: {} sum validate fail. total inputs: {}, total outputs: {}, fee: {}",
+				tx.hash(),
+				total_inputs_value,
+				total_outputs_value,
+				tx.overage(),
+			);
 			return Err(ErrorKind::TransactionSumMismatch)?;
 		}
 

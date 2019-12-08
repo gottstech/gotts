@@ -17,23 +17,28 @@ pub mod common;
 
 use self::core::core::hash::Hashed;
 use self::core::core::verifier_cache::LruVerifierCache;
-use self::core::core::{Block, BlockHeader, Transaction};
+use self::core::core::{Block, BlockHeader, OutputEx, Transaction, Weighting};
 use self::core::libtx;
+use self::core::libtx::build;
+use self::core::libtx::ProofBuilder;
 use self::core::pow::Difficulty;
 use self::keychain::{ExtKeychain, Identifier, Keychain};
 use self::pool::types::PoolError;
+use self::util::secp::pedersen::Commitment;
 use self::util::RwLock;
 use crate::common::*;
 use gotts_core as core;
 use gotts_keychain as keychain;
 use gotts_pool as pool;
 use gotts_util as util;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 #[test]
 fn test_transaction_pool_block_building() {
 	util::init_test_logger();
 	let keychain: ExtKeychain = Keychain::from_random_seed(false).unwrap();
+	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
 
 	let db_root = ".gotts_block_building".to_string();
 	clean_output_dir(db_root.clone());
@@ -72,8 +77,36 @@ fn test_transaction_pool_block_building() {
 
 		// Now create tx to spend that first coinbase (now matured).
 		// Provides us with some useful outputs to test with.
-		let initial_tx =
-			test_transaction_spending_coinbase(&keychain, &header, vec![10, 20, 30, 40]);
+		let initial_tx = test_transaction_spending_coinbase(
+			&keychain,
+			&header,
+			vec![10, 20, 30, 40, 59_000_000_000],
+		);
+
+		let mut complete_inputs: HashMap<Commitment, OutputEx> = HashMap::new();
+		let key_id1 = ExtKeychain::derive_key_id(1, header.height as u32, 0, 0, 0);
+		let (pre_tx, _) = build::partial_transaction(
+			vec![build::output(60_000_000_000, Some(0i64), key_id1)],
+			&keychain,
+			&builder,
+		)
+		.unwrap();
+		complete_inputs.insert(
+			pre_tx.body.outputs[0].commit,
+			OutputEx {
+				output: pre_tx.body.outputs[0],
+				height: header.height,
+				mmr_index: 1, // wrong index but not used here
+			},
+		);
+		initial_tx
+			.validate(
+				Weighting::AsTransaction,
+				verifier_cache.clone(),
+				Some(&complete_inputs),
+				1,
+			)
+			.unwrap();
 
 		// Mine that initial tx so we can spend it with multiple txs
 		let block = add_block(header, vec![initial_tx], &mut chain);

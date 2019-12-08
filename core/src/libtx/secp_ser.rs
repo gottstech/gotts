@@ -152,6 +152,97 @@ pub mod opt_string_or_u64 {
 	}
 }
 
+/// As above, for u32
+pub mod string_or_u32 {
+	use serde::{de, Deserializer, Serializer};
+	use std::fmt;
+
+	/// serialize into a string
+	pub fn serialize<T, S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		T: fmt::Display,
+		S: Serializer,
+	{
+		serializer.collect_str(value)
+	}
+
+	/// deserialize from either literal or string
+	pub fn deserialize<'de, D>(deserializer: D) -> Result<u32, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		struct Visitor;
+		impl<'a> de::Visitor<'a> for Visitor {
+			type Value = u32;
+			fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+				write!(
+					formatter,
+					"a string containing digits or an int fitting into u32"
+				)
+			}
+			fn visit_u32<E>(self, v: u32) -> Result<Self::Value, E> {
+				Ok(v)
+			}
+			fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
+			where
+				E: de::Error,
+			{
+				s.parse().map_err(de::Error::custom)
+			}
+		}
+		deserializer.deserialize_any(Visitor)
+	}
+}
+
+/// As above, for Option<u32>
+pub mod opt_string_or_u32 {
+	use serde::{de, Deserializer, Serializer};
+	use std::fmt;
+
+	/// serialize into string or none
+	pub fn serialize<T, S>(value: &Option<T>, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		T: fmt::Display,
+		S: Serializer,
+	{
+		match value {
+			Some(v) => serializer.collect_str(v),
+			None => serializer.serialize_none(),
+		}
+	}
+
+	/// deser from 'null', literal or string
+	pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<u32>, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		struct Visitor;
+		impl<'a> de::Visitor<'a> for Visitor {
+			type Value = Option<u32>;
+			fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+				write!(
+					formatter,
+					"null, a string containing digits or an int fitting into u32"
+				)
+			}
+			fn visit_unit<E>(self) -> Result<Self::Value, E> {
+				Ok(None)
+			}
+			fn visit_u32<E>(self, v: u32) -> Result<Self::Value, E> {
+				Ok(Some(v))
+			}
+			fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
+			where
+				E: de::Error,
+			{
+				let val: u32 = s.parse().map_err(de::Error::custom)?;
+				Ok(Some(val))
+			}
+		}
+		deserializer.deserialize_any(Visitor)
+	}
+}
+
 /// As above, for i64
 pub mod string_or_i64 {
 	use serde::{de, Deserializer, Serializer};
@@ -177,7 +268,7 @@ pub mod string_or_i64 {
 			fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
 				write!(
 					formatter,
-					"a string containing digits or an int fitting into u64"
+					"a string containing digits or an int fitting into i64"
 				)
 			}
 			fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E> {
@@ -188,6 +279,54 @@ pub mod string_or_i64 {
 				E: de::Error,
 			{
 				s.parse().map_err(de::Error::custom)
+			}
+		}
+		deserializer.deserialize_any(Visitor)
+	}
+}
+/// As above, for Option<i64>
+pub mod opt_string_or_i64 {
+	use serde::{de, Deserializer, Serializer};
+	use std::fmt;
+
+	/// serialize into string or none
+	pub fn serialize<T, S>(value: &Option<T>, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		T: fmt::Display,
+		S: Serializer,
+	{
+		match value {
+			Some(v) => serializer.collect_str(v),
+			None => serializer.serialize_none(),
+		}
+	}
+
+	/// deser from 'null', literal or string
+	pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		struct Visitor;
+		impl<'a> de::Visitor<'a> for Visitor {
+			type Value = Option<i64>;
+			fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+				write!(
+					formatter,
+					"null, a string containing digits or an int fitting into i64"
+				)
+			}
+			fn visit_unit<E>(self) -> Result<Self::Value, E> {
+				Ok(None)
+			}
+			fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E> {
+				Ok(Some(v))
+			}
+			fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
+			where
+				E: de::Error,
+			{
+				let val: i64 = s.parse().map_err(de::Error::custom)?;
+				Ok(Some(val))
 			}
 		}
 		deserializer.deserialize_any(Visitor)
@@ -220,6 +359,14 @@ mod test {
 		pub num: u64,
 		#[serde(with = "opt_string_or_u64")]
 		pub opt_num: Option<u64>,
+		#[serde(with = "string_or_u32")]
+		pub num1: u32,
+		#[serde(with = "opt_string_or_u32")]
+		pub opt_num1: Option<u32>,
+		#[serde(with = "string_or_i64")]
+		pub num2: i64,
+		#[serde(with = "opt_string_or_i64")]
+		pub opt_num2: Option<i64>,
 	}
 
 	impl SerTest {
@@ -237,6 +384,10 @@ mod test {
 				sig: sig.clone(),
 				num: 30,
 				opt_num: Some(33),
+				num1: 30,
+				opt_num1: Some(33),
+				num2: -30,
+				opt_num2: Some(-33),
 			}
 		}
 	}

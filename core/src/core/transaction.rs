@@ -740,8 +740,8 @@ impl TransactionBody {
 			.fold(0, |acc, k| acc.saturating_add(k.fee() as u64))
 	}
 
-	fn overage(&self) -> i64 {
-		self.fee() as i64
+	fn overage(&self) -> u64 {
+		self.fee()
 	}
 
 	/// Calculate transaction weight
@@ -1169,7 +1169,7 @@ impl Transaction {
 	}
 
 	/// Total overage across all kernels.
-	pub fn overage(&self) -> i64 {
+	pub fn overage(&self) -> u64 {
 		self.body.overage()
 	}
 
@@ -1209,18 +1209,22 @@ impl Transaction {
 		//  1. 'complete_inputs' parameter should be Some for validation on sum balance.
 		//  2. 'None' only for the case of avoid those duplicated validation on this.
 		if let Some(complete_inputs) = complete_inputs {
-			let mut sum: i64 = complete_inputs
+			let total_inputs_value = complete_inputs
 				.values()
-				.fold(0i64, |acc, x| acc.saturating_add(x.output.value as i64));
-			let total_inputs_values = sum;
-			sum = self
+				.fold(0u64, |acc, x| acc.saturating_add(x.output.value));
+			let total_outputs_value = self
 				.body
 				.outputs
 				.iter()
-				.fold(sum, |acc, x| acc.saturating_sub(x.value as i64));
-			if sum != self.overage() {
-				debug!("tx {} sum validate fail. total inputs value: {}, total outputs value: {}, fee: {}",
-					  self.hash(), total_inputs_values, total_inputs_values - sum, self.overage(),
+				.fold(0u64, |acc, x| acc.saturating_add(x.value));
+
+			if total_inputs_value != total_outputs_value.saturating_add(self.overage()) {
+				debug!(
+					"tx {} sum validate fail. total inputs: {}, total outputs: {}, fee: {}",
+					self.hash(),
+					total_inputs_value,
+					total_outputs_value,
+					self.overage(),
 				);
 				return Err(Error::TransactionSumMismatch)?;
 			}
