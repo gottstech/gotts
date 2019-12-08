@@ -288,7 +288,7 @@ where
 }
 
 /// Sets the fee on the transaction being built.
-pub fn with_fee<K, B>(fee: u64) -> Box<Append<K, B>>
+pub fn with_fee<K, B>(fee: u32) -> Box<Append<K, B>>
 where
 	K: Keychain,
 	B: ProofBuild,

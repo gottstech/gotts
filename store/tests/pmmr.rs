@@ -1012,7 +1012,7 @@ fn variable_setup(tag: &str) -> (String, Vec<TestVariableElem>) {
 			1 => KernelFeatures::Plain { fee: x },
 			2 => KernelFeatures::HeightLocked {
 				fee: x,
-				lock_height: 100 + x,
+				lock_height: 100u64 + x as u64,
 			},
 			_ => KernelFeatures::Coinbase,
 		};

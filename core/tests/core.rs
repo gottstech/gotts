@@ -43,14 +43,14 @@ fn simple_tx_ser() {
 	let tx = tx2i1o();
 	let mut vec = Vec::new();
 	ser::serialize_default(&mut vec, &tx).expect("serialization failed");
-	let target_len = 242;
+	let target_len = 238;
 	assert_eq!(vec.len(), target_len,);
 
 	let tx = tx1i2o();
 	println!("tx = {}", serde_json::to_string_pretty(&tx).unwrap());
 	let mut vec = Vec::new();
 	ser::serialize_default(&mut vec, &tx).expect("serialization failed");
-	let target_len = 261;
+	let target_len = 257;
 	println!("tx vec = {:02x?}", vec);
 	assert_eq!(vec.len(), target_len,);
 }

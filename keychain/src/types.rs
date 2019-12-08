@@ -135,6 +135,10 @@ impl Identifier {
 		ExtKeychainPath::from_identifier(&self)
 	}
 
+	pub fn extend(&self, d: u32) -> Identifier {
+		self.to_path().extend(d).to_identifier()
+	}
+
 	pub fn to_value_path(&self, value: u64, w: i64) -> ValueExtKeychainPath {
 		ValueExtKeychainPath {
 			value,

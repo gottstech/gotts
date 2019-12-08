@@ -69,7 +69,19 @@ fn test_the_transaction_pool() {
 		test_transaction_spending_coinbase(
 			&keychain,
 			&header,
-			vec![500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400],
+			vec![
+				500,
+				600,
+				700,
+				800,
+				900,
+				1000,
+				1100,
+				1200,
+				1300,
+				1400,
+				59_000_000_000,
+			],
 		)
 	};
 
@@ -284,7 +296,19 @@ fn test_the_transaction_pool() {
 			test_transaction_spending_coinbase(
 				&keychain,
 				&header,
-				vec![500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400],
+				vec![
+					500,
+					600,
+					700,
+					800,
+					900,
+					1000,
+					1100,
+					1200,
+					1300,
+					1400,
+					59_000_000_000,
+				],
 			)
 		};
 
