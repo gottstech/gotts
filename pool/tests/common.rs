@@ -207,12 +207,11 @@ pub fn test_transaction_spending_coinbase<K>(
 where
 	K: Keychain,
 {
-	let output_sum = output_values.iter().sum::<u64>() as i64;
+	let output_sum = output_values.iter().sum::<u64>();
 
 	let coinbase_reward: u64 = 60_000_000_000;
 
-	let fees: i64 = coinbase_reward as i64 - output_sum;
-	assert!(fees >= 0);
+	let fees = coinbase_reward - output_sum;
 
 	let mut tx_elements = Vec::new();
 
@@ -227,7 +226,7 @@ where
 		tx_elements.push(libtx::build::output(output_value, Some(0i64), key_id));
 	}
 
-	tx_elements.push(libtx::build::with_fee(fees as u64));
+	tx_elements.push(libtx::build::with_fee(fees as u32));
 
 	libtx::build::transaction(
 		tx_elements,
@@ -245,11 +244,10 @@ pub fn test_transaction<K>(
 where
 	K: Keychain,
 {
-	let input_sum = input_values.iter().sum::<u64>() as i64;
-	let output_sum = output_values.iter().sum::<u64>() as i64;
+	let input_sum = input_values.iter().sum::<u64>();
+	let output_sum = output_values.iter().sum::<u64>();
 
-	let fees: i64 = input_sum - output_sum;
-	assert!(fees >= 0);
+	let fees = input_sum - output_sum;
 
 	let mut tx_elements = Vec::new();
 
@@ -262,7 +260,7 @@ where
 		let key_id = ExtKeychain::derive_key_id(1, output_value as u32, 0, 0, 0);
 		tx_elements.push(libtx::build::output(output_value, Some(0i64), key_id));
 	}
-	tx_elements.push(libtx::build::with_fee(fees as u64));
+	tx_elements.push(libtx::build::with_fee(fees as u32));
 
 	libtx::build::transaction(
 		tx_elements,
@@ -280,11 +278,10 @@ pub fn test_bad_transaction<K>(
 where
 	K: Keychain,
 {
-	let input_sum = input_values.iter().sum::<u64>() as i64;
-	let output_sum = output_values.iter().sum::<u64>() as i64;
+	let input_sum = input_values.iter().sum::<u64>();
+	let output_sum = output_values.iter().sum::<u64>();
 
-	let fees: i64 = input_sum - output_sum;
-	assert!(fees >= 0);
+	let fees = input_sum - output_sum;
 
 	let mut tx_elements = Vec::new();
 
@@ -298,7 +295,7 @@ where
 		// output_value + 1 here is a bad output value which has an inflation!
 		tx_elements.push(libtx::build::output(output_value + 1, Some(0i64), key_id));
 	}
-	tx_elements.push(libtx::build::with_fee(fees as u64));
+	tx_elements.push(libtx::build::with_fee(fees as u32));
 
 	libtx::build::transaction(
 		tx_elements,

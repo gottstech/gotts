@@ -281,5 +281,6 @@ impl<D: DefaultHashable, E: DefaultHashable, F: DefaultHashable> DefaultHashable
 impl DefaultHashable for crate::util::secp::pedersen::RangeProof {}
 impl DefaultHashable for Vec<u8> {}
 impl DefaultHashable for u8 {}
+impl DefaultHashable for u32 {}
 impl DefaultHashable for u64 {}
 impl DefaultHashable for i64 {}

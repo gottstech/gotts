@@ -53,14 +53,14 @@ pub enum KernelFeatures {
 	/// Plain kernel (the default for Gotts txs).
 	Plain {
 		/// Plain kernels have fees.
-		fee: u64,
+		fee: u32,
 	},
 	/// A coinbase kernel.
 	Coinbase,
 	/// A kernel with an explicit lock height (and fee).
 	HeightLocked {
 		/// Height locked kernels have fees.
-		fee: u64,
+		fee: u32,
 		/// Height locked kernels have lock heights.
 		lock_height: u64,
 	},
@@ -113,14 +113,14 @@ impl Writeable for KernelFeatures {
 		match self {
 			KernelFeatures::Plain { fee } => {
 				writer.write_u8(self.as_u8())?;
-				writer.write_u64(*fee)?;
+				writer.write_u32(*fee)?;
 			}
 			KernelFeatures::Coinbase => {
 				writer.write_u8(self.as_u8())?;
 			}
 			KernelFeatures::HeightLocked { fee, lock_height } => {
 				writer.write_u8(self.as_u8())?;
-				writer.write_u64(*fee)?;
+				writer.write_u32(*fee)?;
 				writer.write_u64(*lock_height)?;
 			}
 		}
@@ -135,12 +135,12 @@ impl Readable for KernelFeatures {
 	fn read(reader: &mut dyn Reader) -> Result<KernelFeatures, ser::Error> {
 		let features = match reader.read_u8()? {
 			KernelFeatures::PLAIN_U8 => {
-				let fee = reader.read_u64()?;
+				let fee = reader.read_u32()?;
 				KernelFeatures::Plain { fee }
 			}
 			KernelFeatures::COINBASE_U8 => KernelFeatures::Coinbase,
 			KernelFeatures::HEIGHT_LOCKED_U8 => {
-				let fee = reader.read_u64()?;
+				let fee = reader.read_u32()?;
 				let lock_height = reader.read_u64()?;
 				KernelFeatures::HeightLocked { fee, lock_height }
 			}
@@ -333,7 +333,7 @@ impl PMMRable for TxKernel {
 
 /// Kernels are "variable size" but we need to implement FixedLength for legacy reasons.
 /// The different length for 3 types: Plain, Coinbase, HeightLocked:
-/// 	106/98/114=(9/1/17)+33+64.
+/// 	102/94/110=(5/1/13)+33+64.
 /// At some point we will refactor the MMR backend so this is no longer required.
 impl FixedLength for TxKernel {
 	const LEN: usize = 0;
@@ -393,7 +393,7 @@ impl TxKernel {
 	}
 
 	/// Return the transaction fee for this tx_kernel.
-	pub fn fee(&self) -> u64 {
+	pub fn fee(&self) -> u32 {
 		match self.features {
 			KernelFeatures::Plain { fee } => fee,
 			KernelFeatures::Coinbase => 0,
@@ -467,7 +467,7 @@ impl TxKernel {
 	/// Builds a new tx kernel with the provided fee.
 	/// Will panic if we cannot safely do this on the existing kernel.
 	/// i.e. Do not try and set a fee on a coinbase kernel.
-	pub fn with_fee(self, fee: u64) -> TxKernel {
+	pub fn with_fee(self, fee: u32) -> TxKernel {
 		match self.features {
 			KernelFeatures::Plain { .. } => {
 				let features = KernelFeatures::Plain { fee };
@@ -737,7 +737,7 @@ impl TransactionBody {
 	pub fn fee(&self) -> u64 {
 		self.kernels
 			.iter()
-			.fold(0, |acc, k| acc.saturating_add(k.fee()))
+			.fold(0, |acc, k| acc.saturating_add(k.fee() as u64))
 	}
 
 	fn overage(&self) -> i64 {
@@ -2552,17 +2552,17 @@ mod test {
 	#[test]
 	fn kernel_features_serialization() {
 		let mut vec = vec![];
-		ser::serialize_default(&mut vec, &(0u8, 10u64, 0u64)).expect("serialized failed");
+		ser::serialize_default(&mut vec, &(0u8, 10u32)).expect("serialized failed");
 		let features: KernelFeatures = ser::deserialize_default(&mut &vec[..]).unwrap();
 		assert_eq!(features, KernelFeatures::Plain { fee: 10 });
 
 		let mut vec = vec![];
-		ser::serialize_default(&mut vec, &(1u8, 0u64, 0u64)).expect("serialized failed");
+		ser::serialize_default(&mut vec, &(1u8)).expect("serialized failed");
 		let features: KernelFeatures = ser::deserialize_default(&mut &vec[..]).unwrap();
 		assert_eq!(features, KernelFeatures::Coinbase);
 
 		let mut vec = vec![];
-		ser::serialize_default(&mut vec, &(2u8, 10u64, 100u64)).expect("serialized failed");
+		ser::serialize_default(&mut vec, &(2u8, 10u32, 100u64)).expect("serialized failed");
 		let features: KernelFeatures = ser::deserialize_default(&mut &vec[..]).unwrap();
 		assert_eq!(
 			features,
@@ -2573,7 +2573,7 @@ mod test {
 		);
 
 		let mut vec = vec![];
-		ser::serialize_default(&mut vec, &(3u8, 0u64, 0u64)).expect("serialized failed");
+		ser::serialize_default(&mut vec, &(3u8, 0u32, 0u64)).expect("serialized failed");
 		let res: Result<KernelFeatures, _> = ser::deserialize_default(&mut &vec[..]);
 		assert_eq!(res.err(), Some(ser::Error::CorruptedData));
 	}
