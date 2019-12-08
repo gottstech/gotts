@@ -126,22 +126,31 @@ impl BlockChain for ChainAdapter {
 
 	fn validate_tx(&self, tx: &Transaction) -> Result<(), pool::PoolError> {
 		let utxo = self.utxo.read();
-		let mut sum = 0i64;
+		let mut total_inputs_value = 0u64;
+		let mut total_outputs_value = 0u64;
 
 		for x in tx.outputs() {
 			if utxo.contains_key(&x.commitment()) {
 				return Err(PoolError::Other(format!("output commitment not unique")));
 			}
-			sum = sum.saturating_sub(x.value as i64);
+			total_outputs_value = total_outputs_value.saturating_add(x.value);
 		}
 
 		for x in tx.inputs() {
 			if !utxo.contains_key(&x.commitment()) {
 				return Err(PoolError::Other(format!("not in utxo set")));
 			}
-			sum = sum.saturating_add(utxo.get(&x.commitment()).unwrap().output.value as i64);
+			total_inputs_value =
+				total_inputs_value.saturating_add(utxo.get(&x.commitment()).unwrap().output.value);
 		}
-		if sum != tx.overage() {
+		if total_inputs_value != total_outputs_value.saturating_add(tx.overage()) {
+			println!(
+				"tx {} sum validate fail. total inputs: {}, total outputs: {}, fee: {}",
+				tx.hash(),
+				total_inputs_value,
+				total_outputs_value,
+				tx.overage(),
+			);
 			return Err(PoolError::Other(format!("transaction sum mismatch")))?;
 		}
 

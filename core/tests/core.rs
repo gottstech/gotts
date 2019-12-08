@@ -37,6 +37,7 @@ use gotts_util as util;
 use serde_json;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::u32;
 
 #[test]
 fn simple_tx_ser() {
@@ -104,6 +105,65 @@ fn test_zero_commit_fails() {
 
 fn verifier_cache() -> Arc<RwLock<dyn VerifierCache>> {
 	Arc::new(RwLock::new(LruVerifierCache::new()))
+}
+
+#[test]
+fn build_tx_fee_overflow() {
+	let keychain = ExtKeychain::from_random_seed(false).unwrap();
+	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
+	let key_id1 = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
+	let key_id2 = ExtKeychain::derive_key_id(1, 2, 0, 0, 0);
+	let key_id3 = ExtKeychain::derive_key_id(1, 3, 0, 0, 0);
+
+	let mut complete_inputs: HashMap<Commitment, OutputEx> = HashMap::new();
+	let (pre_tx, _) =
+		build::partial_transaction(vec![output(10, Some(0i64), key_id1)], &keychain, &builder)
+			.unwrap();
+	complete_inputs.insert(
+		pre_tx.body.outputs[0].commit,
+		OutputEx {
+			output: pre_tx.body.outputs[0],
+			height: 0,
+			mmr_index: 1,
+		},
+	);
+
+	// first build a valid tx with corresponding blinding factor
+	let tx = build::transaction(
+		vec![
+			input(10, 0i64, key_id1),
+			output(5, Some(0i64), key_id2),
+			output(6 + 1000_000, Some(0i64), key_id3),
+			with_fee(u32::MAX - 1000_000),
+		],
+		&keychain,
+		&builder,
+	)
+	.unwrap();
+
+	// check the tx is invalid
+	assert_eq!(
+		tx.validate(
+			Weighting::AsTransaction,
+			verifier_cache(),
+			Some(&complete_inputs),
+			1
+		),
+		Err(core::core::transaction::Error::TransactionSumMismatch)
+	);
+
+	// check the kernel is itself valid
+	assert_eq!(tx.kernels().len(), 1);
+	let kern = &tx.kernels()[0];
+	kern.verify().unwrap();
+
+	assert_eq!(
+		kern.features,
+		KernelFeatures::Plain {
+			fee: u32::MAX - 1000_000
+		}
+	);
+	assert_eq!(u32::MAX as u64 - 1000_000, tx.fee());
 }
 
 #[test]
