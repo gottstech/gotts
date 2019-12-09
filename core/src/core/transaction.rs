@@ -949,12 +949,11 @@ impl TransactionBody {
 								.get(commit)
 								.ok_or(Error::InputNotExist)?
 								.clone();
-							// Verify the Relative Lock Height
-							if height
-								< output_ex.output.get_rlh().unwrap() as u64 + output_ex.height
-							{
+							// Cut-Through/CoinJoin is forbidden in the same block for the SigLocked Outputs.
+							if height <= output_ex.height {
 								return Err(Error::InputUnlocker(
-									"relative_lock_height limited".to_string(),
+									"0-confirmation transaction is limited for SigLocked outputs"
+										.to_string(),
 								));
 							}
 							outputs_to_spent.push(output_ex);
@@ -2036,27 +2035,14 @@ impl Output {
 		}
 	}
 
-	/// Get the relative lock height if it's SigLocked Output
-	pub fn get_rlh(&self) -> Result<u32, Error> {
-		match self.features {
-			OutputFeaturesEx::Plain { .. } | OutputFeaturesEx::Coinbase { .. } => {
-				Err(Error::OutputLocker("output w/o locker".to_owned()))
-			}
-			OutputFeaturesEx::SigLocked { locker } => Ok(locker.relative_lock_height),
-		}
-	}
-
 	/// PathMessage for the output
 	pub fn path_message(&self, rewind_hash: &Hash) -> Result<PathMessage, Error> {
 		let rewind_nonce =
 			Hash::from_vec(blake2b(32, &self.commit.0, rewind_hash.as_bytes()).as_bytes());
 		match self.features {
-			OutputFeaturesEx::Plain { spath } => spath
-				.get_path(&rewind_nonce)
-				.map_err(|e| Error::SecuredPath(e.to_string())),
-			OutputFeaturesEx::Coinbase { spath } => spath
-				.get_path(&rewind_nonce)
-				.map_err(|e| Error::SecuredPath(e.to_string())),
+			OutputFeaturesEx::Plain { spath } | OutputFeaturesEx::Coinbase { spath } => {
+				Ok(spath.get_path(&rewind_nonce))
+			}
 			OutputFeaturesEx::SigLocked { .. } => {
 				Err(Error::SecuredPath("output w/o SecuredPath".to_owned()))
 			}
@@ -2110,6 +2096,10 @@ pub struct OutputI {
 	/// Output features and commit.
 	pub id: OutputIdentifier,
 	/// A secured path message which hide the key derivation path and the random w of commitment.
+	#[serde(
+		serialize_with = "secp_ser::as_hex",
+		deserialize_with = "secp_ser::securedpath_from_hex"
+	)]
 	pub spath: SecuredPath,
 }
 

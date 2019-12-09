@@ -41,7 +41,7 @@ fn test_output_ser_deser() {
 	let w: i64 = thread_rng().gen();
 	let commit = keychain.commit(w, &key_id).unwrap();
 	let builder = proof::ProofBuilder::new(&keychain, &Identifier::zero());
-	let spath = proof::create_secured_path(&keychain, &builder, w, &key_id, commit);
+	let spath = proof::create_secured_path(&builder, w, &key_id, commit);
 
 	let out = Output {
 		features: OutputFeaturesEx::Plain { spath },
@@ -68,7 +68,7 @@ fn test_output_std_hash() {
 	let w: i64 = 100;
 	let commit = keychain.commit(w, &key_id).unwrap();
 	let builder = proof::ProofBuilder::new(&keychain, &Identifier::zero());
-	let spath = proof::create_secured_path(&keychain, &builder, w, &key_id, commit);
+	let spath = proof::create_secured_path(&builder, w, &key_id, commit);
 
 	let out = Output {
 		features: OutputFeaturesEx::Plain { spath },
@@ -125,7 +125,7 @@ fn test_output_std_hash() {
 
 	let mut hasher = DefaultHasher::new();
 	out_ii.hash(&mut hasher);
-	assert_eq!("d506ab1940606574", format!("{:x}", hasher.finish()));
+	assert_eq!("79e8cf86e3d2ea65", format!("{:x}", hasher.finish()));
 }
 
 #[test]
@@ -137,7 +137,7 @@ fn test_output_blake2b_hash() {
 	let w: i64 = 100;
 	let commit = keychain.commit(w, &key_id).unwrap();
 	let builder = proof::ProofBuilder::new(&keychain, &Identifier::zero());
-	let spath = proof::create_secured_path(&keychain, &builder, w, &key_id, commit);
+	let spath = proof::create_secured_path(&builder, w, &key_id, commit);
 
 	let out = Output {
 		features: OutputFeaturesEx::Plain { spath },
@@ -191,7 +191,7 @@ fn test_output_blake2b_hash() {
 	);
 	assert_eq!(
 		vec_ii.hash().to_hex(),
-		"4504a1f255a39cd67de0a56ec8fc4abe6f8556451399b62a7c3a466884d9a3d0",
+		"d14fd338c6aab88e1b848e692950684454c44cb4bc6ce73ea9cd46df9b3cb9e9",
 	);
 }
 

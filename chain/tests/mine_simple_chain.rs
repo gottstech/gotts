@@ -590,7 +590,6 @@ fn spend_in_fork_and_compact() {
 		assert_eq!(tx1_ofph.position == 8 || tx1_ofph.position == 9, true);
 		let active_key_id = key_id30.parent_path();
 		let out1_path_msg = proof::rewind(
-			kc.secp(),
 			&pb,
 			&active_key_id,
 			&out1.commit,
