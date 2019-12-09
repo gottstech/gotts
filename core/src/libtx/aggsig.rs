@@ -243,7 +243,7 @@ pub fn verify_partial_sig(
 /// let w: i64 = thread_rng().gen();
 /// let commit = keychain.commit(w, &key_id).unwrap();
 /// let builder = proof::ProofBuilder::new(&keychain, &Identifier::zero());
-/// let spath = proof::create_secured_path(&keychain, &builder, w, &key_id, commit);
+/// let spath = proof::create_secured_path(&builder, w, &key_id, commit);
 /// let output = Output {
 ///		features: OutputFeaturesEx::Plain { spath },
 ///		commit,
@@ -313,7 +313,7 @@ where
 /// let w = 0i64;
 /// let commit = keychain.commit(w, &key_id).unwrap();
 /// let builder = proof::ProofBuilder::new(&keychain, &Identifier::zero());
-/// let spath = proof::create_secured_path(&keychain, &builder, w, &key_id, commit);
+/// let spath = proof::create_secured_path(&builder, w, &key_id, commit);
 /// let output = Output {
 ///		features: OutputFeaturesEx::Coinbase { spath },
 ///		commit,

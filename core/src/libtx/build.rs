@@ -225,8 +225,7 @@ where
 
 			debug!("Building output: {}, {:?}", value, commit);
 
-			let spath =
-				proof::create_secured_path(build.keychain, build.builder, w, &key_id, commit);
+			let spath = proof::create_secured_path(build.builder, w, &key_id, commit);
 
 			(
 				tx.with_output(Output {

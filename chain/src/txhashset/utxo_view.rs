@@ -131,7 +131,7 @@ impl<'a> UTXOView<'a> {
 	// Input is valid if it is spending an (unspent) output
 	// that currently exists in the output MMR.
 	// Compare the hash in the output MMR at the expected pos.
-	fn validate_input(&self, input: &Input, next_block_height: u64) -> Result<u64, Error> {
+	fn validate_input(&self, input: &Input, _next_block_height: u64) -> Result<u64, Error> {
 		if let Ok(ofph) = self.batch.get_output_pos_height(&input.commitment()) {
 			match ofph.features {
 				OutputFeatures::Plain | OutputFeatures::Coinbase => {
@@ -151,18 +151,7 @@ impl<'a> UTXOView<'a> {
 							if hash == output.hash_with_index(ofph.position - 1)
 								&& output.id.commit == input.commit
 							{
-								// Find the "cutoff" height.
-								let cutoff_height = next_block_height
-									.checked_sub(output.locker.relative_lock_height as u64)
-									.unwrap_or(0);
-
-								// If input height exceed the cutoff_height
-								// we know they have not yet sufficiently matured.
-								if ofph.height > cutoff_height {
-									return Err(ErrorKind::ImmatureCoinbase.into());
-								} else {
-									return Ok(output.value);
-								}
+								return Ok(output.value);
 							}
 						}
 					}

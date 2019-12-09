@@ -20,11 +20,12 @@ use crate::blake2::blake2b::blake2b;
 use crate::core::hash::{Hash, Hashed};
 use crate::keychain::{Identifier, Keychain};
 use crate::libtx::error::{Error, ErrorKind};
+use crate::libtx::secp_ser;
 use crate::ser::{self, Readable, Reader, Writeable, Writer};
 use crate::util;
+use crate::util::secp;
 use crate::util::secp::key::{PublicKey, SecretKey};
 use crate::util::secp::pedersen::Commitment;
-use crate::util::secp::{self, Secp256k1};
 use crate::zeroize::Zeroize;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
@@ -45,11 +46,12 @@ pub struct OutputLocker {
 	/// The 'R' for ephemeral key: `q = Hash(secured_w || p*R)`.
 	#[serde(with = "pubkey_serde")]
 	pub pub_nonce: PublicKey,
-	/// The secured version of 'w' for the Pedersen commitment: `C = q*G + w*H`,
-	/// the real 'w' can be calculated by: `w = secured_w XOR q[0..8]`.
-	pub secured_w: i64,
-	/// The relative lock height, after which the output can be spent.
-	pub relative_lock_height: u32,
+	/// A secured path message which hide the key derivation path and the random w of commitment.
+	#[serde(
+		serialize_with = "secp_ser::as_hex",
+		deserialize_with = "secp_ser::securedpath_from_hex"
+	)]
+	pub spath: SecuredPath,
 }
 
 impl OutputLocker {
@@ -76,8 +78,7 @@ impl Writeable for OutputLocker {
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
 		self.p2pkh.write(writer)?;
 		self.pub_nonce.write(writer)?;
-		writer.write_i64(self.secured_w)?;
-		writer.write_u32(self.relative_lock_height)?;
+		self.spath.write(writer)?;
 		Ok(())
 	}
 }
@@ -86,13 +87,11 @@ impl Readable for OutputLocker {
 	fn read(reader: &mut dyn Reader) -> Result<OutputLocker, ser::Error> {
 		let p2pkh = Hash::read(reader)?;
 		let pub_nonce = PublicKey::read(reader)?;
-		let secured_w = reader.read_i64()?;
-		let relative_lock_height = reader.read_u32()?;
+		let spath = SecuredPath::read(reader)?;
 		Ok(OutputLocker {
 			p2pkh,
 			pub_nonce,
-			secured_w,
-			relative_lock_height,
+			spath,
 		})
 	}
 }
@@ -103,7 +102,7 @@ pub fn create_output_locker<K>(
 	value: u64,
 	recipient_pubkey: &PublicKey,
 	w: i64,
-	relative_lock_height: u32,
+	key_id_last_path: u32,
 	use_test_rng: bool,
 ) -> Result<(Commitment, OutputLocker, SecretKey), Error>
 where
@@ -123,10 +122,13 @@ where
 	let hash = (value, tmp.serialize_vec(true)).hash();
 	let ephemeral_key_q = SecretKey::from_slice(hash.as_bytes())?;
 
-	// The secured_w is calculated by: `secured_w = w XOR q[0..8]`.
-	let mut buf = &ephemeral_key_q.0[0..8];
-	let num = buf.read_i64::<LittleEndian>().unwrap();
-	let secured_w = w ^ num;
+	// The spath is calculated by: `spath = PathMessage XOR Hash(q)`.
+	let rewind_nonce = ephemeral_key_q.0.to_vec().hash();
+	let message = PathMessage {
+		w,
+		key_id_last_path,
+	};
+	let spath = SecuredPath::from_path(&message, &rewind_nonce);
 
 	// The Pedersen commitment: `C = q*G + w*H`.
 	let commit = k.commit_raw(w, &ephemeral_key_q)?;
@@ -136,8 +138,7 @@ where
 		OutputLocker {
 			p2pkh: recipient_pubkey.serialize_vec(true).hash(),
 			pub_nonce,
-			secured_w,
-			relative_lock_height,
+			spath,
 		},
 		ephemeral_key_q,
 	))
@@ -150,22 +151,21 @@ pub fn rewind_outputlocker<K>(
 	recipient_prikey: &SecretKey,
 	commit: &Commitment,
 	locker: &OutputLocker,
-) -> Result<(i64, SecretKey), Error>
+) -> Result<(PathMessage, SecretKey), Error>
 where
 	K: Keychain,
 {
 	// The ephemeral key: `q = Hash(value || p*R)`
 	let ephemeral_key_q = locker.get_ephemeral_key(k, value, recipient_prikey)?;
 
-	// The secured_w is calculated by: `secured_w = w XOR q[0..8]`.
-	let mut buf = &ephemeral_key_q.0[0..8];
-	let num = buf.read_i64::<LittleEndian>().unwrap();
-	let w = locker.secured_w ^ num;
+	// The spath is calculated by: `spath = PathMessage XOR Hash(q)`.
+	let rewind_nonce = ephemeral_key_q.0.to_vec().hash();
+	let info = locker.spath.get_path(&rewind_nonce);
 
 	// Check output
-	let commit_exp = k.commit_raw(w, &ephemeral_key_q)?;
+	let commit_exp = k.commit_raw(info.w, &ephemeral_key_q)?;
 	match commit == &commit_exp {
-		true => Ok((w, ephemeral_key_q)),
+		true => Ok((info, ephemeral_key_q)),
 		false => Err(ErrorKind::OutputLocker("check NOK".to_owned()).into()),
 	}
 }
@@ -227,14 +227,14 @@ impl SecuredPath {
 	}
 
 	/// Get the hidden PathMessage from a SecuredPath
-	pub fn get_path(&self, none: &Hash) -> Result<PathMessage, Error> {
+	pub fn get_path(&self, none: &Hash) -> PathMessage {
 		let decoded: Vec<u8> = self
 			.0
 			.iter()
 			.zip(none.to_vec().iter())
 			.map(|(a, b)| *a ^ *b)
 			.collect();
-		PathMessage::from_slice(&decoded)
+		PathMessage::from_slice(&decoded).unwrap()
 	}
 }
 
@@ -264,29 +264,28 @@ impl PathMessage {
 			key_id_last_path,
 		})
 	}
+
+	/// Create a PathMessage from w and id
+	pub fn create(w: i64, id: &Identifier) -> PathMessage {
+		PathMessage {
+			w,
+			key_id_last_path: id.to_path().last_path_index(),
+		}
+	}
 }
 
 /// Create a SecuredPath
-pub fn create_secured_path<K, B>(
-	k: &K,
-	b: &B,
-	w: i64,
-	key_id: &Identifier,
-	commit: Commitment,
-) -> SecuredPath
+pub fn create_secured_path<B>(b: &B, w: i64, key_id: &Identifier, commit: Commitment) -> SecuredPath
 where
-	K: Keychain,
 	B: ProofBuild,
 {
-	let secp = k.secp();
-	let rewind_nonce = b.rewind_nonce(secp, &commit);
-	let message = b.proof_message(secp, w, key_id);
+	let rewind_nonce = b.rewind_nonce(&commit);
+	let message = PathMessage::create(w, key_id);
 	SecuredPath::from_path(&message, &rewind_nonce)
 }
 
 /// Rewind a SecuredPath to retrieve the PathMessage
 pub fn rewind<B>(
-	secp: &Secp256k1,
 	b: &B,
 	active_key_id: &Identifier,
 	commit: &Commitment,
@@ -295,8 +294,8 @@ pub fn rewind<B>(
 where
 	B: ProofBuild,
 {
-	let nonce = b.rewind_nonce(secp, commit);
-	let info = spath.get_path(&nonce)?;
+	let nonce = b.rewind_nonce(commit);
+	let info = spath.get_path(&nonce);
 
 	let _key_id = b
 		.check_output(active_key_id, commit, &info)
@@ -308,10 +307,7 @@ where
 /// Used for building SecuredPath and checking if the output belongs to the wallet
 pub trait ProofBuild: Sync + Send + Clone {
 	/// Create a nonce that will allow to rewind the derivation path and flags
-	fn rewind_nonce(&self, secp: &Secp256k1, commit: &Commitment) -> Hash;
-
-	/// Create a PathMessage
-	fn proof_message(&self, secp: &Secp256k1, w: i64, id: &Identifier) -> PathMessage;
+	fn rewind_nonce(&self, commit: &Commitment) -> Hash;
 
 	/// Check if the output belongs to this keychain
 	fn check_output(
@@ -361,15 +357,8 @@ impl<'a, K> ProofBuild for ProofBuilder<'a, K>
 where
 	K: Keychain,
 {
-	fn rewind_nonce(&self, _secp: &Secp256k1, commit: &Commitment) -> Hash {
+	fn rewind_nonce(&self, commit: &Commitment) -> Hash {
 		self.nonce(commit)
-	}
-
-	fn proof_message(&self, _secp: &Secp256k1, w: i64, id: &Identifier) -> PathMessage {
-		PathMessage {
-			w,
-			key_id_last_path: id.to_path().last_path_index(),
-		}
 	}
 
 	fn check_output(
