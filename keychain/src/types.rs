@@ -63,6 +63,9 @@ pub enum Error {
 	/// SwitchCommitment error
 	#[fail(display = "Keychain SwitchCommitment error")]
 	SwitchCommitment,
+	/// Generic Error
+	#[fail(display = "Keychain Generic error: {}", _0)]
+	Generic(String),
 }
 
 impl From<secp::Error> for Error {
@@ -491,6 +494,12 @@ pub trait Keychain: Sync + Send + Clone {
 
 	fn derive_key(&self, id: &Identifier) -> Result<SecretKey, Error>;
 	fn derive_pub_key(&self, id: &Identifier) -> Result<PublicKey, Error>;
+	fn search_pub_key(
+		&self,
+		d0_until: u32,
+		d1_until: u32,
+		dest_pub_key: &PublicKey,
+	) -> Result<Identifier, Error>;
 	fn commit(&self, w: i64, id: &Identifier) -> Result<Commitment, Error>;
 	fn commit_raw(&self, w: i64, key: &SecretKey) -> Result<Commitment, Error>;
 	fn blind_sum(&self, blind_sum: &BlindSum) -> Result<BlindingFactor, Error>;
