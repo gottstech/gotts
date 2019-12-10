@@ -35,7 +35,7 @@
 //!
 //!     // Generate PublicKey address
 //! 	let key_id = ExtKeychainPath::new(3, std::u32::MAX>>1, std::u32::MAX>>1, 100, 0).to_identifier();
-//!     let address = Address::from_pubkey(&public_key, &key_id, true);
+//!     let address = Address::from_pubkey(&public_key, key_id.last_path_index(), true);
 //!     println!("new generated address: {}", address);
 //! }
 //! ```
@@ -309,12 +309,12 @@ mod tests {
 	use crate::util;
 	use crate::util::secp::key::PublicKey;
 
-	fn round_trips(addr: &Address, parent_path: &Identifier) {
+	fn round_trips(addr: &Address) {
 		assert_eq!(Address::from_str(&addr.to_string()).unwrap(), *addr,);
 		assert_eq!(
 			&Address::from_pubkey(
 				&addr.get_inner_pubkey(),
-				&addr.get_key_id(parent_path),
+				addr.get_key_id_last_path(),
 				addr.network == ChainTypes::Mainnet
 			),
 			addr,
@@ -336,10 +336,10 @@ mod tests {
 			.unwrap(),
 		)
 		.unwrap();
-		let addr = Address::from_pubkey(&pubkey, &key_id, true);
+		let addr = Address::from_pubkey(&pubkey, key_id.last_path_index(), true);
 		assert_eq!(&addr.to_string(), addr_str);
 		let parent_path = key_id.parent_path();
-		round_trips(&addr, &parent_path);
+		round_trips(&addr);
 		assert_eq!(addr.get_key_id(&parent_path), key_id);
 
 		// same public key as above but in compressed form
@@ -350,9 +350,9 @@ mod tests {
 			.unwrap(),
 		)
 		.unwrap();
-		let addr = Address::from_pubkey(&pubkey, &key_id, true);
+		let addr = Address::from_pubkey(&pubkey, key_id.last_path_index(), true);
 		assert_eq!(&addr.to_string(), addr_str);
-		round_trips(&addr, &parent_path);
+		round_trips(&addr);
 
 		// another public key
 		let pubkey = PublicKey::from_slice(
@@ -364,13 +364,13 @@ mod tests {
 		.unwrap();
 		let key_id =
 			ExtKeychainPath::new(3, std::u32::MAX >> 1, std::u32::MAX >> 1, 200, 0).to_identifier();
-		let addr = Address::from_pubkey(&pubkey, &key_id, true);
+		let addr = Address::from_pubkey(&pubkey, key_id.last_path_index(), true);
 		assert_eq!(
 			&addr.to_string(),
 			"gs1qqvau3jpu2t04wy3znghhygrdjqvjxekrvs5vkrqjk6hesvjdj7lmcnvhha6qyyu8wa"
 		);
 		let parent_path = key_id.parent_path();
-		round_trips(&addr, &parent_path);
+		round_trips(&addr);
 		assert_eq!(addr.get_key_id(&parent_path), key_id);
 	}
 
@@ -385,7 +385,7 @@ mod tests {
 				version: bech32::u5::try_from_u8(0).expect("0<32"),
 				inner_addr: InnerAddr::PubKeyAddr {
 					pubkey: PublicKey::from_slice(&pubkey_vec).unwrap(),
-					keypath: key_id.to_path().last_path_index(),
+					keypath: key_id.last_path_index(),
 				},
 			},
 			network: ChainTypes::Mainnet,
@@ -409,13 +409,10 @@ mod tests {
 			),
 		];
 
-		let parent_path =
-			ExtKeychainPath::new(2, std::u32::MAX >> 1, std::u32::MAX >> 1, 0, 0).to_identifier();
-
 		for vector in &valid_vectors {
 			let addr = Address::from_str(vector.0).unwrap();
 			assert_eq!(&addr.pkh().to_hex(), vector.1);
-			round_trips(&addr, &parent_path);
+			round_trips(&addr);
 		}
 
 		let invalid_vectors = [

@@ -113,16 +113,19 @@ impl Keychain for ExtKeychain {
 		&self,
 		d0_until: u32,
 		d1_until: u32,
+		last_path: u32,
 		dest_pub_key: &PublicKey,
 	) -> Result<Identifier, Error> {
 		let secp = self.secp();
 		let mut hasher = self.hasher.clone();
 		let pk = ExtendedPubKey::from_private(secp, &self.master, &mut hasher);
+		let last_child_number = ChildNumber::from(last_path);
 		for d0 in 0..d0_until {
 			let pk0 = pk.ckd_pub(secp, &mut hasher, ChildNumber::from(d0))?;
 			for d1 in 0..d1_until {
 				let pk1 = pk0.ckd_pub(secp, &mut hasher, ChildNumber::from(d1))?;
-				if pk1.public_key == *dest_pub_key {
+				let pk2 = pk1.ckd_pub(secp, &mut hasher, last_child_number)?;
+				if pk2.public_key == *dest_pub_key {
 					let key_id = ExtKeychainPath::new(2, d0, d1, 0, 0).to_identifier();
 					return Ok(key_id);
 				}
