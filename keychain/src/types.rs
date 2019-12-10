@@ -63,6 +63,9 @@ pub enum Error {
 	/// SwitchCommitment error
 	#[fail(display = "Keychain SwitchCommitment error")]
 	SwitchCommitment,
+	/// Generic Error
+	#[fail(display = "Keychain Generic error: {}", _0)]
+	Generic(String),
 }
 
 impl From<secp::Error> for Error {
@@ -175,6 +178,12 @@ impl Identifier {
 		}
 		Identifier::from_path(&p)
 	}
+
+	/// Last part of the path (for last n_child)
+	pub fn last_path_index(&self) -> u32 {
+		ExtKeychainPath::from_identifier(&self).last_path_index()
+	}
+
 	pub fn from_bytes(bytes: &[u8]) -> Result<Identifier, Error> {
 		let mut identifier = [0; IDENTIFIER_SIZE];
 		for i in 0..min(IDENTIFIER_SIZE, bytes.len()) {
@@ -491,6 +500,18 @@ pub trait Keychain: Sync + Send + Clone {
 
 	fn derive_key(&self, id: &Identifier) -> Result<SecretKey, Error>;
 	fn derive_pub_key(&self, id: &Identifier) -> Result<PublicKey, Error>;
+
+	/// Search the parent key path if knowing the last path and the public key,
+	/// return the parent key path if found.
+	/// This is not an exhausting searching, limited by first two parameters.
+	fn search_pub_key(
+		&self,
+		d0_until: u32,
+		d1_until: u32,
+		last_path: u32,
+		dest_pub_key: &PublicKey,
+	) -> Result<Identifier, Error>;
+
 	fn commit(&self, w: i64, id: &Identifier) -> Result<Commitment, Error>;
 	fn commit_raw(&self, w: i64, key: &SecretKey) -> Result<Commitment, Error>;
 	fn blind_sum(&self, blind_sum: &BlindSum) -> Result<BlindingFactor, Error>;
