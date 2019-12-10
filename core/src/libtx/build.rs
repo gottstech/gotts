@@ -264,13 +264,13 @@ where
 				value,
 				&recipient_address.get_inner_pubkey(),
 				w,
-				1,
+				recipient_address.get_key_id_last_path(),
 				use_test_rng,
 			)
 			.unwrap();
 			debug!(
 				"Building non-interactive tx output: {}, {:?}",
-				value, commit
+				value, commit,
 			);
 
 			(

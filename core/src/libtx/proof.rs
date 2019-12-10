@@ -123,12 +123,13 @@ where
 	let ephemeral_key_q = SecretKey::from_slice(hash.as_bytes())?;
 
 	// The spath is calculated by: `spath = PathMessage XOR Hash(q)`.
-	let rewind_nonce = ephemeral_key_q.0.to_vec().hash();
+	let rewind_nonce1 = ephemeral_key_q.0.to_vec().hash();
+	let rewind_nonce2 = pub_nonce.serialize_vec(true).hash();
 	let message = PathMessage {
 		w,
 		key_id_last_path,
 	};
-	let spath = SecuredPath::from_path(&message, &rewind_nonce);
+	let spath = SecuredPath::from_path_v2(&message, &rewind_nonce1, &rewind_nonce2);
 
 	// The Pedersen commitment: `C = q*G + w*H`.
 	let commit = k.commit_raw(w, &ephemeral_key_q)?;
@@ -148,19 +149,29 @@ where
 pub fn rewind_outputlocker<K>(
 	k: &K,
 	value: u64,
-	recipient_prikey: &SecretKey,
+	recipient_prikey: &Option<SecretKey>,
+	recipient_key_id: &Identifier,
 	commit: &Commitment,
 	locker: &OutputLocker,
 ) -> Result<(PathMessage, SecretKey), Error>
 where
 	K: Keychain,
 {
+	let rewind_nonce2 = locker.pub_nonce.serialize_vec(true).hash();
+	let recipient_prikey = if let Some(r) = recipient_prikey {
+		r.clone()
+	} else {
+		let key_id_last_path = locker.spath.get_path(&rewind_nonce2).key_id_last_path;
+		k.derive_key(&recipient_key_id.parent_path().extend(key_id_last_path))
+			.unwrap()
+	};
+
 	// The ephemeral key: `q = Hash(value || p*R)`
-	let ephemeral_key_q = locker.get_ephemeral_key(k, value, recipient_prikey)?;
+	let ephemeral_key_q = locker.get_ephemeral_key(k, value, &recipient_prikey)?;
 
 	// The spath is calculated by: `spath = PathMessage XOR Hash(q)`.
-	let rewind_nonce = ephemeral_key_q.0.to_vec().hash();
-	let info = locker.spath.get_path(&rewind_nonce);
+	let rewind_nonce1 = ephemeral_key_q.0.to_vec().hash();
+	let info = locker.spath.get_path_v2(&rewind_nonce1, &rewind_nonce2);
 
 	// Check output
 	let commit_exp = k.commit_raw(info.w, &ephemeral_key_q)?;
@@ -213,25 +224,58 @@ impl SecuredPath {
 	}
 
 	/// Create a SecuredPath from the PathMessage
-	pub fn from_path(path_msg: &PathMessage, none: &Hash) -> SecuredPath {
+	pub fn from_path(path_msg: &PathMessage, nonce: &Hash) -> SecuredPath {
 		let mut bin = vec![];
 		bin.write_i64::<LittleEndian>(path_msg.w).unwrap();
 		bin.write_u32::<LittleEndian>(path_msg.key_id_last_path)
 			.unwrap();
 		let encoded: Vec<u8> = bin
 			.iter()
-			.zip(none.to_vec().iter())
+			.zip(nonce.to_vec().iter())
 			.map(|(a, b)| *a ^ *b)
 			.collect();
 		SecuredPath::from_slice(&encoded)
 	}
 
 	/// Get the hidden PathMessage from a SecuredPath
-	pub fn get_path(&self, none: &Hash) -> PathMessage {
+	pub fn get_path(&self, nonce: &Hash) -> PathMessage {
 		let decoded: Vec<u8> = self
 			.0
 			.iter()
-			.zip(none.to_vec().iter())
+			.zip(nonce.to_vec().iter())
+			.map(|(a, b)| *a ^ *b)
+			.collect();
+		PathMessage::from_slice(&decoded).unwrap()
+	}
+
+	/// Create a SecuredPath from the PathMessage, with two nonce
+	pub fn from_path_v2(path_msg: &PathMessage, nonce1: &Hash, nonce2: &Hash) -> SecuredPath {
+		let mut nonce = vec![0; SECURED_PATH_SIZE];
+		nonce[..8].copy_from_slice(&nonce1.to_vec()[..8]);
+		nonce[8..].copy_from_slice(&nonce2.to_vec()[8..12]);
+
+		let mut bin: Vec<u8> = Vec::with_capacity(SECURED_PATH_SIZE);
+		bin.write_i64::<LittleEndian>(path_msg.w).unwrap();
+		bin.write_u32::<LittleEndian>(path_msg.key_id_last_path)
+			.unwrap();
+		let encoded: Vec<u8> = bin
+			.iter()
+			.zip(nonce.to_vec().iter())
+			.map(|(a, b)| *a ^ *b)
+			.collect();
+		SecuredPath::from_slice(&encoded)
+	}
+
+	/// Get the hidden PathMessage from a SecuredPath, with two nonce
+	pub fn get_path_v2(&self, nonce1: &Hash, nonce2: &Hash) -> PathMessage {
+		let mut nonce = vec![0; SECURED_PATH_SIZE];
+		nonce[..8].copy_from_slice(&nonce1.to_vec()[..8]);
+		nonce[8..].copy_from_slice(&nonce2.to_vec()[8..12]);
+
+		let decoded: Vec<u8> = self
+			.0
+			.iter()
+			.zip(nonce.to_vec().iter())
 			.map(|(a, b)| *a ^ *b)
 			.collect();
 		PathMessage::from_slice(&decoded).unwrap()
@@ -335,12 +379,12 @@ where
 	K: Keychain,
 {
 	/// Creates a new instance of this proof builder
-	pub fn new(keychain: &'a K, rewind_hash_key_id: &Identifier) -> Self {
-		let public_root_key = keychain
-			.derive_pub_key(rewind_hash_key_id)
+	pub fn new(keychain: &'a K, rewind_key_id: &Identifier) -> Self {
+		let public_rewind_key = keychain
+			.derive_pub_key(rewind_key_id)
 			.unwrap()
 			.serialize_vec(true);
-		let rewind_hash = Hash::from_vec(blake2b(32, &[], &public_root_key[..]).as_bytes());
+		let rewind_hash = Hash::from_vec(blake2b(32, &[], &public_rewind_key[..]).as_bytes());
 
 		Self {
 			keychain,
