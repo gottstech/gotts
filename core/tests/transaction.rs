@@ -64,10 +64,10 @@ fn test_output_std_hash() {
 	use std::hash::{Hash, Hasher};
 
 	let keychain = ExtKeychain::from_seed(&[0; 32], false).unwrap();
-	let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
+	let key_id = ExtKeychain::derive_key_id(3, 1, 1, 1, 0);
 	let w: i64 = 100;
 	let commit = keychain.commit(w, &key_id).unwrap();
-	let builder = proof::ProofBuilder::new(&keychain, &Identifier::zero());
+	let builder = proof::ProofBuilder::new(&keychain, &key_id.parent_path());
 	let spath = proof::create_secured_path(&builder, w, &key_id, commit);
 
 	let out = Output {
@@ -113,19 +113,19 @@ fn test_output_std_hash() {
 	//
 	let mut hasher = DefaultHasher::new();
 	out.id().hash(&mut hasher);
-	assert_eq!("ed8fc1049eacbf86", format!("{:x}", hasher.finish()));
+	assert_eq!("8a338440279e99d1", format!("{:x}", hasher.finish()));
 
 	let mut hasher = DefaultHasher::new();
 	out.hash(&mut hasher);
-	assert_eq!("61a637bd439cc7d4", format!("{:x}", hasher.finish()));
+	assert_eq!("2b208708e954b5cb", format!("{:x}", hasher.finish()));
 
 	let mut hasher = DefaultHasher::new();
 	out_i.hash(&mut hasher);
-	assert_eq!("c084e619005a87c", format!("{:x}", hasher.finish()));
+	assert_eq!("be8bb33ed7cd9561", format!("{:x}", hasher.finish()));
 
 	let mut hasher = DefaultHasher::new();
 	out_ii.hash(&mut hasher);
-	assert_eq!("79e8cf86e3d2ea65", format!("{:x}", hasher.finish()));
+	assert_eq!("ebfcfbf4286ad1ce", format!("{:x}", hasher.finish()));
 }
 
 #[test]
@@ -191,7 +191,7 @@ fn test_output_blake2b_hash() {
 	);
 	assert_eq!(
 		vec_ii.hash().to_hex(),
-		"d14fd338c6aab88e1b848e692950684454c44cb4bc6ce73ea9cd46df9b3cb9e9",
+		"cc8f0f4fc9fac7639c482e5d25f22da15aeaa67a1f8db5b503633613aeb82555",
 	);
 }
 
