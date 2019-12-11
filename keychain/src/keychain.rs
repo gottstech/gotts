@@ -26,17 +26,6 @@ use crate::util::secp::key::{PublicKey, SecretKey};
 use crate::util::secp::pedersen::Commitment;
 use crate::util::secp::{self, Message, Secp256k1, Signature};
 
-/// Key as a recipient
-#[derive(Clone, Debug)]
-pub struct RecipientKey {
-	/// As recipient of non-interactive transaction, the key derivation path of the public address.
-	pub recipient_key_id: Identifier,
-	/// The public key of the recipient public address
-	pub recipient_pub_key: PublicKey,
-	/// The private key of the recipient public address
-	pub recipient_pri_key: SecretKey,
-}
-
 /// Extended Keychain
 #[derive(Clone, Debug)]
 pub struct ExtKeychain {
