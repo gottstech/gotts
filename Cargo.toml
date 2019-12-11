@@ -1,6 +1,6 @@
 [package]
 name = "gotts"
-version = "0.0.5"
+version = "0.0.6"
 authors = ["Gotts Developers <gotts.tech@lists.launchpad.net>"]
 description = "Simple, private and scalable cryptocurrency implementation based on the MimbleWimble chain format."
 license = "Apache-2.0"
@@ -32,14 +32,14 @@ term = "0.5"
 failure = "0.1"
 failure_derive = "0.1"
 
-gotts_api = { path = "./api", version = "0.0.5" }
-gotts_chain = { path = "./chain", version = "0.0.5" }
-gotts_config = { path = "./config", version = "0.0.5" }
-gotts_core = { path = "./core", version = "0.0.5" }
-gotts_keychain = { path = "./keychain", version = "0.0.5" }
-gotts_p2p = { path = "./p2p", version = "0.0.5" }
-gotts_servers = { path = "./servers", version = "0.0.5" }
-gotts_util = { path = "./util", version = "0.0.5" }
+gotts_api = { path = "./api", version = "0.0.6" }
+gotts_chain = { path = "./chain", version = "0.0.6" }
+gotts_config = { path = "./config", version = "0.0.6" }
+gotts_core = { path = "./core", version = "0.0.6" }
+gotts_keychain = { path = "./keychain", version = "0.0.6" }
+gotts_p2p = { path = "./p2p", version = "0.0.6" }
+gotts_servers = { path = "./servers", version = "0.0.6" }
+gotts_util = { path = "./util", version = "0.0.6" }
 
 [target.'cfg(windows)'.dependencies]
 cursive = { version = "0.12", default-features = false, features = ["pancurses-backend"] }
@@ -53,5 +53,5 @@ cursive = "0.12"
 built = "0.3"
 
 [dev-dependencies]
-gotts_chain = { path = "./chain", version = "0.0.5" }
-gotts_store = { path = "./store", version = "0.0.5" }
+gotts_chain = { path = "./chain", version = "0.0.6" }
+gotts_store = { path = "./store", version = "0.0.6" }

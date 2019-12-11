@@ -1,7 +1,7 @@
 
 [package]
 name = "gotts_p2p-fuzz"
-version = "0.0.5"
+version = "0.0.6"
 authors = ["Gotts Developers <gotts.tech@lists.launchpad.net>"]
 publish = false
 
