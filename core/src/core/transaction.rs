@@ -35,8 +35,6 @@ use crate::util::static_secp_instance;
 use crate::util::RwLock;
 use crate::{consensus, global};
 
-use chrono::naive::{MAX_DATE, MIN_DATE};
-use chrono::prelude::{DateTime, NaiveDateTime, Utc};
 use enum_primitive::FromPrimitive;
 use std::cmp::Ordering;
 use std::cmp::{max, min};
@@ -219,9 +217,6 @@ pub enum Error {
 	/// Input does not exist among UTXO sets.
 	#[fail(display = "Transaction InputNotExist error")]
 	InputNotExist,
-	/// Spend time is earlier than output timestamp.
-	#[fail(display = "Transaction IncorrectTimestamp error")]
-	IncorrectTimestamp,
 	/// Underlying serialization error.
 	#[fail(display = "Transaction Serialization error: {}", _0)]
 	Serialization(ser::Error),
@@ -1493,8 +1488,8 @@ impl Input {
 /// The unlocker in a transaction input when spending an output with a locker.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct InputUnlocker {
-	/// Timestamp at which the transaction was built.
-	pub timestamp: DateTime<Utc>,
+	/// Nonce for the signing message.
+	pub nonce: u64,
 	/// The signature for the output which has a locked public key / address.
 	#[serde(with = "secp_ser::sig_serde")]
 	pub sig: secp::Signature,
@@ -1510,7 +1505,7 @@ hashable_ord!(InputUnlocker);
 /// an Input as binary.
 impl Writeable for InputUnlocker {
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
-		writer.write_i64(self.timestamp.timestamp())?;
+		writer.write_u64(self.nonce)?;
 		self.sig.write(writer)?;
 		self.pub_key.write(writer)?;
 		Ok(())
@@ -1521,17 +1516,11 @@ impl Writeable for InputUnlocker {
 /// an Input from a binary stream.
 impl Readable for InputUnlocker {
 	fn read(reader: &mut dyn Reader) -> Result<InputUnlocker, ser::Error> {
-		let timestamp = reader.read_i64()?;
-		if timestamp > MAX_DATE.and_hms(0, 0, 0).timestamp()
-			|| timestamp < MIN_DATE.and_hms(0, 0, 0).timestamp()
-		{
-			return Err(ser::Error::CorruptedData);
-		}
-
+		let nonce = reader.read_u64()?;
 		let sig = secp::Signature::read(reader)?;
 		let pub_key = secp::key::PublicKey::read(reader)?;
 		Ok(InputUnlocker {
-			timestamp: DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(timestamp, 0), Utc),
+			nonce,
 			sig,
 			pub_key,
 		})
@@ -1712,7 +1701,7 @@ impl InputEx {
 		}
 
 		// Hashing to get the final msg for signature
-		let hash = (msg_to_sign, unlocker.timestamp.timestamp()).hash();
+		let hash = (msg_to_sign, unlocker.nonce).hash();
 		let msg = secp::Message::from_slice(&hash.as_bytes())?;
 
 		Ok((unlocker.sig, msg, unlocker.pub_key))
@@ -2050,7 +2039,7 @@ impl Output {
 	}
 
 	/// The msg signed as part of the Input with a signature.
-	/// 	msg = hash(features || commit || value || timestamp) for single input
+	/// 	msg = hash(features || commit || value || nonce) for single input
 	/// 	msg = hash((features || commit || value) || (...) || nonce) for multiple inputs
 	/// Leave to caller to execute the final hash.
 	pub fn msg_to_sign(&self) -> Result<Vec<u8>, Error> {
