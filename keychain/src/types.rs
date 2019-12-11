@@ -213,7 +213,7 @@ impl Identifier {
 		let mut retval = String::from("m");
 		assert!(p.path.len() >= p.depth as usize);
 		for i in 0..p.depth {
-			retval.push_str(&format!("/{}", <u32>::from(p.path[i as usize])));
+			retval.push_str(&format!("/{}", p.path[i as usize]));
 		}
 		retval
 	}

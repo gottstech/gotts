@@ -243,6 +243,22 @@ impl ChildNumber {
 			ChildNumber::Normal { .. } => false,
 		}
 	}
+
+	/// Returns Key index which is within [0, 2^31 - 1].
+	pub fn index(&self) -> u32 {
+		match *self {
+			ChildNumber::Hardened { index } => index,
+			ChildNumber::Normal { index } => index,
+		}
+	}
+
+	/// Create a new ChildNumber by increase the index, panics if index is i32::MAX.
+	pub fn next(&self) -> Self {
+		match *self {
+			ChildNumber::Hardened { index } => ChildNumber::from_hardened_idx(index + 1),
+			ChildNumber::Normal { index } => ChildNumber::from_normal_idx(index + 1),
+		}
+	}
 }
 
 impl From<u32> for ChildNumber {
