@@ -342,15 +342,13 @@ rewind_nonce = Hash(root_pub_key)
 nonce = Hash( rewind_nonce || commit )
 spath = PathMessage XOR nonce
 ```
-The `PathMessage` contains 28 bytes as follows:
+The `PathMessage` contains 12 bytes as follows:
 ```Rust
 struct PathMessage {
-	/// Reserved at this moment.
-	reserved: [u8; 3],
 	/// The random 'w' of Pedersen commitment `r*G + w*H`.
-	w: u64,
-	/// The key identifier. 1-byte path depth and 16-bytes BIP-32 key derivation path.
-	key_id: Identifier,
+	w: i64,
+	/// The last path index of the key identifier
+	pub key_id_last_path: u32,
 }
 ```
 
@@ -378,19 +376,19 @@ A typical transaction with 1 input and 2 outputs in the Gotts ***Interactive Tra
 
 ```
 1 Input: 1+33 = 34 Bytes
-2 Outputs: 2*(1+33+8+28) = 140 Bytes
-1 Kernel: (1+8+33+64) = 106 Bytes
+2 Outputs: 2*(1+33+8+12) = 108 Bytes
+1 Kernel: (1+4+33+64) = 102 Bytes
 
-Total: 34+140+106 = 280
+Total: 34+108+102 = 244
 ```
 
 ## Gotts Non-Interactive Transaction
 
-For most of personal users, when he/she is a receiver in a transaction, the ***Interactive Transaction*** is difficult to use for him/her, because the receiver need to be online and must be reachable for the sender's wallet, which sometimes will be very difficult or unstable or even impossible for personal user, especially for the NAT network environment.
+For most of personal users, when he/she is the receiver in a transaction, the ***Interactive Transaction*** is difficult to use for him/her, because the receiver need to be online and must be reachable for the sender's wallet, which sometimes will be very difficult or unstable or even impossible for personal user, especially for the NAT network environment.
 
 There're some workaround solutions for example making transaction by file asynchronously. But that doesn't change the necessary ***interactive*** procedure, so the payer still need wait the payee sign the received file and send back to the payer, still difficult to use for personal users to receive coins.
 
-But it's so popular and well-known in cryptocurrency world that the payment should be very easy thanks to "***Pay-to-Address***" / "***Pay-to-Public-Key-Hash***" technology.
+But it's so popular and well-known in cryptocurrency world that the payment can be very easy thanks to "***Pay-to-Address***" / "***Pay-to-Public-Key-Hash***" technology.
 
 So, in Gotts, for better user experience of personal user, and better adoption on common people, we enhance the MimbleWimble transaction so as to also support such kind of "***Pay-to-Address***” / "***Pay-to-Public-Key-Hash***", i.e. the ***Non-Interactive Transaction***.
 
@@ -412,44 +410,40 @@ struct OutputLocker {
 	/// The Hash of 'Pay-to-Public-Key-Hash'.
 	p2pkh: Hash,
 	/// The 'R' for ephemeral key: `q = Hash(secured_w || p*R)`.
-	pub_nonce: PublicKey,
-	/// The secured version of 'w' for the Pedersen commitment: `C = q*G + w*H`,
-	/// the real 'w' can be calculated by: `w = secured_w XOR q[0..8]`.
-	secured_w: u64,
-	/// The relative lock height, after which the output can be spent.
-	relative_lock_height: u32,
+	R: PublicKey,
+	/// A secured path message which hide the key derivation path and the random w of commitment.
+	spath: SecuredPath,
 }
 ```
-Note: the `relative_lock_height` must be a positive number, i.e. `0` is forbidden. To be explained in next chapter.
 
 Accordingly, to spend this ***Non-Interactive Transaction*** output, the ***Input*** must include the correct signature for the locked public key / address in the `OutputLocker`.
 ```Rust
 struct InputUnlocker {
-	/// Timestamp at which the transaction was built. Must be later than any spending output/s.
-	timestamp: DateTime,
+	/// Nonce for the signing message.
+	nonce: u64,
 	/// The signature for the output which has a locked public key / address.
 	sig: Signature,
 	/// The public key.
 	pub_key: PublicKey,
 }
 ```
-For the signature, the signed message is `Hash(timestamp || (features || commit || value) || ...)`, where each `(features || commit || value)` comes from one output.
+For the signature, the signed message is `Hash(nonce || (features || commit || value) || ...)`, where each `(features || commit || value)` comes from one output.
 
-To avoid any possible replay attack here, we define a consensus rule that the `timestamp` must have a bigger value than any of the spending output/s timestamp, i.e. the timestamp of the block who packaged that output.
+To avoid any possible replay attack here, the `nonce` should be a random value.
 
 Regarding the `commit` in the `Output`, we still use the Pedersen Commitment, except the blinding `r` in `r*G+w*H` is not a direct private key of receiver. Instead, we use [ephemeral key](https://en.wikipedia.org/wiki/Ephemeral_key) here, replace `r` with a `q`:
 
 ```sh
 commit = q*G + w*H
-where q = Hash(secured_w || k*P)
+where q = Hash(value || k*P)
 ```
-Here `P` is the receiver's public key which must be told to sender. And we put the `k*G` as the `pub_nonce` to store into the `OutputLocker`.
+Here `P` is the receiver's public key which must be given as the receiver's [address](#gotts-address). And we put the `k*G` as the `R` to store into the `OutputLocker`.
 
 For the receiver, he/she can get this blinding `q` by the following formula:
 ```sh
-q = Hash(secured_w || p*R) 
+q = Hash(value || p*R) 
 ```
-Here `R` is that `pub_nonce` in the `OutputLocker`, and `p` is the private key of public `P`.
+Here `R` is that in the `OutputLocker`, and `p` is the private key of public `P`.
 
 Both the sender and the receiver know this ephemeral key `q`, (but only they know, not any others). So, it's convenient for the sender to complete a 2-of-2 schnorr signature by him/her self, no interactive action is needed any more. That's why Gotts can have this ***Non-Interactive Transaction*** for MimbleWimble.
 
@@ -458,16 +452,16 @@ Both the sender and the receiver know this ephemeral key `q`, (but only they kno
 A typical transaction with 1 input and 2 outputs in the Gotts ***Non-Interactive Transaction*** need about `426` bytes, if the spending output is also an output with a locker, and the change output is an output with a SecuredPath instead of an OutputLocker (which is the normal case):
 
 ```sh
-1 Input: 1+33+(8+64+33) = 139 Bytes
-2 Outputs: (1+33+28) + (1+33+8+77) = 181 Bytes
-1 Kernel: (1+8+33+64) = 106 Bytes
+1 Input: 1+33+(8+64+33) = 137 Bytes
+2 Outputs: (1+33+8+12) + (1+33+8+77) = 173 Bytes
+1 Kernel: (1+4+33+64) = 102 Bytes
 
-Total: 98+246+114 = 426 Bytes
+Total: 412 Bytes
 ```
 
-Even the size is almost `152%` of that typical Interactive Transaction size, considering the convenience for the common people and benefits for the broad adoption, it's fairy deserved.  
+Even the size is almost `169%` of that typical Interactive Transaction size, considering the convenience for the common people and benefits for the broad adoption, it's fairy deserved.  
 
-And in case the Non-Interactive Transaction has the input without a locker, above transaction size will be smaller: `321` Bytes. Then it will be about `115%` of that typical Interactive Transaction size.
+And in case the Non-Interactive Transaction has the input without a locker, above transaction size will be smaller: `309` Bytes. Then it will be about `127%` of that typical Interactive Transaction size.
 
 ### CoinJoin Forbidden for Non-Interactive Transaction
 
@@ -487,11 +481,10 @@ Unfortunately, if we combine the lists of inputs and outputs of these two transa
 ```
 Then we will lose the signature info `sig2` but obviously which should be there to prove the ownership of `out2`.
 
-That's one of the reasons of why we have a `relative_lock_height` field in `OutputLocker`. To correct this, we define a consensus rule in Gotts to avoid this CoinJoin:
-- The `relative_lock_height` of a non-interactive transaction output must have `1` as the minimum value.
-- Note: the `relative_lock_height` is a relative locktime when the output becomes spendable. 
+To correct this, we define a consensus rule in Gotts to avoid this CoinJoin:
+- The CoinJoin of a non-interactive transaction output in same block is forbidden.
 
-The CoinJoin still works for interactive transactions.
+The CoinJoin in same block still works for interactive transactions.
 
 ### Cut-Through
 
@@ -549,17 +542,9 @@ We define two HRP prefixes for Gotts Address:
 The public key need 33 bytes, and it's `62` characters in this base32 coding address, including the prefix `gs1` or `ts1`.
 
 For example, here are some Gotts addresses:
-- `ts1-qgun5fxd-npn72kdz3myetqa-tgkxg7th5y0ymcn-jcsf0n8nzzv8tc5-q9uhkp`
-- `ts1-qgfaqdqy-vm8ryd2k6zfp6cm-359cs4gnudxhljm-d0v38yut4u9r7rg-93d4jp`
-- `gs1-qvgsq0kd-7gvgqksg58fkqm9-ms5cplcllev4fnw-svevuqs2jukrtrc-guuvze`
-
-#### Optional `-` Splitter
-
-To make this address string more readable, optionally, we can use 5 minus sign (`-`) to split the address string into 6 parts:
-- The 1st part is the `ts1` or `gs1`.
-- The 2nd part is the 1st `8` elements from the whole `59` elements.
-- The 3rd/4th/5th part each is the coming `15` elements.
-- The last part is the last `6` elements, which is the checksum.
+- `ts1qgun5fxdnpn72kdz3myetqatgkxg7th5y0ymcnjcsf0n8nzzv8tc5q9uhkp`
+- `ts1qgfaqdqyvm8ryd2k6zfp6cm359cs4gnudxhljmd0v38yut4u9r7rg93d4jp`
+- `gs1qvgsq0kd7gvgqksg58fkqm9ms5cplcllev4fnwsvevuqs2jukrtrcguuvze`
 
 ### Price Feed Oracles Staking Transaction
 
@@ -655,20 +640,19 @@ The MimbleWimble transaction pool accepts all of them as valid transactions, fro
 
 At previous chapter, we say MimbleWimble is a super lightweight chain, because almost only unspent outputs need be kept as chain validation data, plus the block headers. And we also mentioned that all transaction kernel data are needed.
 
-A typical transaction kernel in Gotts need about `1+8+33+64 = 106` bytes, refers to the pseudo-code here:
+A typical transaction kernel in Gotts need about `1+4+33+64 = 102` bytes, refers to the pseudo-code here:
 ```Rust
 struct TxKernel {
 	features: KernelFeatures,
-	fee: u64,
-	lock_height: Option<u64>,
+	fee: u32,
 	excess: Commitment,
 	excess_sig: Signature,
 }
 ```
 
-As we know, the average Bitcoin transaction size is about [~500 bytes](https://charts.bitcoin.com/btc/chart/transaction-size#5moc), and the basic Bitcoin transactions with 1 input and 2 outputs are typically [~250 bytes](https://www.blockchain.com/btc/tx/f4184fc596403b9d638783cf57adfe4c75c605f6356fbc91338530e9831e9e16?show_adv=true) of data.
+As we know, the average Bitcoin transaction size is about [~500 bytes](https://charts.bitcoin.com/btc/chart/transaction-size#5moc), and the basic Bitcoin transactions with 1 input and 2 outputs are typically [~225 bytes](https://www.blockchain.com/btc/tx/7e46a5ea9d9c19cd4d0c3d0a287419d7c1ae13049ac7ab8860b6ee0cec4ead17) of data.
 
-Comparing to Bitcoin, if this `106` bytes transaction kernel data must be kept forever, that will be not very interesting for a concept of a "super lightweight chain", since the kernel size is `~50%` of the basic Bitcoin transaction size.
+Comparing to Bitcoin, if this `102` bytes transaction kernel data must be kept forever, that will be not very interesting for a concept of a "super lightweight chain", since the kernel size is `~45%` of the basic Bitcoin transaction size.
 
 The meaning of a transaction kernel for the **block** validation:
 

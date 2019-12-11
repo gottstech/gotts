@@ -37,7 +37,6 @@ use crate::libtx::proof::ProofBuild;
 use crate::libtx::secp_ser;
 use crate::libtx::{aggsig, proof, Error};
 use crate::util::secp::{self, Commitment, Message, SecretKey};
-use chrono::prelude::*;
 use rand::{thread_rng, Rng};
 use serde::{self, Deserialize};
 
@@ -175,9 +174,9 @@ where
 					parm.ephemeral_key.clone(),
 				));
 			}
-			let now = Utc::now();
+			let nonce: u64 = thread_rng().gen();
 			// Hashing to get the final msg for signature
-			let hash = (msg_to_sign, now.timestamp()).hash();
+			let hash = (msg_to_sign, nonce).hash();
 			let msg = Message::from_slice(&hash.as_bytes()).unwrap();
 			let pub_key = build.keychain.derive_pub_key(&key_id).unwrap();
 			let sig = secp::aggsig::sign_single(
@@ -196,7 +195,7 @@ where
 				tx.with_input_ex(InputEx::InputsWithUnlocker {
 					inputs,
 					unlocker: InputUnlocker {
-						timestamp: now,
+						nonce,
 						sig,
 						pub_key,
 					},

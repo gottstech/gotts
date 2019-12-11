@@ -40,12 +40,13 @@ pub const OUTPUT_LOCKER_SIZE: usize = 32 + secp::COMPRESSED_PUBLIC_KEY_SIZE + 8 
 
 /// A locker to limit an output only spendable to someone who owns the private key of 'p2pkh'.
 #[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
+#[allow(non_snake_case)]
 pub struct OutputLocker {
 	/// The Blake2b hash of 'Pay-to-Public-Key-Hash'.
 	pub p2pkh: Hash,
 	/// The 'R' for ephemeral key: `q = Hash(secured_w || p*R)`.
 	#[serde(with = "pubkey_serde")]
-	pub pub_nonce: PublicKey,
+	pub R: PublicKey,
 	/// A secured path message which hide the key derivation path and the random w of commitment.
 	#[serde(
 		serialize_with = "secp_ser::as_hex",
@@ -66,7 +67,7 @@ impl OutputLocker {
 		K: Keychain,
 	{
 		let secp = k.secp();
-		let mut tmp = self.pub_nonce.clone();
+		let mut tmp = self.R.clone();
 		tmp.mul_assign(&secp, recipient_prikey)?;
 		let hash = (value, tmp.serialize_vec(true)).hash();
 		let ephemeral_key_q = SecretKey::from_slice(hash.as_bytes())?;
@@ -77,26 +78,24 @@ impl OutputLocker {
 impl Writeable for OutputLocker {
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
 		self.p2pkh.write(writer)?;
-		self.pub_nonce.write(writer)?;
+		self.R.write(writer)?;
 		self.spath.write(writer)?;
 		Ok(())
 	}
 }
 
 impl Readable for OutputLocker {
+	#[allow(non_snake_case)]
 	fn read(reader: &mut dyn Reader) -> Result<OutputLocker, ser::Error> {
 		let p2pkh = Hash::read(reader)?;
-		let pub_nonce = PublicKey::read(reader)?;
+		let R = PublicKey::read(reader)?;
 		let spath = SecuredPath::read(reader)?;
-		Ok(OutputLocker {
-			p2pkh,
-			pub_nonce,
-			spath,
-		})
+		Ok(OutputLocker { p2pkh, R, spath })
 	}
 }
 
 /// Create a OutputLocker
+#[allow(non_snake_case)]
 pub fn create_output_locker<K>(
 	k: &K,
 	value: u64,
@@ -114,7 +113,7 @@ where
 	} else {
 		SecretKey::from_slice(&[1; 32]).unwrap()
 	};
-	let pub_nonce = PublicKey::from_secret_key(&secp, &private_nonce)?;
+	let R = PublicKey::from_secret_key(&secp, &private_nonce)?;
 
 	// The ephemeral key: `q = Hash(value || k*P)`
 	let mut tmp = recipient_pubkey.clone();
@@ -124,7 +123,7 @@ where
 
 	// The spath is calculated by: `spath = PathMessage XOR Hash(q)`.
 	let rewind_nonce1 = ephemeral_key_q.0.to_vec().hash();
-	let rewind_nonce2 = pub_nonce.serialize_vec(true).hash();
+	let rewind_nonce2 = R.serialize_vec(true).hash();
 	let message = PathMessage {
 		w,
 		key_id_last_path,
@@ -138,7 +137,7 @@ where
 		commit,
 		OutputLocker {
 			p2pkh: recipient_pubkey.serialize_vec(true).hash(),
-			pub_nonce,
+			R,
 			spath,
 		},
 		ephemeral_key_q,
@@ -157,7 +156,7 @@ pub fn rewind_outputlocker<K>(
 where
 	K: Keychain,
 {
-	let rewind_nonce2 = locker.pub_nonce.serialize_vec(true).hash();
+	let rewind_nonce2 = locker.R.serialize_vec(true).hash();
 	let recipient_prikey = if let Some(r) = recipient_prikey {
 		r.clone()
 	} else {
