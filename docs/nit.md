@@ -120,6 +120,7 @@ Now, let's construct a new input / output relationship for non-interactive trans
 (ri*G + wi*H) + (r'*G + P) = (rc*G + wc*H) + (P + wr*H)
 ```
 where
+
 - `P` is the receiver's Public Key.
 - we have `ri + r' = rc` and `wi = wc + wr`.
 
@@ -128,6 +129,7 @@ We can call this `r'*G + P` as `Offset`. Then, above form can be rewritten as:
 Input + Offset = Change + Payment
 ```
 Where
+
 - `Input` is `ri*G + wi*H`, `Change` is `rc*G + wc*H`, `Payment` is `P + wr*H`.
 - `Offset` is `(rc-ri)*G + P`. `P` is the receiver's Public Key.
 
@@ -221,6 +223,7 @@ Looking back the MimbleWimble/Grin Interactive Transaction design, with 1 input 
 (ri*G + vi*H) + (excess'+ offset*G) = (rc*G + vc*H) + (rr*G + vr*H) + (0+fee*H)
 ```
 Where
+
 - `(ri*G + vi*H)` is the spending coin, i.e. the input, which is selected by the sender.
 - `(rc*G + vc*H)` is the change coin, which is created by the sender.
 - `(rr*G + vr*H)` is the sending coin which is created by the receiver.
@@ -231,6 +234,7 @@ Where
 - `excess'` is the so-called "public excess", which is the public key for transaction kernel signature.
 
 And we have the following relationships:
+
 - `vi = vc + vr + fee`, which is used to calculate the change coin amount `vc`. 
 - `excess' = (rc-ri-offset)*G + rr*G`, which is used to calculate the "public excess".
 
@@ -260,6 +264,7 @@ Still with the example which has 1 input and 2 outputs:
 (ri*G + vi*H) + offset' = (rc*G + vc*H) + (rr*G + vr*H) + (0+fee*H)
 ```
 Where
+
 - `(ri*G + vi*H)` is the spending coin, i.e. the input, which is selected by the sender.
 - `(rc*G + vc*H)` is the change coin, which is created by the sender.
 - `ri` and `rc` are sender's private keys.
@@ -269,6 +274,7 @@ Where
 - `offset'` is **neither** the "public excess", **nor** the public key for transaction kernel signature.
 
 And we have the following relationships:
+
 - `vi = vc + vr + fee`, which is used to calculate the change coin amount `vc`. 
 - `offset' = (rc-ri-offset)*G + rr*G`, where `offset` is a random value selected by the sender.
 
@@ -281,6 +287,7 @@ excess' = SUM(inputs)
 Where, `SUM(inputs) = (ri*G + vi*H)` for above example with single input.
 
 Using the signature solution with commitment as key, which only need to be executed on the sender side:
+
 1. Select two random EC points `R1=k1*G` and `R2=k2*H`, get `R=R1+R2`.
 2. Calculate `C = SUM(inputs)`, `C = (ri*G + vi*H)` for above example with single input.
 3. Calculate `p = SUM(ri) mod p`, calculate `w = SUM(vi) mod p`, Where `p` is the parameter which defines the Elliptic Curve [secp256k1](https://en.bitcoin.it/wiki/Secp256k1) 's finite field Fp.
