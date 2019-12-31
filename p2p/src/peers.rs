@@ -371,6 +371,9 @@ impl Peers {
 	pub fn check_all(&self, total_difficulty: Difficulty, height: u64) {
 		for p in self.connected_peers().iter() {
 			if let Err(e) = p.send_ping(total_difficulty, height) {
+				//todo: above 'send_ping' will always success until the mpsc::sync_channel is full,
+				// since it just sends to a mpsc::SyncSender other than a real network sending.
+				// then, how to detect a pinging failure here?
 				debug!("Error pinging peer {:?}: {:?}", &p.info.addr, e);
 				let mut peers = match self.peers.try_write_for(LOCK_TIMEOUT) {
 					Some(peers) => peers,
