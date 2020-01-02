@@ -24,8 +24,10 @@ use hyper::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, USER_AGENT};
 use hyper::rt::{Future, Stream};
 use hyper::{Body, Client, Request};
 use hyper_rustls;
+use hyper_timeout::TimeoutConnector;
 use serde::{Deserialize, Serialize};
 use serde_json;
+use std::time::Duration;
 use tokio::runtime::Runtime;
 
 pub type ClientResponseFuture<T> = Box<dyn Future<Item = T, Error = Error> + Send>;
@@ -196,7 +198,11 @@ where
 
 fn send_request_async(req: Request<Body>) -> Box<dyn Future<Item = String, Error = Error> + Send> {
 	let https = hyper_rustls::HttpsConnector::new(1);
-	let client = Client::builder().build::<_, Body>(https);
+	let mut connector = TimeoutConnector::new(https);
+	connector.set_connect_timeout(Some(Duration::from_secs(10)));
+	connector.set_read_timeout(Some(Duration::from_secs(10)));
+	connector.set_write_timeout(Some(Duration::from_secs(10)));
+	let client = Client::builder().build::<_, hyper::Body>(connector);
 	Box::new(
 		client
 			.request(req)
