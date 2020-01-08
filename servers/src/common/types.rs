@@ -197,6 +197,10 @@ pub struct ServerConfig {
 	#[serde(default)]
 	pub stratum_mining_config: Option<StratumServerConfig>,
 
+	/// Configuration for the price feeder oracle daemon
+	#[serde(default)]
+	pub price_feeder_oracle_config: Option<PriceOracleServerConfig>,
+
 	/// Configuration for the webhooks that trigger on certain events
 	#[serde(default)]
 	pub webhook_config: WebHooksConfig,
@@ -213,6 +217,7 @@ impl Default for ServerConfig {
 			p2p_config: p2p::P2PConfig::default(),
 			dandelion_config: pool::DandelionConfig::default(),
 			stratum_mining_config: Some(StratumServerConfig::default()),
+			price_feeder_oracle_config: Some(PriceOracleServerConfig::default()),
 			chain_type: ChainTypes::default(),
 			archive_mode: Some(false),
 			pruning_kernel_index: Some(true),
@@ -261,6 +266,29 @@ impl Default for StratumServerConfig {
 			minimum_share_difficulty: 1,
 			enable_stratum_server: Some(false),
 			stratum_server_addr: Some("127.0.0.1:3516".to_string()),
+		}
+	}
+}
+
+/// Price Feeder Oracle server configuration
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PriceOracleServerConfig {
+	/// Run a price feeder oracle mining server
+	pub enable_price_feeder_oracle_server: Option<bool>,
+
+	/// If enabled, the oracle address and port to query the prices from
+	pub oracle_server_url: Option<String>,
+
+	/// Base address to the HTTP wallet receiver
+	pub wallet_listener_url: String,
+}
+
+impl Default for PriceOracleServerConfig {
+	fn default() -> PriceOracleServerConfig {
+		PriceOracleServerConfig {
+			enable_price_feeder_oracle_server: Some(false),
+			oracle_server_url: Some("http://127.0.0.1:3518".to_string()),
+			wallet_listener_url: "http://127.0.0.1:3515".to_string(),
 		}
 	}
 }

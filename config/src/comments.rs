@@ -408,6 +408,40 @@ fn comments() -> HashMap<String, String> {
 	);
 
 	retval.insert(
+		"[server.price_feeder_oracle_config]".to_string(),
+		"
+################################################
+###   PRICE FEEDER ORACLE SERVER CONFIG      ###
+################################################
+"
+		.to_string(),
+	);
+
+	retval.insert(
+		"enable_price_feeder_oracle_server".to_string(),
+		"
+#whether price feeder oracle server is enabled
+"
+		.to_string(),
+	);
+
+	retval.insert(
+		"oracle_server_url".to_string(),
+		"
+#which oracle server url to query the prices from
+"
+		.to_string(),
+	);
+
+	retval.insert(
+		"wallet_listener_url".to_string(),
+		"
+#the wallet receiver to which coinbase rewards will be sent
+"
+		.to_string(),
+	);
+
+	retval.insert(
 		"[logging]".to_string(),
 		"
 #########################################

@@ -37,12 +37,13 @@ use crate::common::adapters::{
 };
 use crate::common::hooks::{init_chain_hooks, init_net_hooks};
 use crate::common::stats::{DiffBlock, DiffStats, PeerStats, ServerStateInfo, ServerStats};
-use crate::common::types::{Error, ServerConfig, StratumServerConfig};
+use crate::common::types::{Error, PriceOracleServerConfig, ServerConfig, StratumServerConfig};
 use crate::core::core::hash::{Hashed, ZERO_HASH};
 use crate::core::core::verifier_cache::{LruVerifierCache, VerifierCache};
 use crate::core::ser::ProtocolVersion;
 use crate::core::{consensus, genesis, global, pow};
 use crate::gotts::{dandelion_monitor, seed, sync};
+use crate::mining::price_oracle;
 use crate::mining::stratumserver;
 use crate::mining::test_miner::Miner;
 use crate::p2p;
@@ -86,6 +87,7 @@ impl Server {
 		F: FnMut(Server),
 	{
 		let mining_config = config.stratum_mining_config.clone();
+		let price_feeder_config = config.price_feeder_oracle_config.clone();
 		let enable_test_miner = config.run_test_miner;
 		let test_miner_wallet_url = config.test_miner_wallet_url.clone();
 		let serv = Server::new(config)?;
@@ -99,6 +101,14 @@ impl Server {
 						stratum_stats.is_enabled = true;
 					}
 					serv.start_stratum_server(c.clone());
+				}
+			}
+		}
+
+		if let Some(c) = price_feeder_config {
+			if let Some(s) = c.enable_price_feeder_oracle_server {
+				if s {
+					serv.start_price_oracle_server(c.clone());
 				}
 			}
 		}
@@ -346,6 +356,20 @@ impl Server {
 	/// Number of peers
 	pub fn peer_count(&self) -> u32 {
 		self.p2p.peers.peer_count()
+	}
+
+	/// Start a price feeder oracle service on a separate thread
+	pub fn start_price_oracle_server(&self, config: PriceOracleServerConfig) {
+		let sync_state = self.sync_state.clone();
+		let stop_state = self.stop_state.clone();
+
+		let mut price_oracle_server =
+			price_oracle::PriceOracleServer::new(config, self.chain.clone(), stop_state);
+		let _ = thread::Builder::new()
+			.name("price_oracle_server".to_string())
+			.spawn(move || {
+				price_oracle_server.run_loop(sync_state);
+			});
 	}
 
 	/// Start a minimal "stratum" mining service on a separate thread
