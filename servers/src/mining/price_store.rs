@@ -15,17 +15,19 @@
 
 //! Storage implementation for price feeder data.
 
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, Duration, Timelike, Utc};
+use itertools::Itertools;
 
+//use crate::util::secp::{self, Message, Signature};
 use crate::core::ser::{self, Readable, Reader, Writeable, Writer};
-use gotts_store::{self, option_to_not_found, to_key, to_key_i64, Error};
+use gotts_store::{self, option_to_not_found, to_i64_key, to_key, to_key_i64_b, Error};
 
 const DB_NAME: &'static str = "price";
 const STORE_SUBPATH: &'static str = "prices";
 
-const EXCHANGE_RATE_PREFIX: u8 = 'e' as u8;
+const EXCHANGE_RATES_PREFIX: u8 = 'e' as u8;
 
-/// Data stored for the exchange rate of a currency pair.
+/// Data queried for the exchange rate of a currency pair.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ExchangeRate {
 	/// Currency to get the exchange rate for.
@@ -38,33 +40,62 @@ pub struct ExchangeRate {
 	pub date: DateTime<Utc>,
 }
 
-impl Readable for ExchangeRate {
-	fn read(reader: &mut dyn Reader) -> Result<ExchangeRate, ser::Error> {
-		let data = reader.read_bytes_len_prefix()?;
-		let from = std::str::from_utf8(&data)
-			.map_err(|_| ser::Error::CorruptedData)?
-			.to_string();
-		let data = reader.read_bytes_len_prefix()?;
-		let to = std::str::from_utf8(&data)
-			.map_err(|_| ser::Error::CorruptedData)?
-			.to_string();
-		let rate = reader.read_f64()?;
-		let timestamp = reader.read_i64()?;
-		Ok(ExchangeRate {
-			from,
-			to,
-			rate,
-			date: DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(timestamp, 0), Utc),
+/// Data stored for the exchange rate of the currency pairs and price pairs.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ExchangeRates {
+	/// Price pairs version
+	pub version: u16,
+	/// Price feeder data source unique name
+	pub source_uid: String,
+	/// Currency pairs & Price pairs
+	pub pairs: Vec<(String, f64)>,
+	/// Date the exchange rate corresponds to.
+	pub date: DateTime<Utc>,
+}
+
+impl ExchangeRates {
+	/// Construct the currency/price pairs from the raw ExchangeRate vector.
+	pub fn from(rates: &Vec<ExchangeRate>) -> Result<ExchangeRates, Error> {
+		if rates.is_empty() {
+			return Err(Error::Generic("empty rates".to_string()));
+		}
+
+		// pre-checking on the date to make sure they are on same timestamp
+		for (a, b) in rates.iter().tuple_windows() {
+			let time_a = a.date - Duration::seconds(a.date.second() as i64);
+			let time_b = b.date - Duration::seconds(b.date.second() as i64);
+			if time_a != time_b {
+				return Err(Error::Generic(
+					"exchange rates in different timestamp".to_string(),
+				));
+			}
+		}
+
+		let date = rates[0].date - Duration::seconds(rates[0].date.second() as i64);
+		let pairs = rates
+			.iter()
+			.map(|r| (format!("{}2{}", r.from, r.to), r.rate))
+			.collect();
+
+		Ok(ExchangeRates {
+			version: 0,
+			source_uid: "gotts".to_string(),
+			pairs,
+			date,
 		})
 	}
 }
 
-impl Writeable for ExchangeRate {
+impl Readable for ExchangeRates {
+	fn read(reader: &mut dyn Reader) -> Result<ExchangeRates, ser::Error> {
+		let data = reader.read_bytes_len_prefix()?;
+		serde_json::from_slice(&data[..]).map_err(|_| ser::Error::CorruptedData)
+	}
+}
+
+impl Writeable for ExchangeRates {
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
-		writer.write_bytes(&self.from.as_bytes().to_vec())?;
-		writer.write_bytes(&self.to.as_bytes().to_vec())?;
-		writer.write_f64(self.rate)?;
-		writer.write_i64(self.date.timestamp())
+		writer.write_bytes(&serde_json::to_vec(self).map_err(|_| ser::Error::CorruptedData)?)
 	}
 }
 
@@ -80,68 +111,68 @@ impl PriceStore {
 		Ok(PriceStore { db })
 	}
 
-	pub fn save(&mut self, date: DateTime<Utc>, exchange_rate: ExchangeRate) -> Result<(), Error> {
-		// Save the exchange rate data to the db.
-		{
-			let mut fromto = exchange_rate.from.clone();
-			fromto.push('2');
-			fromto.push_str(&exchange_rate.to);
-			let key = to_key_i64(
-				EXCHANGE_RATE_PREFIX,
-				&mut fromto.as_bytes().to_vec(),
-				date.timestamp(),
-			);
-			let batch = self.db.batch()?;
-			batch.put_ser(&key, &exchange_rate)?;
-			batch.commit()?
-		}
+	pub fn save(&self, pairs: &ExchangeRates) -> Result<(), Error> {
+		let key = to_key_i64_b(
+			EXCHANGE_RATES_PREFIX,
+			&mut pairs.source_uid.as_bytes().to_vec(),
+			pairs.date.timestamp(),
+		);
+		let batch = self.db.batch()?;
+		batch.put_ser(&key, pairs)?;
+		batch.commit()?;
 
 		Ok(())
 	}
 
-	pub fn get(&self, id: &str) -> Result<ExchangeRate, Error> {
-		let key = to_key(EXCHANGE_RATE_PREFIX, &mut id.as_bytes().to_vec());
-		option_to_not_found(self.db.get_ser(&key), || format!("Key ID: {}", id))
-			.map_err(|e| e.into())
+	pub fn get(&self, source_uid: &str, date: DateTime<Utc>) -> Result<ExchangeRates, Error> {
+		let key = to_key_i64_b(
+			EXCHANGE_RATES_PREFIX,
+			&mut source_uid.as_bytes().to_vec(),
+			date.timestamp(),
+		);
+		option_to_not_found(self.db.get_ser(&key), || {
+			format!("Source: {} date: {}", source_uid, date)
+		})
+		.map_err(|e| e.into())
 	}
 
-	fn delete(&mut self, id: &str, date: DateTime<Utc>) -> Result<(), Error> {
-		// Delete the exchange rate data.
-		{
-			let key = to_key_i64(
-				EXCHANGE_RATE_PREFIX,
-				&mut id.as_bytes().to_vec(),
-				date.timestamp(),
-			);
-			let batch = self.db.batch()?;
-			batch.delete(&key)?;
-			batch.commit()?
-		}
+	pub fn delete(&self, source_uid: &str, date: DateTime<Utc>) -> Result<(), Error> {
+		let key = to_key_i64_b(
+			EXCHANGE_RATES_PREFIX,
+			&mut source_uid.as_bytes().to_vec(),
+			date.timestamp(),
+		);
+		let batch = self.db.batch()?;
+		batch.delete(&key)?;
+		batch.commit()?;
 
 		Ok(())
 	}
 
 	/// List all known prices
 	/// Used for /v1/prices/all api endpoint
-	pub fn all_prices(&self) -> Result<Vec<ExchangeRate>, Error> {
-		let key = to_key(EXCHANGE_RATE_PREFIX, &mut "".to_string().into_bytes());
+	pub fn all_prices(&self) -> Result<Vec<ExchangeRates>, Error> {
+		let key = to_key(EXCHANGE_RATES_PREFIX, &mut "".to_string().into_bytes());
 		Ok(self
 			.db
-			.iter::<ExchangeRate>(&key)?
+			.iter::<ExchangeRates>(&key)?
 			.map(|(_, v)| v)
 			.collect::<Vec<_>>())
 	}
 
-	/// Iterate over all exchange rate data stored by the backend with same id
-	pub fn iter_id<'a>(&'a self, id: &str) -> Box<dyn Iterator<Item = ExchangeRate> + 'a> {
-		let key = to_key(EXCHANGE_RATE_PREFIX, &mut id.as_bytes().to_vec());
+	/// Iterate over all price pairs stored by the backend with same date
+	pub fn iter_date<'a>(
+		&'a self,
+		date: DateTime<Utc>,
+	) -> Box<dyn Iterator<Item = ExchangeRates> + 'a> {
+		let key = to_i64_key(EXCHANGE_RATES_PREFIX, date.timestamp());
 		Box::new(self.db.iter(&key).unwrap().map(|o| o.1))
 	}
 
 	/// Delete prices from the storage that satisfy some condition `predicate`
 	pub fn delete_prices<F>(&self, predicate: F) -> Result<(), Error>
 	where
-		F: Fn(&ExchangeRate) -> bool,
+		F: Fn(&ExchangeRates) -> bool,
 	{
 		let mut to_remove = vec![];
 
@@ -154,12 +185,11 @@ impl PriceStore {
 		// Delete prices in single batch
 		if !to_remove.is_empty() {
 			let batch = self.db.batch()?;
-			for rate in to_remove {
-				let id = format!("{}2{}", rate.from, rate.to);
-				let key = to_key_i64(
-					EXCHANGE_RATE_PREFIX,
-					&mut id.as_bytes().to_vec(),
-					rate.date.timestamp(),
+			for pairs in to_remove {
+				let key = to_key_i64_b(
+					EXCHANGE_RATES_PREFIX,
+					&mut pairs.source_uid.as_bytes().to_vec(),
+					pairs.date.timestamp(),
 				);
 				batch.delete(&key)?;
 			}

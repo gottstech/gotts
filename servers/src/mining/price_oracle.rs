@@ -21,7 +21,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time;
 
-use super::price_store::ExchangeRate;
+use super::price_store::{ExchangeRate, ExchangeRates, PriceStore};
 use crate::api;
 use crate::chain::{self, SyncState};
 use crate::common::types::Error;
@@ -74,7 +74,8 @@ fn create_price_msg(dest: &str) -> Result<Vec<ExchangeRate>, Error> {
 }
 
 pub struct PriceOracleServer {
-	id: String,
+	db_root: String,
+	store: Arc<PriceStore>,
 	config: PriceOracleServerConfig,
 	stop_state: Arc<StopState>,
 	chain: Arc<chain::Chain>,
@@ -84,25 +85,26 @@ pub struct PriceOracleServer {
 impl PriceOracleServer {
 	/// Creates a new price feeder oracle server.
 	pub fn new(
+		db_root: String,
 		config: PriceOracleServerConfig,
 		chain: Arc<chain::Chain>,
 		stop_state: Arc<StopState>,
-	) -> PriceOracleServer {
-		PriceOracleServer {
-			id: String::from("0"),
+	) -> Result<PriceOracleServer, Error> {
+		let store = Arc::new(PriceStore::new(&db_root)?);
+
+		Ok(PriceOracleServer {
+			db_root,
+			store,
 			config,
 			stop_state,
 			chain,
 			sync_state: Arc::new(SyncState::new()),
-		}
+		})
 	}
 
 	/// "main()" - Starts the price feeder oracle server.
 	pub fn run_loop(&mut self, sync_state: Arc<SyncState>) {
-		info!(
-			"(Server ID: {}) Starting price feeder oracle server",
-			self.id,
-		);
+		info!("Starting price feeder oracle server");
 
 		self.sync_state = sync_state;
 		let oracle_server_url = self
@@ -131,6 +133,17 @@ impl PriceOracleServer {
 						);
 						thread::sleep(time::Duration::from_secs(1));
 						continue 'restart_querying;
+					}
+				}
+
+				if let Ok(pairs) = ExchangeRates::from(&rates) {
+					self.store.save(&pairs).unwrap();
+
+					if let Ok(pairs_copy) = self.store.get("gotts", pairs.date) {
+						debug!(
+							"price pairs read from local lmdb: {}",
+							serde_json::to_string(&pairs_copy).unwrap()
+						);
 					}
 				}
 

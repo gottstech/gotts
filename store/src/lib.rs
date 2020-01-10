@@ -63,12 +63,24 @@ pub fn to_key_u64(prefix: u8, k: &mut Vec<u8>, val: u64) -> Vec<u8> {
 	res
 }
 
-/// Build a db key from a prefix and a byte vector identifier and numeric identifier
-pub fn to_key_i64(prefix: u8, k: &mut Vec<u8>, val: i64) -> Vec<u8> {
+/// Build a db key from a prefix and numeric identifier and a byte vector identifier
+/// Note: the numeric identifier is before the byte vector identifier, don't mix it
+///  with 'to_key_i64_a' which is after.
+pub fn to_key_i64_b(prefix: u8, k: &mut Vec<u8>, val: i64) -> Vec<u8> {
 	let mut res = Vec::with_capacity(k.len() + 10);
 	res.push(prefix);
 	res.push(SEP);
+	res.write_i64::<BigEndian>(val).unwrap();
 	res.append(k);
+	res
+}
+
+/// Build a db key from a prefix and numeric identifier
+/// Note: do not mix with 'to_key' which is "prefix + byte vector".
+pub fn to_i64_key(prefix: u8, val: i64) -> Vec<u8> {
+	let mut res = Vec::with_capacity(10);
+	res.push(prefix);
+	res.push(SEP);
 	res.write_i64::<BigEndian>(val).unwrap();
 	res
 }

@@ -87,6 +87,7 @@ impl Server {
 		F: FnMut(Server),
 	{
 		let mining_config = config.stratum_mining_config.clone();
+		let db_root = config.db_root.clone();
 		let price_feeder_config = config.price_feeder_oracle_config.clone();
 		let enable_test_miner = config.run_test_miner;
 		let test_miner_wallet_url = config.test_miner_wallet_url.clone();
@@ -108,7 +109,7 @@ impl Server {
 		if let Some(c) = price_feeder_config {
 			if let Some(s) = c.enable_price_feeder_oracle_server {
 				if s {
-					serv.start_price_oracle_server(c.clone());
+					serv.start_price_oracle_server(db_root, c.clone());
 				}
 			}
 		}
@@ -359,12 +360,13 @@ impl Server {
 	}
 
 	/// Start a price feeder oracle service on a separate thread
-	pub fn start_price_oracle_server(&self, config: PriceOracleServerConfig) {
+	pub fn start_price_oracle_server(&self, db_root: String, config: PriceOracleServerConfig) {
 		let sync_state = self.sync_state.clone();
 		let stop_state = self.stop_state.clone();
 
 		let mut price_oracle_server =
-			price_oracle::PriceOracleServer::new(config, self.chain.clone(), stop_state);
+			price_oracle::PriceOracleServer::new(db_root, config, self.chain.clone(), stop_state)
+				.unwrap();
 		let _ = thread::Builder::new()
 			.name("price_oracle_server".to_string())
 			.spawn(move || {
