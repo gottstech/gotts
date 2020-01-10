@@ -1,5 +1,4 @@
-// Copyright 2018 The Grin Developers
-// Modifications Copyright 2019 The Gotts Developers
+// Copyright 2019 The Gotts Developers
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,10 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Mining + Mining server
+//! Diff0 compress algorithm
 
-mod mine_block;
-pub mod price_oracle;
-pub mod price_store;
-pub mod stratumserver;
-pub mod test_miner;
+#![deny(non_upper_case_globals)]
+#![deny(non_camel_case_types)]
+#![deny(non_snake_case)]
+#![deny(unused_mut)]
+#![warn(missing_docs)]
+
+#[macro_use]
+extern crate log;
+
+mod diff0_algo;
+
+pub use diff0_algo::{diff0_compress, diff0_decompress, Error};
+pub use diff0_algo::{u32_to_u8, u8_to_u32};
