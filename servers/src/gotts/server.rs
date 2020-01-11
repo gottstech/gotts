@@ -364,9 +364,14 @@ impl Server {
 		let sync_state = self.sync_state.clone();
 		let stop_state = self.stop_state.clone();
 
-		let mut price_oracle_server =
-			price_oracle::PriceOracleServer::new(db_root, config, self.chain.clone(), stop_state)
-				.unwrap();
+		let mut price_oracle_server = price_oracle::PriceOracleServer::new(
+			db_root,
+			config,
+			self.chain.clone(),
+			self.verifier_cache.clone(),
+			stop_state,
+		)
+		.unwrap();
 		let _ = thread::Builder::new()
 			.name("price_oracle_server".to_string())
 			.spawn(move || {

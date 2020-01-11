@@ -793,6 +793,7 @@ impl_int!(u32, write_u32, read_u32);
 impl_int!(i32, write_i32, read_i32);
 impl_int!(u64, write_u64, read_u64);
 impl_int!(i64, write_i64, read_i64);
+impl_int!(f64, write_f64, read_f64);
 
 impl<T> Readable for Vec<T>
 where

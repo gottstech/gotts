@@ -426,9 +426,9 @@ fn comments() -> HashMap<String, String> {
 	);
 
 	retval.insert(
-		"price_feeder_uname".to_string(),
+		"price_feeder_uid".to_string(),
 		"
-#The unique name of this price feeder, which should be one of the listed names in the Genesis.
+#The unique id of this price feeder, which should be one of the list in the Genesis.
 "
 		.to_string(),
 	);

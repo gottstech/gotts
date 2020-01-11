@@ -14,11 +14,13 @@
 
 //! ExchangeRate and ExchangeRates
 
-use chrono::{DateTime, Duration, Timelike, Utc};
+use chrono::{DateTime, Duration, NaiveDateTime, Timelike, Utc};
 use itertools::Itertools;
 
-//use crate::util::secp::{self, Message, Signature};
-use crate::ser::{self, Readable, Reader, Writeable, Writer};
+use crate::core::hash::Hashed;
+use crate::libtx::secp_ser;
+use crate::ser::{self, read_multi, Readable, Reader, Writeable, Writer};
+use crate::util::secp::{self, Signature};
 
 /// Data queried for the exchange rate of a currency pair.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -33,30 +35,37 @@ pub struct ExchangeRate {
 	pub date: DateTime<Utc>,
 }
 
+/// PriceVersion(0) currency pairs
+pub const CURRENCY_PAIRS_V0: &'static [&'static str] = &[
+	"BTC2USD", "ETH2USD", "EUR2USD", "GBP2USD", "USD2CNY", "USD2JPY", "USD2CAD",
+];
+
 /// Data stored for the exchange rate of the currency pairs and price pairs.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ExchangeRates {
 	/// Price pairs version
 	pub version: PriceVersion,
 	/// Price feeder data source unique name
-	pub source_uid: String,
+	pub source_uid: u16,
 	/// Currency pairs & Price pairs
-	pub pairs: Vec<(String, f64)>,
+	pub pairs: Vec<f64>,
 	/// Date the exchange rate corresponds to.
 	pub date: DateTime<Utc>,
+	/// Feeder's signature
+	#[serde(with = "secp_ser::sig_serde")]
+	pub sig: Signature,
 }
 
 impl ExchangeRates {
 	/// Construct the currency/price pairs from the raw ExchangeRate vector.
-	pub fn from(
-		rates: &Vec<ExchangeRate>,
-		price_feeder_uname: &str,
-	) -> Result<ExchangeRates, Error> {
-		if rates.is_empty() {
-			return Err(Error::Generic("empty rates".to_string()));
+	pub fn from(rates: &Vec<ExchangeRate>, price_feeder_uid: u16) -> Result<ExchangeRates, Error> {
+		if rates.len() != CURRENCY_PAIRS_V0.len() {
+			return Err(Error::Generic(
+				"v0 price pairs size not matched".to_string(),
+			));
 		}
 
-		// pre-checking on the date to make sure they are on same timestamp
+		// pre-checking the rates date to make sure they are on same timestamp
 		for (a, b) in rates.iter().tuple_windows() {
 			let time_a = a.date - Duration::seconds(a.date.second() as i64);
 			let time_b = b.date - Duration::seconds(b.date.second() as i64);
@@ -68,30 +77,68 @@ impl ExchangeRates {
 		}
 
 		let date = rates[0].date - Duration::seconds(rates[0].date.second() as i64);
-		let pairs = rates
-			.iter()
-			.map(|r| (format!("{}2{}", r.from, r.to), r.rate))
-			.collect();
+		let mut pairs: Vec<f64> = Vec::with_capacity(CURRENCY_PAIRS_V0.len());
+		for currency_pair in CURRENCY_PAIRS_V0 {
+			let index = rates
+				.iter()
+				.position(|r| format!("{}2{}", r.from, r.to) == *currency_pair)
+				.ok_or(Error::NotFound("v0 pairs".to_string()))?;
+			pairs.push(rates[index].rate);
+		}
 
 		Ok(ExchangeRates {
 			version: PriceVersion::default(),
-			source_uid: price_feeder_uname.to_string(),
+			source_uid: price_feeder_uid,
 			pairs,
 			date,
+			sig: Signature::from(secp::ffi::Signature::new()),
 		})
+	}
+
+	/// msg = hash(self without sig field)
+	pub fn price_sig_msg(&self) -> Result<secp::Message, Error> {
+		let mut data: Vec<u8> = vec![];
+
+		//todo: to avoid 'sig' serialization here, so as to have a simple 'data.hash()' in next line
+		ser::serialize_default(&mut data, self)?;
+		let hash = data[..data.len() - secp::COMPACT_SIGNATURE_SIZE]
+			.to_vec()
+			.hash();
+
+		let msg = secp::Message::from_slice(&hash.as_bytes())?;
+		Ok(msg)
 	}
 }
 
 impl Readable for ExchangeRates {
 	fn read(reader: &mut dyn Reader) -> Result<ExchangeRates, ser::Error> {
-		let data = reader.read_bytes_len_prefix()?;
-		serde_json::from_slice(&data[..]).map_err(|_| ser::Error::CorruptedData)
+		let version = PriceVersion::read(reader)?;
+		let source_uid = reader.read_u16()?;
+		let pairs_len = reader.read_u32()?;
+		let pairs = read_multi(reader, pairs_len as u64)?;
+		let timestamp = reader.read_i64()?;
+		let date = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(timestamp, 0), Utc);
+		let sig = secp::Signature::read(reader)?;
+		Ok(ExchangeRates {
+			version,
+			source_uid,
+			pairs,
+			date,
+			sig,
+		})
 	}
 }
 
 impl Writeable for ExchangeRates {
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
-		writer.write_bytes(&serde_json::to_vec(self).map_err(|_| ser::Error::CorruptedData)?)
+		self.version.write(writer)?;
+		writer.write_u16(self.source_uid)?;
+		writer.write_u32(self.pairs.len() as u32)?;
+		self.pairs.write(writer)?;
+		writer.write_i64(self.date.timestamp())?;
+		self.sig.write(writer)?;
+
+		Ok(())
 	}
 }
 
@@ -107,6 +154,7 @@ impl Default for PriceVersion {
 
 // self-conscious increment function courtesy of Jasper
 impl PriceVersion {
+	#[allow(dead_code)]
 	fn next(&self) -> Self {
 		Self(self.0 + 1)
 	}
@@ -141,10 +189,71 @@ impl Readable for PriceVersion {
 /// Errors thrown by Price validation
 #[derive(Clone, Eq, PartialEq, Debug, Fail)]
 pub enum Error {
-	/// Wraps a serialization error for Writeable or Readable
-	#[fail(display = "Serialization Error")]
-	SerErr(String),
+	/// Underlying Secp256k1 error (signature validation or invalid public key typically)
+	#[fail(display = "Libsecp internal error: {}", _0)]
+	Secp(secp::Error),
+	/// Underlying serialization error.
+	#[fail(display = "Serialization error: {}", _0)]
+	Serialization(ser::Error),
+	/// NotFound error
+	#[fail(display = "Pair not found: {}", _0)]
+	NotFound(String),
 	/// Generic error
 	#[fail(display = "Generic Error: {}", _0)]
 	Generic(String),
+}
+
+impl From<ser::Error> for Error {
+	fn from(e: ser::Error) -> Error {
+		Error::Serialization(e)
+	}
+}
+
+impl From<secp::Error> for Error {
+	fn from(e: secp::Error) -> Error {
+		Error::Secp(e)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use gotts_util::to_hex;
+
+	#[test]
+	fn price_sig_msg() {
+		let date = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0x5e19a248, 0), Utc);
+		let rates = ExchangeRates {
+			version: PriceVersion::default(),
+			source_uid: 0,
+			pairs: vec![
+				7944.59_f64,
+				138.95_f64,
+				1.1116_f64,
+				1.3111_f64,
+				6.9481_f64,
+				109.22_f64,
+				1.3037_f64,
+			],
+			date,
+			sig: Signature::from(secp::ffi::Signature::new()),
+		};
+
+		let msg = rates.price_sig_msg().unwrap();
+		assert_eq!(
+			msg,
+			secp::Message::from_str(
+				"b4de08c8eccd8214adafd8db438fcbd17afafb9d128066df2bc50b228ba1945a"
+			)
+			.unwrap(),
+		);
+
+		let mut data: Vec<u8> = vec![];
+		ser::serialize_default(&mut data, &rates).unwrap();
+		assert_eq!(data.len(), 72 + 64);
+		assert_eq!(
+			"000000000000000740bf08970a3d70a440615e66666666663ff1c91d14e3bcd33ff4fa43fe5c91d1401bcadab9f559b4405b4e147ae147ae3ff4dbf487fcb924000000005e19a248",
+			to_hex(data[..data.len()-secp::COMPACT_SIGNATURE_SIZE].to_vec()),
+		);
+	}
 }

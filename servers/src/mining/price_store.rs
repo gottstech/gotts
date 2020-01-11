@@ -15,6 +15,7 @@
 
 //! Storage implementation for price feeder data.
 
+use byteorder::{BigEndian, ByteOrder};
 use chrono::{DateTime, Utc};
 
 use crate::core::core::price::ExchangeRates;
@@ -38,9 +39,12 @@ impl PriceStore {
 	}
 
 	pub fn save(&self, pairs: &ExchangeRates) -> Result<(), Error> {
+		let mut k = [0u8; 2];
+		BigEndian::write_u16(&mut k, pairs.source_uid);
+
 		let key = to_key_i64_b(
 			EXCHANGE_RATES_PREFIX,
-			&mut pairs.source_uid.as_bytes().to_vec(),
+			&mut k.to_vec(),
 			pairs.date.timestamp(),
 		);
 		let batch = self.db.batch()?;
@@ -50,24 +54,22 @@ impl PriceStore {
 		Ok(())
 	}
 
-	pub fn get(&self, source_uid: &str, date: DateTime<Utc>) -> Result<ExchangeRates, Error> {
-		let key = to_key_i64_b(
-			EXCHANGE_RATES_PREFIX,
-			&mut source_uid.as_bytes().to_vec(),
-			date.timestamp(),
-		);
+	pub fn get(&self, source_uid: u16, date: DateTime<Utc>) -> Result<ExchangeRates, Error> {
+		let mut k = [0u8; 2];
+		BigEndian::write_u16(&mut k, source_uid);
+
+		let key = to_key_i64_b(EXCHANGE_RATES_PREFIX, &mut k.to_vec(), date.timestamp());
 		option_to_not_found(self.db.get_ser(&key), || {
 			format!("Source: {} date: {}", source_uid, date)
 		})
 		.map_err(|e| e.into())
 	}
 
-	pub fn delete(&self, source_uid: &str, date: DateTime<Utc>) -> Result<(), Error> {
-		let key = to_key_i64_b(
-			EXCHANGE_RATES_PREFIX,
-			&mut source_uid.as_bytes().to_vec(),
-			date.timestamp(),
-		);
+	pub fn delete(&self, source_uid: u16, date: DateTime<Utc>) -> Result<(), Error> {
+		let mut k = [0u8; 2];
+		BigEndian::write_u16(&mut k, source_uid);
+
+		let key = to_key_i64_b(EXCHANGE_RATES_PREFIX, &mut k.to_vec(), date.timestamp());
 		let batch = self.db.batch()?;
 		batch.delete(&key)?;
 		batch.commit()?;
@@ -108,13 +110,16 @@ impl PriceStore {
 			}
 		}
 
+		let mut k = [0u8; 2];
+
 		// Delete prices in single batch
 		if !to_remove.is_empty() {
 			let batch = self.db.batch()?;
 			for pairs in to_remove {
+				BigEndian::write_u16(&mut k, pairs.source_uid);
 				let key = to_key_i64_b(
 					EXCHANGE_RATES_PREFIX,
-					&mut pairs.source_uid.as_bytes().to_vec(),
+					&mut k.to_vec(),
 					pairs.date.timestamp(),
 				);
 				batch.delete(&key)?;
