@@ -37,7 +37,7 @@ pub struct ExchangeRate {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ExchangeRates {
 	/// Price pairs version
-	pub version: u16,
+	pub version: PriceVersion,
 	/// Price feeder data source unique name
 	pub source_uid: String,
 	/// Currency pairs & Price pairs
@@ -48,7 +48,10 @@ pub struct ExchangeRates {
 
 impl ExchangeRates {
 	/// Construct the currency/price pairs from the raw ExchangeRate vector.
-	pub fn from(rates: &Vec<ExchangeRate>) -> Result<ExchangeRates, Error> {
+	pub fn from(
+		rates: &Vec<ExchangeRate>,
+		price_feeder_uname: &str,
+	) -> Result<ExchangeRates, Error> {
 		if rates.is_empty() {
 			return Err(Error::Generic("empty rates".to_string()));
 		}
@@ -71,8 +74,8 @@ impl ExchangeRates {
 			.collect();
 
 		Ok(ExchangeRates {
-			version: 0,
-			source_uid: "gotts".to_string(),
+			version: PriceVersion::default(),
+			source_uid: price_feeder_uname.to_string(),
 			pairs,
 			date,
 		})
@@ -89,6 +92,49 @@ impl Readable for ExchangeRates {
 impl Writeable for ExchangeRates {
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
 		writer.write_bytes(&serde_json::to_vec(self).map_err(|_| ser::Error::CorruptedData)?)
+	}
+}
+
+/// Some type safety around price versioning.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PriceVersion(pub u16);
+
+impl Default for PriceVersion {
+	fn default() -> PriceVersion {
+		PriceVersion(0)
+	}
+}
+
+// self-conscious increment function courtesy of Jasper
+impl PriceVersion {
+	fn next(&self) -> Self {
+		Self(self.0 + 1)
+	}
+}
+
+impl PriceVersion {
+	/// Constructor taking the provided version.
+	pub fn new(version: u16) -> PriceVersion {
+		PriceVersion(version)
+	}
+}
+
+impl From<PriceVersion> for u16 {
+	fn from(v: PriceVersion) -> u16 {
+		v.0
+	}
+}
+
+impl Writeable for PriceVersion {
+	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
+		writer.write_u16(self.0)
+	}
+}
+
+impl Readable for PriceVersion {
+	fn read(reader: &mut dyn Reader) -> Result<PriceVersion, ser::Error> {
+		let version = reader.read_u16()?;
+		Ok(PriceVersion(version))
 	}
 }
 

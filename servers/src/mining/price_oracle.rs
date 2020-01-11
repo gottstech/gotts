@@ -111,6 +111,11 @@ impl PriceOracleServer {
 			.oracle_server_url
 			.clone()
 			.unwrap_or("http://127.0.0.1:3518".to_string());
+		let price_feeder_uname = self
+			.config
+			.price_feeder_uname
+			.clone()
+			.unwrap_or("undefined".to_string());
 
 		warn!(
 			"Price feeder oracle server started on {}",
@@ -135,10 +140,10 @@ impl PriceOracleServer {
 					}
 				}
 
-				if let Ok(pairs) = ExchangeRates::from(&rates) {
+				if let Ok(pairs) = ExchangeRates::from(&rates, &price_feeder_uname) {
 					self.store.save(&pairs).unwrap();
 
-					if let Ok(pairs_copy) = self.store.get("gotts", pairs.date) {
+					if let Ok(pairs_copy) = self.store.get(&price_feeder_uname, pairs.date) {
 						debug!(
 							"price pairs read from local lmdb: {}",
 							serde_json::to_string(&pairs_copy).unwrap()
