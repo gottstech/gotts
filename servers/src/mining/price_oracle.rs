@@ -21,11 +21,12 @@ use std::sync::Arc;
 use std::thread;
 use std::time;
 
-use super::price_store::{ExchangeRate, ExchangeRates, PriceStore};
+use super::price_store::PriceStore;
 use crate::api;
 use crate::chain::{self, SyncState};
 use crate::common::types::Error;
 use crate::common::types::PriceOracleServerConfig;
+use crate::core::core::price::{ExchangeRate, ExchangeRates};
 use crate::util::StopState;
 use diff0::{self, diff0_compress, diff0_decompress};
 use gotts_util::to_hex;
@@ -74,7 +75,6 @@ fn create_price_msg(dest: &str) -> Result<Vec<ExchangeRate>, Error> {
 }
 
 pub struct PriceOracleServer {
-	db_root: String,
 	store: Arc<PriceStore>,
 	config: PriceOracleServerConfig,
 	stop_state: Arc<StopState>,
@@ -93,7 +93,6 @@ impl PriceOracleServer {
 		let store = Arc::new(PriceStore::new(&db_root)?);
 
 		Ok(PriceOracleServer {
-			db_root,
 			store,
 			config,
 			stop_state,
