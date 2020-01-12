@@ -26,11 +26,11 @@ use crate::api;
 use crate::chain::{self, SyncState};
 use crate::common::types::Error;
 use crate::common::types::PriceOracleServerConfig;
+use crate::core::consensus;
 use crate::core::core::price::{ExchangeRate, ExchangeRates};
 use crate::core::core::verifier_cache::VerifierCache;
-use crate::keychain::Identifier;
 use crate::util::file::get_first_line;
-use crate::util::secp::{self, Message, Signature};
+use crate::util::secp::{self, Signature};
 use crate::util::{to_hex, RwLock, StopState};
 use diff0::{self, diff0_compress, diff0_decompress};
 
@@ -82,8 +82,8 @@ fn get_price_signed(
 	wallet_listener_url: &str,
 	owner_api_secret: &Option<String>,
 	msg: secp::Message,
-	key_id: Identifier,
-) -> Result<Signature, Error> {
+	key_id: &str,
+) -> Result<(String, String), Error> {
 	let url = format!("{}/v2/owner", wallet_listener_url);
 	let req_body = json!({
 		"jsonrpc": "2.0",
@@ -91,7 +91,7 @@ fn get_price_signed(
 		"id": 1,
 		"params": {
 			"msg": msg.to_string(),
-			"key_id": key_id.to_hex()
+			"key_id": key_id.clone()
 		}
 	});
 
@@ -119,8 +119,8 @@ fn get_price_signed(
 
 	let cb_data = res["result"]["Ok"].clone();
 	trace!("cb_data: {}", cb_data);
-	let ret_val = match serde_json::from_value::<String>(cb_data) {
-		Ok(r) => r,
+	let (sig, pubkey) = match serde_json::from_value::<(String, String)>(cb_data) {
+		Ok(r) => (r.0, r.1),
 		Err(e) => {
 			let report = format!("Couldn't deserialize : {}", e);
 			error!("{}", report);
@@ -128,8 +128,8 @@ fn get_price_signed(
 		}
 	};
 
-	debug!("get_price_signed: {:?}", ret_val);
-	Ok(Signature::from_str(&ret_val)?)
+	debug!("get_price_signed: sig = {}, pubkey = {}", sig, pubkey);
+	Ok((sig, pubkey))
 }
 
 pub struct PriceOracleServer {
@@ -173,11 +173,11 @@ impl PriceOracleServer {
 			.clone()
 			.unwrap_or("http://127.0.0.1:3518".to_string());
 		let owner_api_secret = get_first_line(self.config.owner_api_secret_path.clone());
-		let price_feeder_uid = self
+		let price_feeder_key_id = self
 			.config
-			.price_feeder_uid
+			.price_feeder_key_id
 			.clone()
-			.unwrap_or(std::u16::MAX);
+			.unwrap_or("03000000000000000000000000".to_string());
 
 		warn!(
 			"Price feeder oracle server started on {}",
@@ -202,21 +202,26 @@ impl PriceOracleServer {
 					}
 				}
 
-				if let Ok(mut pairs) = ExchangeRates::from(&rates, price_feeder_uid) {
-					let sign_msg = pairs.price_sig_msg().unwrap();
-					if let Ok(signature) = get_price_signed(
+				if let Ok(mut pairs) = ExchangeRates::from(&rates) {
+					if let Ok((sig, pubkey)) = get_price_signed(
 						&self.config.wallet_owner_api_listener_url,
 						&owner_api_secret,
-						sign_msg,
-						Identifier::zero(),
+						pairs.price_sig_msg().unwrap(),
+						&price_feeder_key_id,
 					) {
-						pairs.sig = signature;
-						self.store.save(&pairs).unwrap();
-						if let Ok(pairs_copy) = self.store.get(price_feeder_uid, pairs.date) {
-							debug!(
-								"price pairs read from local lmdb: {}",
-								serde_json::to_string(&pairs_copy).unwrap()
-							);
+						if let Some(source_uid) = consensus::price_feeders_list()
+							.iter()
+							.position(|p| *p == pubkey)
+						{
+							pairs.sig = Signature::from_str(&sig).unwrap();
+							pairs.source_uid = source_uid as u16;
+							self.store.save(&pairs).unwrap();
+							if let Ok(pairs_copy) = self.store.get(pairs.source_uid, pairs.date) {
+								debug!(
+									"price pairs read from local lmdb: {}",
+									serde_json::to_string(&pairs_copy).unwrap()
+								);
+							}
 						}
 					}
 				}

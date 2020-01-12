@@ -426,9 +426,10 @@ fn comments() -> HashMap<String, String> {
 	);
 
 	retval.insert(
-		"price_feeder_uid".to_string(),
+		"price_feeder_key_id".to_string(),
 		"
-#The unique id of this price feeder, which should be one of the list in the Genesis.
+#The key identifier string of this price feeder, which is corresponded to
+# one public key of the price_feeders_list list in the consensus.
 "
 		.to_string(),
 	);

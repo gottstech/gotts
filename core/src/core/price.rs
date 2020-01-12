@@ -17,10 +17,12 @@
 use chrono::{DateTime, Duration, NaiveDateTime, Timelike, Utc};
 use itertools::Itertools;
 
+use crate::consensus;
 use crate::core::hash::Hashed;
 use crate::libtx::secp_ser;
 use crate::ser::{self, read_multi, Readable, Reader, Writeable, Writer};
 use crate::util::secp::{self, Signature};
+use crate::util::static_secp_instance;
 
 /// Data queried for the exchange rate of a currency pair.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -35,22 +37,17 @@ pub struct ExchangeRate {
 	pub date: DateTime<Utc>,
 }
 
-/// PriceVersion(0) currency pairs
-pub const CURRENCY_PAIRS_V0: &'static [&'static str] = &[
-	"BTC2USD", "ETH2USD", "EUR2USD", "GBP2USD", "USD2CNY", "USD2JPY", "USD2CAD",
-];
-
 /// Data stored for the exchange rate of the currency pairs and price pairs.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ExchangeRates {
 	/// Price pairs version
 	pub version: PriceVersion,
-	/// Price feeder data source unique name
-	pub source_uid: u16,
 	/// Currency pairs & Price pairs
 	pub pairs: Vec<f64>,
 	/// Date the exchange rate corresponds to.
 	pub date: DateTime<Utc>,
+	/// Price feeder data source unique name
+	pub source_uid: u16,
 	/// Feeder's signature
 	#[serde(with = "secp_ser::sig_serde")]
 	pub sig: Signature,
@@ -58,10 +55,15 @@ pub struct ExchangeRates {
 
 impl ExchangeRates {
 	/// Construct the currency/price pairs from the raw ExchangeRate vector.
-	pub fn from(rates: &Vec<ExchangeRate>, price_feeder_uid: u16) -> Result<ExchangeRates, Error> {
-		if rates.len() != CURRENCY_PAIRS_V0.len() {
+	pub fn from(rates: &Vec<ExchangeRate>) -> Result<ExchangeRates, Error> {
+		if rates.len() != consensus::currency_pairs().len() {
+			trace!(
+				"currency pairs size not matched: input size = {}, consensus = {}",
+				rates.len(),
+				consensus::currency_pairs().len()
+			);
 			return Err(Error::Generic(
-				"v0 price pairs size not matched".to_string(),
+				"currency pairs size not matched".to_string(),
 			));
 		}
 
@@ -70,6 +72,7 @@ impl ExchangeRates {
 			let time_a = a.date - Duration::seconds(a.date.second() as i64);
 			let time_b = b.date - Duration::seconds(b.date.second() as i64);
 			if time_a != time_b {
+				trace!("exchange rates in different timestamp: {:?} vs {:?}", a, b);
 				return Err(Error::Generic(
 					"exchange rates in different timestamp".to_string(),
 				));
@@ -77,8 +80,8 @@ impl ExchangeRates {
 		}
 
 		let date = rates[0].date - Duration::seconds(rates[0].date.second() as i64);
-		let mut pairs: Vec<f64> = Vec::with_capacity(CURRENCY_PAIRS_V0.len());
-		for currency_pair in CURRENCY_PAIRS_V0 {
+		let mut pairs: Vec<f64> = Vec::with_capacity(consensus::currency_pairs().len());
+		for currency_pair in consensus::currency_pairs() {
 			let index = rates
 				.iter()
 				.position(|r| format!("{}2{}", r.from, r.to) == *currency_pair)
@@ -88,26 +91,47 @@ impl ExchangeRates {
 
 		Ok(ExchangeRates {
 			version: PriceVersion::default(),
-			source_uid: price_feeder_uid,
+			source_uid: 0, // to be updated later when signing
 			pairs,
 			date,
-			sig: Signature::from(secp::ffi::Signature::new()),
+			sig: Signature::from(secp::ffi::Signature::new()), // to be updated later when signing
 		})
 	}
 
-	/// msg = hash(self without sig field)
+	/// msg = hash(self without 'source_uid' and 'sig' fields)
 	pub fn price_sig_msg(&self) -> Result<secp::Message, Error> {
 		let mut data: Vec<u8> = vec![];
 
-		//todo: to avoid 'sig' serialization here, so as to have a simple 'data.hash()' in next line
+		//todo: to avoid 'source_uid' and 'sig' serialization here, so as to have a simple 'data.hash()' in next line
 		ser::serialize_default(&mut data, self)?;
-		let hash = data[..data.len() - secp::COMPACT_SIGNATURE_SIZE]
+		let hash = data[..data.len() - secp::COMPACT_SIGNATURE_SIZE - 2]
 			.to_vec()
 			.hash();
 
 		let msg = secp::Message::from_slice(&hash.as_bytes())?;
 		Ok(msg)
 	}
+
+	//	/ Verify the price proof validity. Entails getting the corresponding public key of
+	//	/ the price feeder source_uid and checking the signature verifies with the price as message.
+	//	pub fn verify(&self) -> Result<(), Error> {
+	//		let secp = static_secp_instance();
+	//		let secp = secp.lock();
+	//		let pubkey = &self.excess.to_pubkey(&secp)?;
+	//		if !secp::aggsig::verify_single(
+	//			&secp,
+	//			&self.sig,
+	//			&self.price_sig_msg()?,
+	//			None,
+	//			&pubkey,
+	//			Some(&pubkey),
+	//			None,
+	//			false,
+	//		) {
+	//			return Err(Error::IncorrectSignature);
+	//		}
+	//		Ok(())
+	//	}
 }
 
 impl Readable for ExchangeRates {
@@ -192,6 +216,9 @@ pub enum Error {
 	/// Underlying Secp256k1 error (signature validation or invalid public key typically)
 	#[fail(display = "Libsecp internal error: {}", _0)]
 	Secp(secp::Error),
+	/// Price Signature verification error.
+	#[fail(display = "Price IncorrectSignature error")]
+	IncorrectSignature,
 	/// Underlying serialization error.
 	#[fail(display = "Serialization error: {}", _0)]
 	Serialization(ser::Error),

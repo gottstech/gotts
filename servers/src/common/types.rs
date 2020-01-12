@@ -284,8 +284,9 @@ pub struct PriceOracleServerConfig {
 	/// Run a price feeder oracle mining server
 	pub enable_price_feeder_oracle_server: Option<bool>,
 
-	/// The unique id of this price feeder, which should be one of the list in the Genesis.
-	pub price_feeder_uid: Option<u16>,
+	/// The key identifier string of this price feeder, which is corresponded to
+	/// one public key of the price_feeders_list list in the consensus.
+	pub price_feeder_key_id: Option<String>,
 
 	/// If enabled, the oracle address and port to query the prices from
 	pub oracle_server_url: Option<String>,
@@ -301,7 +302,7 @@ impl Default for PriceOracleServerConfig {
 	fn default() -> PriceOracleServerConfig {
 		PriceOracleServerConfig {
 			enable_price_feeder_oracle_server: Some(false),
-			price_feeder_uid: Some(std::u16::MAX),
+			price_feeder_key_id: Some("03000000000000000000000000".to_string()),
 			oracle_server_url: Some("http://127.0.0.1:3518".to_string()),
 			wallet_owner_api_listener_url: "http://127.0.0.1:3520".to_string(),
 			owner_api_secret_path: Some(".api_secret".to_string()),
