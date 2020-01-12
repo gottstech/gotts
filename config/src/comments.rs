@@ -442,9 +442,17 @@ fn comments() -> HashMap<String, String> {
 	);
 
 	retval.insert(
-		"wallet_listener_url".to_string(),
+		"wallet_owner_api_listener_url".to_string(),
 		"
-#the wallet receiver to which coinbase rewards will be sent
+#the wallet owner api url of HTTP wallet
+"
+		.to_string(),
+	);
+
+	retval.insert(
+		"owner_api_secret_path".to_string(),
+		"
+#location of wallet owner api secret for basic auth.
 "
 		.to_string(),
 	);

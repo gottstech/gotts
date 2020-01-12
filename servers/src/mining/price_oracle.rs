@@ -28,6 +28,8 @@ use crate::common::types::Error;
 use crate::common::types::PriceOracleServerConfig;
 use crate::core::core::price::{ExchangeRate, ExchangeRates};
 use crate::core::core::verifier_cache::VerifierCache;
+use crate::keychain::Identifier;
+use crate::util::file::get_first_line;
 use crate::util::secp::{self, Message, Signature};
 use crate::util::{to_hex, RwLock, StopState};
 use diff0::{self, diff0_compress, diff0_decompress};
@@ -76,55 +78,59 @@ fn create_price_msg(dest: &str) -> Result<Vec<ExchangeRate>, Error> {
 }
 
 // Connect to the wallet listener to get ExchangeRates signed and return the signature.
-//fn get_price_signed(
-//	wallet_listener_url: &String,
-//) -> Result<Signature, Error> {
-//	let url = format!("{}/v2/foreign", dest);
-//	let req_body = json!({
-//		"jsonrpc": "2.0",
-//		"method": "sign_price",
-//		"id": 1,
-//		"params": {
-//			"msg": block_fees
-//		}
-//	});
-//
-//	trace!("Sending build_coinbase request: {}", req_body);
-//	let req = api::client::create_post_request(url.as_str(), None, &req_body)?;
-//	let res: String = api::client::send_request(req).map_err(|e| {
-//		let report = format!(
-//			"Failed to get coinbase from {}. Is the wallet listening? {}",
-//			dest, e
-//		);
-//		error!("{}", report);
-//		Error::WalletComm(report)
-//	})?;
-//
-//	let res: Value = serde_json::from_str(&res).unwrap();
-//	trace!("Response: {}", res);
-//	if res["error"] != json!(null) {
-//		let report = format!(
-//			"Failed to get coinbase from {}: Error: {}, Message: {}",
-//			dest, res["error"]["code"], res["error"]["message"]
-//		);
-//		error!("{}", report);
-//		return Err(Error::WalletComm(report));
-//	}
-//
-//	let cb_data = res["result"]["Ok"].clone();
-//	trace!("cb_data: {}", cb_data);
-//	let ret_val = match serde_json::from_value::<CbData>(cb_data) {
-//		Ok(r) => r,
-//		Err(e) => {
-//			let report = format!("Couldn't deserialize CbData: {}", e);
-//			error!("{}", report);
-//			return Err(Error::WalletComm(report));
-//		}
-//	};
-//
-//	debug!("get_price_signed: {:?}", block_fees);
-//	Ok(())
-//}
+fn get_price_signed(
+	wallet_listener_url: &str,
+	owner_api_secret: &Option<String>,
+	msg: secp::Message,
+	key_id: Identifier,
+) -> Result<Signature, Error> {
+	let url = format!("{}/v2/owner", wallet_listener_url);
+	let req_body = json!({
+		"jsonrpc": "2.0",
+		"method": "sign_price",
+		"id": 1,
+		"params": {
+			"msg": msg.to_string(),
+			"key_id": key_id.to_hex()
+		}
+	});
+
+	trace!("Sending sign_price request: {}", req_body);
+	let req = api::client::create_post_request(url.as_str(), owner_api_secret.clone(), &req_body)?;
+	let res: String = api::client::send_request(req).map_err(|e| {
+		let report = format!(
+			"Failed to sign_price from {}. Is the wallet listening? {}",
+			wallet_listener_url, e
+		);
+		error!("{}", report);
+		Error::WalletComm(report)
+	})?;
+
+	let res: Value = serde_json::from_str(&res).unwrap();
+	trace!("Response: {}", res);
+	if res["error"] != json!(null) {
+		let report = format!(
+			"Failed to sign_price from {}: Error: {}, Message: {}",
+			wallet_listener_url, res["error"]["code"], res["error"]["message"]
+		);
+		error!("{}", report);
+		return Err(Error::WalletComm(report));
+	}
+
+	let cb_data = res["result"]["Ok"].clone();
+	trace!("cb_data: {}", cb_data);
+	let ret_val = match serde_json::from_value::<String>(cb_data) {
+		Ok(r) => r,
+		Err(e) => {
+			let report = format!("Couldn't deserialize : {}", e);
+			error!("{}", report);
+			return Err(Error::WalletComm(report));
+		}
+	};
+
+	debug!("get_price_signed: {:?}", ret_val);
+	Ok(Signature::from_str(&ret_val)?)
+}
 
 pub struct PriceOracleServer {
 	store: Arc<PriceStore>,
@@ -166,6 +172,7 @@ impl PriceOracleServer {
 			.oracle_server_url
 			.clone()
 			.unwrap_or("http://127.0.0.1:3518".to_string());
+		let owner_api_secret = get_first_line(self.config.owner_api_secret_path.clone());
 		let price_feeder_uid = self
 			.config
 			.price_feeder_uid
@@ -195,14 +202,22 @@ impl PriceOracleServer {
 					}
 				}
 
-				if let Ok(pairs) = ExchangeRates::from(&rates, price_feeder_uid) {
-					self.store.save(&pairs).unwrap();
-
-					if let Ok(pairs_copy) = self.store.get(price_feeder_uid, pairs.date) {
-						debug!(
-							"price pairs read from local lmdb: {}",
-							serde_json::to_string(&pairs_copy).unwrap()
-						);
+				if let Ok(mut pairs) = ExchangeRates::from(&rates, price_feeder_uid) {
+					let sign_msg = pairs.price_sig_msg().unwrap();
+					if let Ok(signature) = get_price_signed(
+						&self.config.wallet_owner_api_listener_url,
+						&owner_api_secret,
+						sign_msg,
+						Identifier::zero(),
+					) {
+						pairs.sig = signature;
+						self.store.save(&pairs).unwrap();
+						if let Ok(pairs_copy) = self.store.get(price_feeder_uid, pairs.date) {
+							debug!(
+								"price pairs read from local lmdb: {}",
+								serde_json::to_string(&pairs_copy).unwrap()
+							);
+						}
 					}
 				}
 

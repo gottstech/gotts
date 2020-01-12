@@ -29,10 +29,13 @@ use crate::p2p;
 use crate::pool;
 use crate::pool::types::DandelionConfig;
 use crate::store;
+use crate::util::secp;
 
 /// Error type wrapping underlying module errors.
 #[derive(Debug)]
 pub enum Error {
+	/// Underlying Secp256k1 error (signature validation or invalid public key typically)
+	Secp(secp::Error),
 	/// Error originating from the core implementation.
 	Core(core::block::Error),
 	/// Error originating from the libtx implementation.
@@ -63,6 +66,11 @@ pub enum Error {
 	General(String),
 }
 
+impl From<secp::Error> for Error {
+	fn from(e: secp::Error) -> Error {
+		Error::Secp(e)
+	}
+}
 impl From<core::block::Error> for Error {
 	fn from(e: core::block::Error) -> Error {
 		Error::Core(e)
@@ -282,8 +290,11 @@ pub struct PriceOracleServerConfig {
 	/// If enabled, the oracle address and port to query the prices from
 	pub oracle_server_url: Option<String>,
 
-	/// Base address to the HTTP wallet receiver
-	pub wallet_listener_url: String,
+	/// URL of HTTP wallet owner API
+	pub wallet_owner_api_listener_url: String,
+
+	/// Location of wallet owner api secret for basic auth.
+	pub owner_api_secret_path: Option<String>,
 }
 
 impl Default for PriceOracleServerConfig {
@@ -292,7 +303,8 @@ impl Default for PriceOracleServerConfig {
 			enable_price_feeder_oracle_server: Some(false),
 			price_feeder_uid: Some(std::u16::MAX),
 			oracle_server_url: Some("http://127.0.0.1:3518".to_string()),
-			wallet_listener_url: "http://127.0.0.1:3515".to_string(),
+			wallet_owner_api_listener_url: "http://127.0.0.1:3520".to_string(),
+			owner_api_secret_path: Some(".api_secret".to_string()),
 		}
 	}
 }

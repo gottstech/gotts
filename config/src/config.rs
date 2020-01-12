@@ -254,6 +254,14 @@ impl GlobalConfig {
 		secret_path.push(API_SECRET_FILE_NAME);
 		self.members.as_mut().unwrap().server.api_secret_path =
 			Some(secret_path.to_str().unwrap().to_owned());
+		self.members
+			.as_mut()
+			.unwrap()
+			.server
+			.price_feeder_oracle_config
+			.as_mut()
+			.unwrap()
+			.owner_api_secret_path = Some(secret_path.to_str().unwrap().to_owned());
 		let mut log_path = gotts_home.clone();
 		log_path.push(SERVER_LOG_FILE_NAME);
 		self.members
