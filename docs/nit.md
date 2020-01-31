@@ -230,6 +230,7 @@ And we have the following relationships:
 - `excess' = (rc-ri-offset)*G + rr*G`, which is used to calculate the "public excess".
 
 The Mimblewimble/Grin signature theme is the standard usage of Schonorr 2-of-2 aggregated signature: 
+
 1. The sender notify the receiver his/her public key `P1 = (rc-ri-offset)*G` and a nonce `R1 = k1*G`.
 2. The receiver take his/her public key `P2 = rr*G` and a nonce `R2 = k2*G`, calculate `P = P1+P2` and `R = R1+R2`.
 3. The receiver send back to the sender: `P2`, `R2`, and the partial signature `s1 = k2+e*rr`, where `e = Hash(R || P || m)`.
@@ -263,7 +264,7 @@ Where
 And we have the following relationships:
 
 - _v<sub>i</sub> = v<sub>c</sub> + v<sub>r</sub> + fee_, which is used to calculate the change coin amount _v<sub>c</sub>_. 
-- _Excess = (x<sub>c</sub>-x<sub>i</sub>)*G + (A<sub>i</sub>+B<sub>i</sub> + w<sub>e</sub>*H_, where _ w<sub>e</sub> = (w<sub>c</sub> - w<sub>i</sub> + R'.x) mod p_.
+- _Excess = (x<sub>c</sub>-x<sub>i</sub>)*G + (A<sub>i</sub>+B<sub>i</sub> + w<sub>e</sub>*H_, where _w<sub>e</sub> = (w<sub>c</sub> - w<sub>i</sub> + R'.x) mod p_.
 
 The _Excess_ is transmitted as part of the transaction data, but only packaged into the block header as the _Total Excess_, which accumulates all transactions _Excess_ value since the Genesis block. i.e. _Excess_ is not available on the block and chain data.
 
