@@ -65,6 +65,7 @@ enum_from_primitive! {
 		TransactionKernel = 20,
 		KernelDataRequest = 21,
 		KernelDataResponse = 22,
+		Price = 23,
 	}
 }
 
@@ -104,6 +105,7 @@ fn max_msg_size(msg_type: Type) -> u64 {
 		Type::TransactionKernel => 32,
 		Type::KernelDataRequest => 0,
 		Type::KernelDataResponse => 8,
+		Type::Price => 256,
 	}
 }
 

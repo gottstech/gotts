@@ -26,6 +26,7 @@ use rand::thread_rng;
 use crate::chain;
 use crate::core::core;
 use crate::core::core::hash::{Hash, Hashed};
+use crate::core::core::price::ExchangeRates;
 use crate::core::global;
 use crate::core::pow::Difficulty;
 use crate::peer::Peer;
@@ -366,6 +367,18 @@ impl Peers {
 		);
 	}
 
+	/// Broadcasts the provided price to all our connected peers.
+	/// A peer implementation may drop the broadcast request
+	/// if it knows the remote peer already has the price.
+	pub fn broadcast_price(&self, price: &ExchangeRates) {
+		let count = self.broadcast("price", |p| p.send_price(price));
+		debug!(
+			"broadcast_price: {} to {} peers, done.",
+			price.hash(),
+			count,
+		);
+	}
+
 	/// Ping all our connected peers. Always automatically expects a pong back
 	/// or disconnects. This acts as a liveness test.
 	pub fn check_all(&self, total_difficulty: Difficulty, height: u64) {
@@ -589,6 +602,10 @@ impl ChainAdapter for Peers {
 		stem: bool,
 	) -> Result<bool, chain::Error> {
 		self.adapter.transaction_received(tx, stem)
+	}
+
+	fn price_received(&self, price: core::ExchangeRates) -> Result<bool, chain::Error> {
+		self.adapter.price_received(price)
 	}
 
 	fn block_received(

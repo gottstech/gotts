@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use crate::conn::{Message, MessageHandler, Response, Tracker};
+use crate::core::core::price::ExchangeRates;
 use crate::core::core::{self, hash::Hash, hash::Hashed, CompactBlock};
 
 use crate::msg::{
@@ -135,6 +136,16 @@ impl MessageHandler for Protocol {
 				);
 				let tx: core::Transaction = msg.body()?;
 				adapter.transaction_received(tx, false)?;
+				Ok(None)
+			}
+
+			Type::Price => {
+				debug!(
+					"handle_payload: received price: msg_len: {}",
+					msg.header.msg_len
+				);
+				let price: ExchangeRates = msg.body()?;
+				adapter.price_received(price)?;
 				Ok(None)
 			}
 

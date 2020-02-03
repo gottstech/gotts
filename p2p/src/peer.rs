@@ -25,6 +25,7 @@ use std::sync::Arc;
 use crate::chain;
 use crate::conn;
 use crate::core::core::hash::{Hash, Hashed};
+use crate::core::core::price::ExchangeRates;
 use crate::core::pow::Difficulty;
 use crate::core::ser::Writeable;
 use crate::core::{core, global};
@@ -244,8 +245,7 @@ impl Peer {
 		Ok(())
 	}
 
-	/// Send a ping to the remote peer, providing our local difficulty and
-	/// height
+	/// Send a ping to the remote peer, providing our local difficulty and height
 	pub fn send_ping(&self, total_difficulty: Difficulty, height: u64) -> Result<(), Error> {
 		let ping_msg = Ping {
 			total_difficulty,
@@ -411,6 +411,23 @@ impl Peer {
 		self.send(&KernelDataRequest {}, msg::Type::KernelDataRequest)
 	}
 
+	/// Sends the provided price to the remote peer. The request may be
+	/// dropped if the remote peer is known to already have the price.
+	pub fn send_price(&self, price: &ExchangeRates) -> Result<bool, Error> {
+		if !self.tracking_adapter.has_recv(price.hash()) {
+			debug!("Send price {} to {}", price.hash(), self.info.addr);
+			self.send(price, msg::Type::Price)?;
+			Ok(true)
+		} else {
+			debug!(
+				"Not sending price {} to {} (already seen)",
+				price.hash(),
+				self.info.addr
+			);
+			Ok(false)
+		}
+	}
+
 	/// Stops the peer
 	pub fn stop(&self) {
 		debug!("Stopping peer {:?}", self.info.addr);
@@ -519,6 +536,10 @@ impl ChainAdapter for TrackingAdapter {
 			self.push_recv(kernel.hash());
 		}
 		self.adapter.transaction_received(tx, stem)
+	}
+
+	fn price_received(&self, price: core::ExchangeRates) -> Result<bool, chain::Error> {
+		self.adapter.price_received(price)
 	}
 
 	fn block_received(

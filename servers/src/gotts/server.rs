@@ -42,6 +42,7 @@ use crate::core::core::hash::{Hashed, ZERO_HASH};
 use crate::core::core::verifier_cache::{LruVerifierCache, VerifierCache};
 use crate::core::ser::ProtocolVersion;
 use crate::core::{consensus, genesis, global, pow};
+use crate::gotts::price_pool::PricePool;
 use crate::gotts::{dandelion_monitor, seed, sync};
 use crate::mining::price_oracle;
 use crate::mining::stratumserver;
@@ -62,6 +63,8 @@ pub struct Server {
 	pub chain: Arc<chain::Chain>,
 	/// in-memory transaction pool
 	tx_pool: Arc<RwLock<pool::TransactionPool>>,
+	/// in-memory price pool
+	pub price_pool: Arc<RwLock<PricePool>>,
 	/// Shared cache for verification results when
 	/// verifying rangeproof and kernel signatures.
 	verifier_cache: Arc<RwLock<dyn VerifierCache>>,
@@ -109,7 +112,7 @@ impl Server {
 		if let Some(c) = price_feeder_config {
 			if let Some(s) = c.enable_price_feeder_oracle_server {
 				if s {
-					serv.start_price_oracle_server(db_root, c.clone());
+					serv.start_price_oracle_server(db_root, c.clone(), serv.p2p.peers.clone());
 				}
 			}
 		}
@@ -212,10 +215,20 @@ impl Server {
 
 		pool_adapter.set_chain(shared_chain.clone());
 
+		let price_pool = Arc::new(RwLock::new(PricePool::new(
+			config
+				.price_feeder_oracle_config
+				.clone()
+				.unwrap_or_default(),
+			shared_chain.clone(),
+			verifier_cache.clone(),
+		)));
+
 		let net_adapter = Arc::new(NetToChainAdapter::new(
 			sync_state.clone(),
 			shared_chain.clone(),
 			tx_pool.clone(),
+			price_pool.clone(),
 			verifier_cache.clone(),
 			config.clone(),
 			init_net_hooks(&config),
@@ -234,6 +247,10 @@ impl Server {
 		chain_adapter.init(p2p_server.peers.clone());
 		pool_net_adapter.init(p2p_server.peers.clone());
 		net_adapter.init(p2p_server.peers.clone());
+		{
+			let p = price_pool.write();
+			p.init(p2p_server.peers.clone());
+		}
 
 		let mut connect_thread = None;
 
@@ -327,6 +344,7 @@ impl Server {
 			p2p: p2p_server,
 			chain: shared_chain,
 			tx_pool,
+			price_pool,
 			verifier_cache,
 			sync_state,
 			state_info: ServerStateInfo {
@@ -360,7 +378,12 @@ impl Server {
 	}
 
 	/// Start a price feeder oracle service on a separate thread
-	pub fn start_price_oracle_server(&self, db_root: String, config: PriceOracleServerConfig) {
+	pub fn start_price_oracle_server(
+		&self,
+		db_root: String,
+		config: PriceOracleServerConfig,
+		peers: Arc<p2p::Peers>,
+	) {
 		let sync_state = self.sync_state.clone();
 		let stop_state = self.stop_state.clone();
 
@@ -368,6 +391,8 @@ impl Server {
 			db_root,
 			config,
 			self.chain.clone(),
+			self.price_pool.clone(),
+			peers,
 			self.verifier_cache.clone(),
 			stop_state,
 		)

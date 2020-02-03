@@ -17,7 +17,7 @@
 use chrono::{Duration, Timelike};
 use itertools::Itertools;
 use serde_json::{json, Value};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::thread;
 use std::time;
 
@@ -29,8 +29,11 @@ use crate::common::types::PriceOracleServerConfig;
 use crate::core::consensus;
 use crate::core::core::price::{ExchangeRate, ExchangeRates};
 use crate::core::core::verifier_cache::VerifierCache;
+use crate::gotts::price_pool::PricePool;
+use crate::p2p;
 use crate::util::file::get_first_line;
 use crate::util::secp::{self, Signature};
+use crate::util::OneTime;
 use crate::util::{to_hex, RwLock, StopState};
 use diff0::{self, diff0_compress, diff0_decompress};
 
@@ -137,6 +140,8 @@ pub struct PriceOracleServer {
 	config: PriceOracleServerConfig,
 	stop_state: Arc<StopState>,
 	chain: Arc<chain::Chain>,
+	price_pool: Arc<RwLock<PricePool>>,
+	peers: OneTime<Weak<p2p::Peers>>,
 	verifier_cache: Arc<RwLock<dyn VerifierCache>>,
 	sync_state: Arc<SyncState>,
 }
@@ -147,19 +152,32 @@ impl PriceOracleServer {
 		db_root: String,
 		config: PriceOracleServerConfig,
 		chain: Arc<chain::Chain>,
+		price_pool: Arc<RwLock<PricePool>>,
+		peers: Arc<p2p::Peers>,
 		verifier_cache: Arc<RwLock<dyn VerifierCache>>,
 		stop_state: Arc<StopState>,
 	) -> Result<PriceOracleServer, Error> {
 		let store = Arc::new(PriceStore::new(&db_root)?);
+		let p: OneTime<Weak<p2p::Peers>> = OneTime::new();
+		p.init(Arc::downgrade(&peers));
 
 		Ok(PriceOracleServer {
 			store,
 			config,
 			stop_state,
 			chain,
+			price_pool,
+			peers: p,
 			verifier_cache,
 			sync_state: Arc::new(SyncState::new()),
 		})
+	}
+
+	fn peers(&self) -> Arc<p2p::Peers> {
+		self.peers
+			.borrow()
+			.upgrade()
+			.expect("Failed to upgrade weak ref to our peers.")
 	}
 
 	/// "main()" - Starts the price feeder oracle server.
@@ -187,6 +205,10 @@ impl PriceOracleServer {
 		let precision = GOTTS_PRICE_PRECISION;
 		let mut prev_price_rates: Option<Vec<f64>> = None;
 		'restart_querying: loop {
+			// get the latest chain state
+			let head = self.chain.head().unwrap();
+			let head = self.chain.get_block_header(&head.last_block_h).unwrap();
+
 			if let Ok(rates) = create_price_msg(&oracle_server_url) {
 				// pre-checking on the date to make sure the aggregated rates are on same timestamp.
 				for (a, b) in rates.iter().tuple_windows() {
@@ -215,6 +237,16 @@ impl PriceOracleServer {
 						{
 							pairs.sig = Signature::from_str(&sig).unwrap();
 							pairs.source_uid = source_uid as u16;
+
+							if let Err(e) =
+								self.price_pool.write().add_to_pool(pairs.clone(), &head)
+							{
+								debug!("price add_to_pool fail: {}", e.to_string());
+								thread::sleep(time::Duration::from_secs(1));
+								continue 'restart_querying;
+							}
+
+							// save into database
 							self.store.save(&pairs).unwrap();
 							if let Ok(pairs_copy) = self.store.get(pairs.source_uid, pairs.date) {
 								debug!(
@@ -230,6 +262,7 @@ impl PriceOracleServer {
 					warn!("price_encode failed: {:?}", e);
 				} else {
 					let serialized_price = self.encode_price_feeder(&prev_price_rates, &rates);
+
 					prev_price_rates = Some(rates.iter().map(|r| r.rate).collect());
 					let decoded_diffs = diff0_decompress(serialized_price).unwrap();
 					// convert i64 to float64 with 10^-9 precision

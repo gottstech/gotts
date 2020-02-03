@@ -16,6 +16,7 @@
 //! Gotts P2P / API server
 
 pub mod dandelion_monitor;
+pub mod price_pool;
 pub mod seed;
 pub mod server;
 pub mod sync;

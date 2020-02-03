@@ -278,6 +278,10 @@ impl ChainAdapter for DummyAdapter {
 	) -> Result<bool, chain::Error> {
 		Ok(true)
 	}
+
+	fn price_received(&self, _price: core::ExchangeRates) -> Result<bool, chain::Error> {
+		Ok(true)
+	}
 	fn compact_block_received(
 		&self,
 		_cb: core::CompactBlock,

@@ -18,11 +18,14 @@ use chrono::{DateTime, Duration, NaiveDateTime, Timelike, Utc};
 use itertools::Itertools;
 
 use crate::consensus;
-use crate::core::hash::Hashed;
+use crate::core::hash::{DefaultHashable, Hashed};
+use crate::core::verifier_cache::VerifierCache;
 use crate::libtx::secp_ser;
 use crate::ser::{self, read_multi, Readable, Reader, Writeable, Writer};
-use crate::util::secp::{self, Signature};
+use crate::util::secp::{self, PublicKey, Signature};
 use crate::util::static_secp_instance;
+use crate::util::RwLock;
+use std::sync::Arc;
 
 /// Data queried for the exchange rate of a currency pair.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -52,6 +55,8 @@ pub struct ExchangeRates {
 	#[serde(with = "secp_ser::sig_serde")]
 	pub sig: Signature,
 }
+
+impl DefaultHashable for ExchangeRates {}
 
 impl ExchangeRates {
 	/// Construct the currency/price pairs from the raw ExchangeRate vector.
@@ -112,26 +117,45 @@ impl ExchangeRates {
 		Ok(msg)
 	}
 
-	//	/ Verify the price proof validity. Entails getting the corresponding public key of
-	//	/ the price feeder source_uid and checking the signature verifies with the price as message.
-	//	pub fn verify(&self) -> Result<(), Error> {
-	//		let secp = static_secp_instance();
-	//		let secp = secp.lock();
-	//		let pubkey = &self.excess.to_pubkey(&secp)?;
-	//		if !secp::aggsig::verify_single(
-	//			&secp,
-	//			&self.sig,
-	//			&self.price_sig_msg()?,
-	//			None,
-	//			&pubkey,
-	//			Some(&pubkey),
-	//			None,
-	//			false,
-	//		) {
-	//			return Err(Error::IncorrectSignature);
-	//		}
-	//		Ok(())
-	//	}
+	/// Validates all relevant parts of a price.
+	/// - Checks the timestamp is the latest.
+	/// - Checks the source is one of the price_feeders_list.
+	/// - Checks the signature.
+	pub fn validate(
+		&self,
+		verifier: Arc<RwLock<dyn VerifierCache>>,
+		header_time: DateTime<Utc>,
+	) -> Result<(), Error> {
+		if self.source_uid as usize >= consensus::price_feeders_list().len() {
+			return Err(Error::InvalidSource(self.source_uid));
+		}
+
+		if self.date < header_time {
+			debug!(
+				"outdated price received: {}",
+				self.date.format("%Y-%m-%d %H:%M:%S").to_string()
+			);
+			return Err(Error::Outdated);
+		}
+
+		let secp = static_secp_instance();
+		let secp = secp.lock();
+		let pubkey =
+			PublicKey::from_str(consensus::price_feeders_list()[self.source_uid as usize])?;
+		if !secp::aggsig::verify_single(
+			&secp,
+			&self.sig,
+			&self.price_sig_msg()?,
+			None,
+			&pubkey,
+			Some(&pubkey),
+			None,
+			false,
+		) {
+			return Err(Error::IncorrectSignature);
+		}
+		Ok(())
+	}
 }
 
 impl Readable for ExchangeRates {
@@ -225,6 +249,12 @@ pub enum Error {
 	/// NotFound error
 	#[fail(display = "Pair not found: {}", _0)]
 	NotFound(String),
+	/// InvalidSource error
+	#[fail(display = "Invalid source: {}", _0)]
+	InvalidSource(u16),
+	/// Outdated error
+	#[fail(display = "Outdated price")]
+	Outdated,
 	/// Generic error
 	#[fail(display = "Generic Error: {}", _0)]
 	Generic(String),

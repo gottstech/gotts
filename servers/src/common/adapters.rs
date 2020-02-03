@@ -38,6 +38,7 @@ use crate::p2p::types::PeerInfo;
 use crate::pool;
 use crate::util::secp::pedersen::Commitment;
 use crate::util::OneTime;
+use crate::PricePool;
 use chrono::prelude::*;
 use chrono::Duration;
 use rand::prelude::*;
@@ -50,6 +51,7 @@ pub struct NetToChainAdapter {
 	sync_state: Arc<SyncState>,
 	chain: Weak<chain::Chain>,
 	tx_pool: Arc<RwLock<pool::TransactionPool>>,
+	price_pool: Arc<RwLock<PricePool>>,
 	verifier_cache: Arc<RwLock<dyn VerifierCache>>,
 	peers: OneTime<Weak<p2p::Peers>>,
 	config: ServerConfig,
@@ -116,6 +118,21 @@ impl p2p::ChainAdapter for NetToChainAdapter {
 			Ok(_) => Ok(true),
 			Err(e) => {
 				debug!("Transaction {} rejected: {:?}", tx_hash, e);
+				Ok(false)
+			}
+		}
+	}
+
+	fn price_received(&self, price: core::ExchangeRates) -> Result<bool, chain::Error> {
+		let header = self.chain().head_header()?;
+
+		let price_hash = price.hash();
+
+		let mut price_pool = self.price_pool.write();
+		match price_pool.add_to_pool(price, &header) {
+			Ok(_) => Ok(true),
+			Err(e) => {
+				debug!("Price {} rejected: {:?}", price_hash, e);
 				Ok(false)
 			}
 		}
@@ -481,6 +498,7 @@ impl NetToChainAdapter {
 		sync_state: Arc<SyncState>,
 		chain: Arc<chain::Chain>,
 		tx_pool: Arc<RwLock<pool::TransactionPool>>,
+		price_pool: Arc<RwLock<PricePool>>,
 		verifier_cache: Arc<RwLock<dyn VerifierCache>>,
 		config: ServerConfig,
 		hooks: Vec<Box<dyn NetEvents + Send + Sync>>,
@@ -489,6 +507,7 @@ impl NetToChainAdapter {
 			sync_state,
 			chain: Arc::downgrade(&chain),
 			tx_pool,
+			price_pool,
 			verifier_cache,
 			peers: OneTime::new(),
 			config,
