@@ -539,6 +539,7 @@ impl ChainAdapter for TrackingAdapter {
 	}
 
 	fn price_received(&self, price: core::ExchangeRates) -> Result<bool, chain::Error> {
+		self.push_recv(price.hash());
 		self.adapter.price_received(price)
 	}
 
