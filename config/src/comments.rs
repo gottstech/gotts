@@ -435,6 +435,16 @@ fn comments() -> HashMap<String, String> {
 	);
 
 	retval.insert(
+		"price_feeder_source_uid".to_string(),
+		"
+#The unique id (index) of this price oracle server,
+# which is one of the consensus PRICE_FEEDERS_LIST.
+#The default value '30000' is invalid, change me when oracle server enabled.
+"
+		.to_string(),
+	);
+
+	retval.insert(
 		"oracle_server_url".to_string(),
 		"
 #which oracle server url to query the prices from

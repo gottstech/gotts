@@ -190,6 +190,7 @@ impl PriceOracleServer {
 			.oracle_server_url
 			.clone()
 			.unwrap_or("http://127.0.0.1:3518".to_string());
+		let price_feeder_source_uid = self.config.price_feeder_source_uid;
 		let owner_api_secret = get_first_line(self.config.owner_api_secret_path.clone());
 		let price_feeder_key_id = self
 			.config
@@ -224,7 +225,7 @@ impl PriceOracleServer {
 					}
 				}
 
-				if let Ok(mut pairs) = ExchangeRates::from(&rates) {
+				if let Ok(mut pairs) = ExchangeRates::from(&rates, price_feeder_source_uid) {
 					if let Ok((sig, pubkey)) = get_price_signed(
 						&self.config.wallet_owner_api_listener_url,
 						&owner_api_secret,
@@ -236,12 +237,15 @@ impl PriceOracleServer {
 							.position(|p| *p == pubkey)
 						{
 							pairs.sig = Signature::from_str(&sig).unwrap();
-							pairs.source_uid = source_uid as u16;
 
 							if let Err(e) =
 								self.price_pool.write().add_to_pool(pairs.clone(), &head)
 							{
-								debug!("price add_to_pool fail: {}", e.to_string());
+								debug!(
+									"price from source {} - add_to_pool fail: {}",
+									source_uid,
+									e.to_string()
+								);
 								thread::sleep(time::Duration::from_secs(1));
 								continue 'restart_querying;
 							}

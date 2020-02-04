@@ -288,6 +288,9 @@ pub struct PriceOracleServerConfig {
 	/// one public key of the price_feeders_list list in the consensus.
 	pub price_feeder_key_id: Option<String>,
 
+	/// The unique id (index) of this price oracle server among the consensus PRICE_FEEDERS_LIST.
+	pub price_feeder_source_uid: u16,
+
 	/// If enabled, the oracle address and port to query the prices from
 	pub oracle_server_url: Option<String>,
 
@@ -303,6 +306,7 @@ impl Default for PriceOracleServerConfig {
 		PriceOracleServerConfig {
 			enable_price_feeder_oracle_server: Some(false),
 			price_feeder_key_id: Some("03000000000000000000000000".to_string()),
+			price_feeder_source_uid: 30_000u16,
 			oracle_server_url: Some("http://127.0.0.1:3518".to_string()),
 			wallet_owner_api_listener_url: "http://127.0.0.1:3520".to_string(),
 			owner_api_secret_path: Some(".api_secret".to_string()),

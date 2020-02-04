@@ -150,7 +150,7 @@ impl PricePool {
 #[derive(Debug, Fail, PartialEq)]
 pub enum PoolError {
 	/// An invalid pool entry caused by underlying tx validation error
-	#[fail(display = "Invalid Price {}", _0)]
+	#[fail(display = "Invalid Price - {}", _0)]
 	InvalidPrice(price::Error),
 	/// Attempt to add a duplicate price to the pool.
 	#[fail(display = "Duplicate price")]
@@ -159,7 +159,7 @@ pub enum PoolError {
 	#[fail(display = "Over Capacity")]
 	OverCapacity,
 	/// Other kinds of error (not yet pulled out into meaningful errors).
-	#[fail(display = "General pool error {}", _0)]
+	#[fail(display = "General pool error - {}", _0)]
 	Other(String),
 }
 

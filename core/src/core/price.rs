@@ -60,7 +60,10 @@ impl DefaultHashable for ExchangeRates {}
 
 impl ExchangeRates {
 	/// Construct the currency/price pairs from the raw ExchangeRate vector.
-	pub fn from(rates: &Vec<ExchangeRate>) -> Result<ExchangeRates, Error> {
+	pub fn from(
+		rates: &Vec<ExchangeRate>,
+		price_feeder_source_uid: u16,
+	) -> Result<ExchangeRates, Error> {
 		if rates.len() != consensus::currency_pairs().len() {
 			trace!(
 				"currency pairs size not matched: input size = {}, consensus = {}",
@@ -96,7 +99,7 @@ impl ExchangeRates {
 
 		Ok(ExchangeRates {
 			version: PriceVersion::default(),
-			source_uid: 0, // to be updated later when signing
+			source_uid: price_feeder_source_uid,
 			pairs,
 			date,
 			sig: Signature::from(secp::ffi::Signature::new()), // to be updated later when signing
