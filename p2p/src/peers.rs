@@ -26,7 +26,7 @@ use rand::thread_rng;
 use crate::chain;
 use crate::core::core;
 use crate::core::core::hash::{Hash, Hashed};
-use crate::core::core::price::ExchangeRates;
+use crate::core::core::price::{self, ExchangeRates};
 use crate::core::global;
 use crate::core::pow::Difficulty;
 use crate::peer::Peer;
@@ -604,8 +604,42 @@ impl ChainAdapter for Peers {
 		self.adapter.transaction_received(tx, stem)
 	}
 
-	fn price_received(&self, price: core::ExchangeRates) -> Result<bool, chain::Error> {
-		self.adapter.price_received(price)
+	fn price_received(
+		&self,
+		price: core::ExchangeRates,
+		peer_info: &PeerInfo,
+	) -> Result<bool, chain::Error> {
+		let hash = price.hash();
+		let ret = self.adapter.price_received(price, peer_info);
+		match ret {
+			Err(ref e) => {
+				debug!("Price {} rejected: {:?}", hash, e);
+				match e.kind() {
+					chain::ErrorKind::PricePool(pe) => {
+						match pe {
+							price::PoolError::InvalidPrice(e) => match e {
+								price::Error::InvalidSource(_)
+								| price::Error::IncorrectSignature => {
+									// if the peer sent us a price that's intrinsically bad
+									// they are either mistaken or malevolent, both of which require a ban
+									debug!(
+										"Received a bad price {} from  {}, the peer will be banned",
+										hash, peer_info.addr,
+									);
+									self.ban_peer(peer_info.addr, ReasonForBan::BadPrice);
+									return Ok(false);
+								}
+								_ => {}
+							},
+							_ => {}
+						}
+					}
+					_ => {}
+				}
+			}
+			_ => {}
+		}
+		ret
 	}
 
 	fn block_received(

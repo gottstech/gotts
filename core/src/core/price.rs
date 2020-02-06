@@ -275,6 +275,29 @@ impl From<secp::Error> for Error {
 	}
 }
 
+/// Possible errors when interacting with the transaction pool.
+#[derive(Clone, Debug, Fail, Eq, PartialEq)]
+pub enum PoolError {
+	/// An invalid pool entry caused by underlying tx validation error
+	#[fail(display = "Invalid Price - {}", _0)]
+	InvalidPrice(Error),
+	/// Attempt to add a duplicate price to the pool.
+	#[fail(display = "Duplicate price")]
+	DuplicatePrice,
+	/// Price pool is over capacity, can't accept more prices
+	#[fail(display = "Over Capacity")]
+	OverCapacity,
+	/// Other kinds of error (not yet pulled out into meaningful errors).
+	#[fail(display = "General pool error - {}", _0)]
+	Other(String),
+}
+
+impl From<Error> for PoolError {
+	fn from(e: Error) -> PoolError {
+		PoolError::InvalidPrice(e)
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

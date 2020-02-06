@@ -25,8 +25,6 @@
 #[macro_use]
 extern crate serde_derive;
 #[macro_use]
-extern crate failure_derive;
-#[macro_use]
 extern crate log;
 
 use gotts_api as api;
@@ -44,5 +42,5 @@ mod mining;
 
 pub use crate::common::stats::{DiffBlock, PeerStats, ServerStats, StratumStats, WorkerStats};
 pub use crate::common::types::{PriceOracleServerConfig, ServerConfig, StratumServerConfig};
-pub use crate::gotts::price_pool::{PoolError, PricePool};
+pub use crate::gotts::price_pool::PricePool;
 pub use crate::gotts::server::Server;

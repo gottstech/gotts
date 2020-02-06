@@ -279,7 +279,11 @@ impl ChainAdapter for DummyAdapter {
 		Ok(true)
 	}
 
-	fn price_received(&self, _price: core::ExchangeRates) -> Result<bool, chain::Error> {
+	fn price_received(
+		&self,
+		_price: core::ExchangeRates,
+		_peer_info: &PeerInfo,
+	) -> Result<bool, chain::Error> {
 		Ok(true)
 	}
 	fn compact_block_received(

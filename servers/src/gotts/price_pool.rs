@@ -14,28 +14,18 @@
 
 //! Price Pool
 
-use chrono::{Duration, Timelike};
-use itertools::Itertools;
-use serde_json::{json, Value};
 use std::sync::{Arc, Weak};
-use std::thread;
-use std::time;
 
 use crate::chain::{self, SyncState};
-use crate::common::types::Error;
 use crate::common::types::PriceOracleServerConfig;
 use crate::core::consensus;
-use crate::core::core::hash::{DefaultHashable, Hash, Hashed};
-use crate::core::core::price::{self, ExchangeRates};
+use crate::core::core::hash::{Hash, Hashed};
+use crate::core::core::price::{ExchangeRates, PoolError};
 use crate::core::core::verifier_cache::VerifierCache;
 use crate::core::core::BlockHeader;
-use crate::mining::price_oracle::PriceOracleServer;
 use crate::p2p;
-use crate::util::file::get_first_line;
-use crate::util::secp::{self, Signature};
 use crate::util::OneTime;
-use crate::util::{to_hex, RwLock, StopState};
-use diff0::{self, diff0_compress, diff0_decompress};
+use crate::util::RwLock;
 
 /// Price pool implementation
 pub struct PricePool {
@@ -143,28 +133,5 @@ impl PricePool {
 			.filter(|&p| p.date != oldest_date)
 			.count();
 		self.entries.truncate(count);
-	}
-}
-
-/// Possible errors when interacting with the transaction pool.
-#[derive(Debug, Fail, PartialEq)]
-pub enum PoolError {
-	/// An invalid pool entry caused by underlying tx validation error
-	#[fail(display = "Invalid Price - {}", _0)]
-	InvalidPrice(price::Error),
-	/// Attempt to add a duplicate price to the pool.
-	#[fail(display = "Duplicate price")]
-	DuplicatePrice,
-	/// Price pool is over capacity, can't accept more prices
-	#[fail(display = "Over Capacity")]
-	OverCapacity,
-	/// Other kinds of error (not yet pulled out into meaningful errors).
-	#[fail(display = "General pool error - {}", _0)]
-	Other(String),
-}
-
-impl From<price::Error> for PoolError {
-	fn from(e: price::Error) -> PoolError {
-		PoolError::InvalidPrice(e)
 	}
 }

@@ -145,7 +145,7 @@ impl MessageHandler for Protocol {
 					msg.header.msg_len
 				);
 				let price: ExchangeRates = msg.body()?;
-				adapter.price_received(price)?;
+				adapter.price_received(price, &self.peer_info)?;
 				Ok(None)
 			}
 

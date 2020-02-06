@@ -123,19 +123,16 @@ impl p2p::ChainAdapter for NetToChainAdapter {
 		}
 	}
 
-	fn price_received(&self, price: core::ExchangeRates) -> Result<bool, chain::Error> {
+	fn price_received(
+		&self,
+		price: core::ExchangeRates,
+		_peer_info: &PeerInfo,
+	) -> Result<bool, chain::Error> {
 		let header = self.chain().head_header()?;
 
-		let price_hash = price.hash();
-
 		let mut price_pool = self.price_pool.write();
-		match price_pool.add_to_pool(price, &header) {
-			Ok(_) => Ok(true),
-			Err(e) => {
-				debug!("Price {} rejected: {:?}", price_hash, e);
-				Ok(false)
-			}
-		}
+		price_pool.add_to_pool(price, &header)?;
+		Ok(true)
 	}
 
 	fn block_received(

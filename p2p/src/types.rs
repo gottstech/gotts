@@ -384,6 +384,7 @@ enum_from_primitive! {
 		ManualBan = 5,
 		FraudHeight = 6,
 		BadHandshake = 7,
+		BadPrice = 8,
 	}
 }
 
@@ -518,7 +519,11 @@ pub trait ChainAdapter: Sync + Send {
 	fn get_transaction(&self, kernel_hash: Hash) -> Option<core::Transaction>;
 
 	/// A price has been received from one of our peers
-	fn price_received(&self, price: ExchangeRates) -> Result<bool, chain::Error>;
+	fn price_received(
+		&self,
+		price: ExchangeRates,
+		peer_info: &PeerInfo,
+	) -> Result<bool, chain::Error>;
 
 	fn tx_kernel_received(
 		&self,
