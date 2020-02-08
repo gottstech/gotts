@@ -243,9 +243,9 @@ pub struct BlockHeader {
 	/// Total size of the kernel MMR after applying this block
 	pub kernel_mmr_size: u64,
 	/// Median Price
-	//pub median_price: VersionedPriceEncoded,
+	pub median_price: VersionedPriceEncoded,
 	/// Merklish root of all selected ExchangeRates in this block
-	//pub price_root: Hash,
+	pub price_root: Hash,
 	/// Proof of work and related
 	pub pow: ProofOfWork,
 }
@@ -265,7 +265,8 @@ impl Default for BlockHeader {
 			output_i_mmr_size: 0,
 			output_ii_mmr_size: 0,
 			kernel_mmr_size: 0,
-			//median_price:
+			median_price: VersionedPriceEncoded::default(),
+			price_root: ZERO_HASH,
 			pow: ProofOfWork::default(),
 		}
 	}
@@ -314,6 +315,8 @@ impl Readable for BlockHeader {
 		let kernel_root = Hash::read(reader)?;
 		let (output_i_mmr_size, output_ii_mmr_size, kernel_mmr_size) =
 			ser_multiread!(reader, read_u64, read_u64, read_u64);
+		let median_price = VersionedPriceEncoded::read(reader)?;
+		let price_root = Hash::read(reader)?;
 		let pow = ProofOfWork::read(reader)?;
 
 		if timestamp > MAX_DATE.and_hms(0, 0, 0).timestamp()
@@ -342,6 +345,8 @@ impl Readable for BlockHeader {
 			output_i_mmr_size,
 			output_ii_mmr_size,
 			kernel_mmr_size,
+			median_price,
+			price_root,
 			pow,
 		})
 	}
@@ -364,6 +369,8 @@ impl BlockHeader {
 			[write_u64, self.output_ii_mmr_size],
 			[write_u64, self.kernel_mmr_size]
 		);
+		self.median_price.write(writer)?;
+		writer.write_fixed_bytes(&self.price_root)?;
 		Ok(())
 	}
 

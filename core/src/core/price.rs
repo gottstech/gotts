@@ -246,12 +246,30 @@ impl VersionedPriceEncoded {
 	}
 }
 
-// The default methold is only for test.
-//impl Default for VersionedPriceEncoded {
-//	fn default() -> VersionedPriceEncoded {
-//		VersionedPriceEncoded::new(0)
-//	}
-//}
+impl Default for VersionedPriceEncoded {
+	fn default() -> VersionedPriceEncoded {
+		let now = Utc::now();
+		let mut default_rates: Vec<ExchangeRate> = vec![];
+		for pair in consensus::currency_pairs() {
+			let split = pair.clone().split("2");
+			let currency: Vec<&str> = split.collect();
+			assert_eq!(2, currency.len());
+			default_rates.push(ExchangeRate {
+				from: currency[0].to_string(),
+				to: currency[1].to_string(),
+				rate: 0.0f64,
+				date: now,
+			});
+		}
+
+		let bin = encode_price_feeder(&None, &default_rates);
+
+		VersionedPriceEncoded {
+			version: PriceVersion::Raw(0),
+			encoded_price: bin,
+		}
+	}
+}
 
 /// Some type safety around price versioning.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]

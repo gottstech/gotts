@@ -37,8 +37,8 @@ use crate::p2p;
 use crate::util::file::get_first_line;
 use crate::util::secp::{self, Signature};
 use crate::util::OneTime;
-use crate::util::{to_hex, RwLock, StopState};
-use diff0::{self, diff0_compress, diff0_decompress};
+use crate::util::{RwLock, StopState};
+use diff0::{self, diff0_decompress};
 
 /// Call the oracle API to create a price feeder message.
 fn create_price_msg(dest: &str) -> Result<Vec<ExchangeRate>, Error> {
