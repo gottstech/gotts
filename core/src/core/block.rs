@@ -28,6 +28,7 @@ use crate::core::committed::{self, Committed};
 use crate::core::compact_block::{CompactBlock, CompactBlockBody};
 use crate::core::hash::{DefaultHashable, Hash, Hashed, ZERO_HASH};
 use crate::core::verifier_cache::VerifierCache;
+use crate::core::VersionedPriceEncoded;
 use crate::core::{
 	transaction, Commitment, Input, InputEx, KernelFeatures, Output, OutputEx, Transaction,
 	TransactionBody, TxKernel, Weighting,
@@ -241,6 +242,10 @@ pub struct BlockHeader {
 	pub output_ii_mmr_size: u64,
 	/// Total size of the kernel MMR after applying this block
 	pub kernel_mmr_size: u64,
+	/// Median Price
+	//pub median_price: VersionedPriceEncoded,
+	/// Merklish root of all selected ExchangeRates in this block
+	//pub price_root: Hash,
 	/// Proof of work and related
 	pub pow: ProofOfWork,
 }
@@ -260,6 +265,7 @@ impl Default for BlockHeader {
 			output_i_mmr_size: 0,
 			output_ii_mmr_size: 0,
 			kernel_mmr_size: 0,
+			//median_price:
 			pow: ProofOfWork::default(),
 		}
 	}

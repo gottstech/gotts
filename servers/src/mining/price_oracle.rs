@@ -27,7 +27,10 @@ use crate::chain::{self, SyncState};
 use crate::common::types::Error;
 use crate::common::types::PriceOracleServerConfig;
 use crate::core::consensus;
-use crate::core::core::price::{ExchangeRate, ExchangeRates};
+use crate::core::core::price::{
+	calculate_full_price_pairs, encode_price_feeder, ExchangeRate, ExchangeRates,
+	GOTTS_PRICE_PRECISION,
+};
 use crate::core::core::verifier_cache::VerifierCache;
 use crate::gotts::price_pool::PricePool;
 use crate::p2p;
@@ -36,9 +39,6 @@ use crate::util::secp::{self, Signature};
 use crate::util::OneTime;
 use crate::util::{to_hex, RwLock, StopState};
 use diff0::{self, diff0_compress, diff0_decompress};
-
-/// The price data precision in fraction (1/x)
-pub const GOTTS_PRICE_PRECISION: f64 = 1_000_000_000.0_f64;
 
 /// Call the oracle API to create a price feeder message.
 fn create_price_msg(dest: &str) -> Result<Vec<ExchangeRate>, Error> {
@@ -262,10 +262,10 @@ impl PriceOracleServer {
 					}
 				}
 
-				if let Err(e) = self.calculate_full_price_pairs(&rates) {
+				if let Err(e) = calculate_full_price_pairs(&rates) {
 					warn!("price_encode failed: {:?}", e);
 				} else {
-					let serialized_price = self.encode_price_feeder(&prev_price_rates, &rates);
+					let serialized_price = encode_price_feeder(&prev_price_rates, &rates);
 
 					prev_price_rates = Some(rates.iter().map(|r| r.rate).collect());
 					let decoded_diffs = diff0_decompress(serialized_price).unwrap();
@@ -283,118 +283,5 @@ impl PriceOracleServer {
 			}
 			thread::sleep(time::Duration::from_secs(60));
 		}
-	}
-
-	fn encode_price_feeder(
-		&self,
-		previous_price_pairs: &Option<Vec<f64>>,
-		aggregated_rates: &Vec<ExchangeRate>,
-	) -> Vec<u8> {
-		let price_pairs: Vec<f64> = aggregated_rates.iter().map(|r| r.rate).collect();
-		let precision = GOTTS_PRICE_PRECISION;
-
-		let pairs = if let Some(previous) = previous_price_pairs {
-			// only encode the difference values, with 10^-9 precision.
-			assert_eq!(previous.len(), price_pairs.len());
-			let diff: Vec<f64> = price_pairs
-				.iter()
-				.zip(previous)
-				.map(|(a, b)| ((a - b) * precision).round() / precision)
-				.collect();
-			debug!("diff price pairs = {:?}", diff);
-			diff
-		} else {
-			// encode the raw values
-			debug!("raw price pairs = {:?}", price_pairs);
-			price_pairs
-		};
-
-		// convert float64 to i64 with 10^-9 precision
-		let i64_pairs: Vec<i64> = pairs
-			.iter()
-			.map(|r| (*r * precision).round() as i64)
-			.collect();
-
-		// encode
-		let serialized_buffer = diff0_compress(i64_pairs).unwrap();
-		debug!(
-			"serialized_buffer: len = {}, data = {}",
-			serialized_buffer.len(),
-			to_hex(serialized_buffer.clone())
-		);
-		serialized_buffer
-	}
-
-	fn calculate_full_price_pairs(
-		&self,
-		aggregated_rates: &Vec<ExchangeRate>,
-	) -> Result<(), Error> {
-		let currencies_a = vec!["EUR", "GBP", "BTC", "ETH"];
-		let currencies_b = vec!["CNY", "JPY", "CAD"];
-		let mut calculated_rates: Vec<ExchangeRate> = vec![];
-
-		// firstly, get/calculate all x over USD rates
-		for from in currencies_a.clone() {
-			let to = "USD";
-			let index = aggregated_rates
-				.iter()
-				.position(|r| r.from == from && r.to == to)
-				.ok_or(Error::General(format!("price {}2{} not found", from, to)))?;
-			calculated_rates.push(aggregated_rates[index].clone());
-		}
-		for to in currencies_b.clone().into_iter() {
-			let index = aggregated_rates
-				.iter()
-				.position(|r| r.from == "USD" && r.to == to)
-				.ok_or(Error::General(format!("price USD2{} not found", to)))?;
-			let rate = ExchangeRate {
-				from: to.to_string(),
-				to: "USD".to_string(),
-				rate: 1f64 / aggregated_rates[index].rate,
-				date: aggregated_rates[index].date,
-			};
-			calculated_rates.push(rate);
-		}
-
-		// secondly, calculate/get 1/(x/USD) to get the rates of USD over all x.
-		for (index, to) in currencies_a.iter().enumerate() {
-			let rate = ExchangeRate {
-				from: "USD".to_string(),
-				to: to.to_string(),
-				rate: 1f64 / calculated_rates[index].rate,
-				date: calculated_rates[index].date,
-			};
-			calculated_rates.push(rate);
-		}
-		for to in currencies_b.clone().into_iter() {
-			let index = aggregated_rates
-				.iter()
-				.position(|r| r.from == "USD" && r.to == to)
-				.ok_or(Error::General(format!("price USD2{} not found", to)))?;
-			calculated_rates.push(aggregated_rates[index].clone());
-		}
-
-		// thirdly, calculate all others
-		let currencies = [&currencies_a[..], &currencies_b[..]].concat();
-		for (i, from) in currencies.iter().enumerate() {
-			for (j, to) in currencies.iter().enumerate() {
-				if i != j {
-					let rate = ExchangeRate {
-						from: from.to_string(),
-						to: to.to_string(),
-						rate: calculated_rates[i].rate / calculated_rates[j].rate,
-						date: calculated_rates[i].date,
-					};
-					calculated_rates.push(rate);
-				}
-			}
-		}
-
-		trace!(
-			"price pairs = {}",
-			serde_json::to_string_pretty(&calculated_rates).unwrap()
-		);
-
-		Ok(())
 	}
 }
