@@ -20,6 +20,7 @@ use crate::chain::{self, SyncState};
 use crate::common::types::PriceOracleServerConfig;
 use crate::core::consensus;
 use crate::core::core::hash::{Hash, Hashed};
+use crate::core::core::id::{ShortId, ShortIdentifiable};
 use crate::core::core::price::{ExchangeRates, PoolError};
 use crate::core::core::verifier_cache::VerifierCache;
 use crate::core::core::BlockHeader;
@@ -133,5 +134,65 @@ impl PricePool {
 			.filter(|&p| p.date != oldest_date)
 			.count();
 		self.entries.truncate(count);
+	}
+
+	/// Take pool prices with the chain head as previous, filtering and ordering them in a way that's
+	/// appropriate to put in a mined block.
+	pub fn prepare_mineable_prices(
+		&self,
+		header: &BlockHeader,
+	) -> Result<Vec<ExchangeRates>, PoolError> {
+		// Get all the new prices, sort and remove duplicated prices from same source.
+		let prev_timestamp = header.timestamp;
+		let mut mineable_prices: Vec<ExchangeRates> = self
+			.entries
+			.clone()
+			.into_iter()
+			.filter(|p| p.date > prev_timestamp)
+			.collect();
+		mineable_prices.sort_by(|a, b| a.date.partial_cmp(&b.date).unwrap());
+		mineable_prices.dedup_by_key(|p| p.source_uid);
+
+		// Select part of feeders
+		assert!(mineable_prices.len() <= consensus::price_feeders_list().len());
+		mineable_prices.sort_unstable();
+
+		Ok(mineable_prices)
+	}
+
+	/// Query the price pool for all known prices based on price short_ids
+	/// from the provided compact_block.
+	/// Note: does not validate that we return the full set of required prices.
+	/// The caller will need to validate that themselves.
+	pub fn retrieve_prices(
+		&self,
+		hash: Hash,
+		nonce: u64,
+		kern_ids: &[ShortId],
+	) -> (Vec<ExchangeRates>, Vec<ShortId>) {
+		let mut prices = Vec::with_capacity(kern_ids.len());
+		let mut found_ids = Vec::with_capacity(kern_ids.len());
+
+		// Rehash all entries in the pool using short_ids based on provided hash and nonce.
+		for p in &self.entries {
+			// rehash each kernel to calculate the block specific short_id
+			let short_id = p.short_id(&hash, nonce);
+			if kern_ids.contains(&short_id) {
+				prices.push(p.clone());
+				found_ids.push(short_id);
+			}
+			if found_ids.len() == kern_ids.len() {
+				break;
+			}
+		}
+		prices.dedup();
+		(
+			prices,
+			kern_ids
+				.into_iter()
+				.filter(|id| !found_ids.contains(id))
+				.cloned()
+				.collect(),
+		)
 	}
 }

@@ -28,8 +28,7 @@ use crate::common::types::Error;
 use crate::common::types::PriceOracleServerConfig;
 use crate::core::consensus;
 use crate::core::core::price::{
-	calculate_full_price_pairs, encode_price_feeder, ExchangeRate, ExchangeRates,
-	GOTTS_PRICE_PRECISION,
+	calculate_full_price_pairs, decode_price, encode_price, ExchangeRate, ExchangeRates,
 };
 use crate::core::core::verifier_cache::VerifierCache;
 use crate::gotts::price_pool::PricePool;
@@ -38,7 +37,6 @@ use crate::util::file::get_first_line;
 use crate::util::secp::{self, Signature};
 use crate::util::OneTime;
 use crate::util::{RwLock, StopState};
-use diff0::{self, diff0_decompress};
 
 /// Call the oracle API to create a price feeder message.
 fn create_price_msg(dest: &str) -> Result<Vec<ExchangeRate>, Error> {
@@ -203,8 +201,6 @@ impl PriceOracleServer {
 			oracle_server_url,
 		);
 
-		let precision = GOTTS_PRICE_PRECISION;
-		let mut prev_price_rates: Option<Vec<f64>> = None;
 		'restart_querying: loop {
 			// get the latest chain state
 			let head = self.chain.head().unwrap();
@@ -265,16 +261,8 @@ impl PriceOracleServer {
 				if let Err(e) = calculate_full_price_pairs(&rates) {
 					warn!("price_encode failed: {:?}", e);
 				} else {
-					let serialized_price = encode_price_feeder(&prev_price_rates, &rates);
-
-					prev_price_rates = Some(rates.iter().map(|r| r.rate).collect());
-					let decoded_diffs = diff0_decompress(serialized_price).unwrap();
-					// convert i64 to float64 with 10^-9 precision
-					let diffs: Vec<f64> = decoded_diffs
-						.iter()
-						.map(|r| *r as f64 / precision)
-						.collect();
-					debug!("deco price pairs = {:?}", diffs);
+					let fixed_point_price = encode_price(&rates.iter().map(|r| r.rate).collect());
+					debug!("deco price pairs = {:?}", decode_price(&fixed_point_price));
 				}
 			}
 

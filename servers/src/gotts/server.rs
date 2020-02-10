@@ -414,6 +414,7 @@ impl Server {
 			config.clone(),
 			self.chain.clone(),
 			self.tx_pool.clone(),
+			self.price_pool.clone(),
 			self.verifier_cache.clone(),
 			self.state_info.stratum_stats.clone(),
 		);
@@ -452,6 +453,7 @@ impl Server {
 			config.clone(),
 			self.chain.clone(),
 			self.tx_pool.clone(),
+			self.price_pool.clone(),
 			self.verifier_cache.clone(),
 			stop_state,
 			sync_state,

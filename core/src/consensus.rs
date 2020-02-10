@@ -383,6 +383,10 @@ pub fn price_feeders_list() -> &'static [&'static str] {
 	PRICE_FEEDERS_LIST_V0
 }
 
+/// Max price feeders in one block, selected from above lists with some algorithm.
+/// Note that we may increase this value in the future as we get more feeders.
+pub const BLOCK_MAX_FEEDERS: usize = 15;
+
 /// PriceVersion(0) currency pairs
 pub const CURRENCY_PAIRS_V0: &'static [&'static str] = &[
 	"BTC2USD", "ETH2USD", "EUR2USD", "GBP2USD", "USD2CNY", "USD2JPY", "USD2CAD",

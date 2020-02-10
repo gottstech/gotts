@@ -170,9 +170,28 @@ impl p2p::ChainAdapter for NetToChainAdapter {
 		);
 
 		let cb_hash = cb.hash();
+
+		let (prices, missing_short_ids) = {
+			self.price_pool
+				.read()
+				.retrieve_prices(cb.hash(), cb.nonce, cb.kern_ids())
+		};
+
+		debug!(
+			"compact_block_received: prices from price pool - {}, (unknown kern_ids: {})",
+			prices.len(),
+			missing_short_ids.len(),
+		);
+
+		// If we have missing prices then we know we cannot hydrate this compact block.
+		if missing_short_ids.len() > 0 {
+			self.request_block(&cb.header, peer_info);
+			return Ok(true);
+		}
+
 		if cb.kern_ids().is_empty() {
 			// push the freshly hydrated block through the chain pipeline
-			match core::Block::hydrate_from(cb, vec![]) {
+			match core::Block::hydrate_from(cb, prices, vec![]) {
 				Ok(block) => {
 					if !self.sync_state.is_syncing() {
 						for hook in &self.hooks {
@@ -203,17 +222,18 @@ impl p2p::ChainAdapter for NetToChainAdapter {
 			};
 
 			debug!(
-				"adapter: txs from tx pool - {}, (unknown kern_ids: {})",
+				"compact_block_received: txs from tx pool - {}, (unknown kern_ids: {})",
 				txs.len(),
 				missing_short_ids.len(),
 			);
 
-			// TODO - 3 scenarios here -
-			// 1) we hydrate a valid block (good to go)
-			// 2) we hydrate an invalid block (txs legit missing from our pool)
-			// 3) we hydrate an invalid block (peer sent us a "bad" compact block) - [TBD]
+			// If we have missing kernels then we know we cannot hydrate this compact block.
+			if missing_short_ids.len() > 0 {
+				self.request_block(&cb.header, peer_info);
+				return Ok(true);
+			}
 
-			let block = match core::Block::hydrate_from(cb.clone(), txs) {
+			let block = match core::Block::hydrate_from(cb.clone(), prices, txs) {
 				Ok(block) => {
 					if !self.sync_state.is_syncing() {
 						for hook in &self.hooks {

@@ -22,6 +22,7 @@ use rand::prelude::*;
 
 use crate::api;
 use crate::chain;
+use crate::core::core::price;
 use crate::core::global::ChainTypes;
 use crate::core::{core, libtx, pow};
 use crate::keychain;
@@ -52,6 +53,10 @@ pub enum Error {
 	Cuckoo(pow::Error),
 	/// Error originating from the transaction pool.
 	Pool(pool::PoolError),
+	/// Error originating from the price pool.
+	PricePool(price::PoolError),
+	/// Error originating from the price.
+	Price(price::Error),
 	/// Error originating from the keychain.
 	Keychain(keychain::Error),
 	/// Invalid Arguments.
@@ -66,6 +71,16 @@ pub enum Error {
 	General(String),
 }
 
+impl From<price::Error> for Error {
+	fn from(e: price::Error) -> Error {
+		Error::Price(e)
+	}
+}
+impl From<price::PoolError> for Error {
+	fn from(e: price::PoolError) -> Error {
+		Error::PricePool(e)
+	}
+}
 impl From<secp::Error> for Error {
 	fn from(e: secp::Error) -> Error {
 		Error::Secp(e)

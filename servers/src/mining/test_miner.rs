@@ -28,6 +28,7 @@ use crate::core::core::hash::{Hash, Hashed};
 use crate::core::core::verifier_cache::VerifierCache;
 use crate::core::core::{Block, BlockHeader};
 use crate::core::global;
+use crate::gotts::price_pool::PricePool;
 use crate::mining::mine_block;
 use crate::pool;
 use crate::util::StopState;
@@ -39,6 +40,7 @@ pub struct Miner {
 	config: StratumServerConfig,
 	chain: Arc<chain::Chain>,
 	tx_pool: Arc<RwLock<pool::TransactionPool>>,
+	price_pool: Arc<RwLock<PricePool>>,
 	verifier_cache: Arc<RwLock<dyn VerifierCache>>,
 	stop_state: Arc<StopState>,
 	sync_state: Arc<SyncState>,
@@ -54,6 +56,7 @@ impl Miner {
 		config: StratumServerConfig,
 		chain: Arc<chain::Chain>,
 		tx_pool: Arc<RwLock<pool::TransactionPool>>,
+		price_pool: Arc<RwLock<PricePool>>,
 		verifier_cache: Arc<RwLock<dyn VerifierCache>>,
 		stop_state: Arc<StopState>,
 		sync_state: Arc<SyncState>,
@@ -62,6 +65,7 @@ impl Miner {
 			config,
 			chain,
 			tx_pool,
+			price_pool,
 			verifier_cache,
 			debug_output_id: String::from("none"),
 			stop_state,
@@ -159,6 +163,7 @@ impl Miner {
 			let (mut b, block_fees) = mine_block::get_block(
 				&self.chain,
 				&self.tx_pool,
+				&self.price_pool,
 				self.verifier_cache.clone(),
 				key_id.clone(),
 				wallet_listener_url.clone(),

@@ -18,15 +18,19 @@ use chrono::{DateTime, Duration, NaiveDateTime, Timelike, Utc};
 use itertools::Itertools;
 
 use crate::consensus;
-use crate::core::hash::{DefaultHashable, Hashed};
+use crate::core::hash::{DefaultHashable, Hash, Hashed};
+use crate::core::pmmr::{VecBackend, PMMR};
 use crate::core::verifier_cache::VerifierCache;
 use crate::libtx::secp_ser;
-use crate::ser::{self, read_multi, Readable, Reader, Writeable, Writer};
+use crate::ser::{
+	self, read_multi, FixedLength, PMMRIndexHashable, PMMRable, Readable, Reader,
+	VerifySortedAndUnique, Writeable, Writer,
+};
 use crate::util::secp::{self, PublicKey, Signature};
 use crate::util::static_secp_instance;
-use crate::util::{to_hex, RwLock};
-use diff0::{self, diff0_compress, diff0_decompress};
+use crate::util::RwLock;
 
+use std::cmp::Ordering;
 use std::sync::Arc;
 
 /// The price data precision in fraction (1/x)
@@ -46,7 +50,7 @@ pub struct ExchangeRate {
 }
 
 /// Data stored for the exchange rate of the currency pairs and price pairs.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExchangeRates {
 	/// Price pairs version
 	pub version: PriceVersion,
@@ -62,6 +66,26 @@ pub struct ExchangeRates {
 }
 
 impl DefaultHashable for ExchangeRates {}
+hashable_ord!(ExchangeRates);
+
+/// ExchangeRates are "variable size" but we need to implement FixedLength for legacy reasons.
+impl FixedLength for ExchangeRates {
+	const LEN: usize = 0;
+}
+
+impl PMMRable for ExchangeRates {
+	type E = Self;
+
+	fn as_elmt(&self) -> Self::E {
+		self.clone()
+	}
+}
+
+impl PMMRIndexHashable for ExchangeRates {
+	fn hash_with_index(&self, index: u64) -> Hash {
+		(index, self).hash()
+	}
+}
 
 impl ExchangeRates {
 	/// Construct the currency/price pairs from the raw ExchangeRate vector.
@@ -103,7 +127,7 @@ impl ExchangeRates {
 		}
 
 		Ok(ExchangeRates {
-			version: PriceVersion::Raw(0),
+			version: PriceVersion(0),
 			source_uid: price_feeder_source_uid,
 			pairs,
 			date,
@@ -146,6 +170,16 @@ impl ExchangeRates {
 			return Err(Error::Outdated);
 		}
 
+		{
+			let mut verifier = verifier.write();
+			if verifier
+				.filter_prices_sig_unverified(&[self.clone()])
+				.is_empty()
+			{
+				return Ok(());
+			}
+		}
+
 		let secp = static_secp_instance();
 		let secp = secp.lock();
 		let pubkey =
@@ -162,8 +196,36 @@ impl ExchangeRates {
 		) {
 			return Err(Error::IncorrectSignature);
 		}
+
+		let mut verifier = verifier.write();
+		verifier.add_prices_sig_verified(&[self.clone()]);
 		Ok(())
 	}
+}
+
+/// Batch signature verification.
+pub fn batch_sig_verify(prices: &Vec<ExchangeRates>) -> Result<(), Error> {
+	let len = prices.len();
+	let mut sigs: Vec<secp::Signature> = Vec::with_capacity(len);
+	let mut pubkeys: Vec<secp::key::PublicKey> = Vec::with_capacity(len);
+	let mut msgs: Vec<secp::Message> = Vec::with_capacity(len);
+
+	let secp = static_secp_instance();
+	let secp = secp.lock();
+
+	for price in prices {
+		sigs.push(price.sig.clone());
+		pubkeys.push(PublicKey::from_str(
+			consensus::price_feeders_list()[price.source_uid as usize],
+		)?);
+		msgs.push(price.price_sig_msg()?);
+	}
+
+	if !secp::aggsig::verify_batch(&secp, &sigs, &msgs, &pubkeys) {
+		return Err(Error::IncorrectSignature);
+	}
+
+	Ok(())
 }
 
 impl Readable for ExchangeRates {
@@ -200,114 +262,117 @@ impl Writeable for ExchangeRates {
 
 /// Encoded Price Data with PriceVersion
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct VersionedPriceEncoded {
+pub struct VersionedPrice {
 	/// Price version
 	pub version: PriceVersion,
-	/// Encoded Price Data, variable length vector
-	pub encoded_price: Vec<u8>,
+	/// Fixed Point Price Data, variable length vector
+	pub prices: Vec<i64>,
 }
 
-impl Writeable for VersionedPriceEncoded {
+impl Writeable for VersionedPrice {
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
 		self.version.write(writer)?;
-		writer.write_u16(self.encoded_price.len() as u16)?;
-		writer.write_fixed_bytes(&self.encoded_price)
+		writer.write_u16(self.prices.len() as u16)?;
+		self.prices.write(writer)?;
+		Ok(())
 	}
 }
 
-impl Readable for VersionedPriceEncoded {
-	fn read(reader: &mut dyn Reader) -> Result<VersionedPriceEncoded, ser::Error> {
+impl Readable for VersionedPrice {
+	fn read(reader: &mut dyn Reader) -> Result<VersionedPrice, ser::Error> {
 		let version = PriceVersion::read(reader)?;
-		let encoded_price_len = reader.read_u16()?;
-		let encoded_price = reader.read_fixed_bytes(encoded_price_len as usize)?;
-		Ok(VersionedPriceEncoded {
-			version,
-			encoded_price,
-		})
+		let prices_len = reader.read_u16()?;
+		let prices = read_multi(reader, prices_len as u64)?;
+
+		Ok(VersionedPrice { version, prices })
 	}
 }
 
-impl VersionedPriceEncoded {
-	/// Constructor
-	pub fn new(version: u16, encoded_price: Vec<u8>, is_raw: bool) -> VersionedPriceEncoded {
-		let version = match is_raw {
-			true => PriceVersion::Raw(version),
-			false => PriceVersion::Diff(version),
-		};
-		VersionedPriceEncoded {
-			version,
-			encoded_price,
-		}
-	}
-
+impl VersionedPrice {
 	/// Size of this object
 	pub fn size(&self) -> usize {
-		self.encoded_price.len() + 2
+		self.prices.len() * std::mem::size_of::<i64>() + std::mem::size_of::<u16>()
 	}
 }
 
-impl Default for VersionedPriceEncoded {
-	fn default() -> VersionedPriceEncoded {
-		let now = Utc::now();
-		let mut default_rates: Vec<ExchangeRate> = vec![];
-		for pair in consensus::currency_pairs() {
-			let split = pair.clone().split("2");
-			let currency: Vec<&str> = split.collect();
-			assert_eq!(2, currency.len());
-			default_rates.push(ExchangeRate {
-				from: currency[0].to_string(),
-				to: currency[1].to_string(),
-				rate: 0.0f64,
-				date: now,
-			});
+impl Default for VersionedPrice {
+	fn default() -> VersionedPrice {
+		let mut zero_prices: Vec<f64> = Vec::with_capacity(consensus::currency_pairs().len());
+		for _ in 0..consensus::currency_pairs().len() {
+			zero_prices.push(0f64);
 		}
-
-		let bin = encode_price_feeder(&None, &default_rates);
-
-		VersionedPriceEncoded {
-			version: PriceVersion::Raw(0),
-			encoded_price: bin,
+		VersionedPrice {
+			version: PriceVersion(0),
+			prices: encode_price(&zero_prices),
 		}
 	}
+}
+
+/// Util to calculate MMR root
+pub fn prices_root(prices: &Vec<ExchangeRates>) -> Result<Hash, Error> {
+	let mut ba = VecBackend::new();
+	let mut pmmr = PMMR::new(&mut ba);
+	for price in prices {
+		pmmr.push(price).unwrap();
+	}
+	Ok(pmmr.root().map_err(|_| Error::InvalidMMRroot)?)
+}
+
+/// Util to calculate median price based on selected prices list
+pub fn get_median_price(prices: &Vec<ExchangeRates>) -> Result<VersionedPrice, Error> {
+	prices.verify_sorted_and_unique()?;
+	prices
+		.iter()
+		.position(|r| r.version != PriceVersion(0))
+		.ok_or(Error::InvalidVersion)?;
+
+	let pairs_size = consensus::price_feeders_list().len();
+	prices
+		.iter()
+		.position(|r| r.pairs.len() != pairs_size)
+		.ok_or(Error::InvalidSize)?;
+
+	let float_point_prices: Vec<Vec<f64>> = prices.iter().map(|r| r.pairs.clone()).collect();
+	let mut median_prices: Vec<i64> = Vec::with_capacity(pairs_size);
+	for i in 0..pairs_size {
+		let mut price_list: Vec<i64> =
+			encode_price(&float_point_prices.iter().map(|a| a[i]).collect());
+		price_list.sort();
+		median_prices.push(price_list[price_list.len() / 2]);
+	}
+
+	Ok(VersionedPrice {
+		version: PriceVersion(0),
+		prices: median_prices,
+	})
 }
 
 /// Some type safety around price versioning.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub enum PriceVersion {
-	/// Differential Price
-	Diff(u16),
-	/// Raw Price
-	Raw(u16),
-}
+pub struct PriceVersion(u16);
 
 impl From<PriceVersion> for u16 {
 	fn from(ver: PriceVersion) -> u16 {
-		match ver {
-			PriceVersion::Diff(v) => v | 0x8000u16,
-			PriceVersion::Raw(v) => v & 0x7fffu16,
-		}
+		ver.0
 	}
 }
 
 impl From<u16> for PriceVersion {
 	fn from(v: u16) -> PriceVersion {
-		match v >> 15 {
-			0 => PriceVersion::Diff(v & 0x7fffu16),
-			_ => PriceVersion::Raw(v & 0x7fffu16),
-		}
+		PriceVersion(v)
 	}
 }
 
 impl Writeable for PriceVersion {
 	fn write<W: Writer>(&self, writer: &mut W) -> Result<(), ser::Error> {
-		writer.write_u16(u16::from(self.clone()))
+		writer.write_u16(self.0)
 	}
 }
 
 impl Readable for PriceVersion {
 	fn read(reader: &mut dyn Reader) -> Result<PriceVersion, ser::Error> {
 		let version = reader.read_u16()?;
-		Ok(PriceVersion::from(version))
+		Ok(PriceVersion(version))
 	}
 }
 
@@ -332,6 +397,15 @@ pub enum Error {
 	/// Outdated error
 	#[fail(display = "Outdated price")]
 	Outdated,
+	/// Invalid version
+	#[fail(display = "Invalid version")]
+	InvalidVersion,
+	/// Invalid size
+	#[fail(display = "Invalid size")]
+	InvalidSize,
+	/// Invalid MMR root
+	#[fail(display = "Invalid MMR root")]
+	InvalidMMRroot,
 	/// Generic error
 	#[fail(display = "Generic Error: {}", _0)]
 	Generic(String),
@@ -372,44 +446,27 @@ impl From<Error> for PoolError {
 	}
 }
 
-/// Diff0 compression encoder to convert float price into fixed point binary
-pub fn encode_price_feeder(
-	previous_price_pairs: &Option<Vec<f64>>,
-	aggregated_rates: &Vec<ExchangeRate>,
-) -> Vec<u8> {
-	let price_pairs: Vec<f64> = aggregated_rates.iter().map(|r| r.rate).collect();
-	let precision = GOTTS_PRICE_PRECISION;
-
-	let pairs = if let Some(previous) = previous_price_pairs {
-		// only encode the difference values, with 10^-9 precision.
-		assert_eq!(previous.len(), price_pairs.len());
-		let diff: Vec<f64> = price_pairs
-			.iter()
-			.zip(previous)
-			.map(|(a, b)| ((a - b) * precision).round() / precision)
-			.collect();
-		debug!("diff price pairs = {:?}", diff);
-		diff
-	} else {
-		// encode the raw values
-		debug!("raw price pairs = {:?}", price_pairs);
-		price_pairs
-	};
-
+/// Util to convert float price into fixed point price
+pub fn encode_price(prices: &Vec<f64>) -> Vec<i64> {
 	// convert float64 to i64 with 10^-9 precision
-	let i64_pairs: Vec<i64> = pairs
+	let price_pairs: Vec<i64> = prices
 		.iter()
-		.map(|r| (*r * precision).round() as i64)
+		.map(|r| (*r * GOTTS_PRICE_PRECISION).round() as i64)
 		.collect();
 
-	// encode
-	let serialized_buffer = diff0_compress(i64_pairs).unwrap();
-	debug!(
-		"serialized_buffer: len = {}, data = {}",
-		serialized_buffer.len(),
-		to_hex(serialized_buffer.clone())
-	);
-	serialized_buffer
+	debug!("encode price pairs = {:?}", price_pairs);
+	price_pairs
+}
+
+/// Util to convert fixed point price into float price
+pub fn decode_price(encoded: &Vec<i64>) -> Vec<f64> {
+	// convert i64 to float64 with 10^-9 precision
+	let decoded: Vec<f64> = encoded
+		.iter()
+		.map(|r| *r as f64 / GOTTS_PRICE_PRECISION)
+		.collect();
+	debug!("decode price pairs = {:?}", decoded);
+	decoded
 }
 
 /// Util to calculate full price pairs from the basic pairs
