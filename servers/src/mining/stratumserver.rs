@@ -391,7 +391,12 @@ impl Handler {
 		}
 
 		// Get share difficulty
-		share_difficulty = b.header.pow.to_difficulty(b.header.height).to_num();
+		share_difficulty = b
+			.header
+			.pow
+			.to_difficulty(b.header.height)
+			.enlarge(b.header.price_mmr_size)
+			.to_num();
 		// If the difficulty is too low its an error
 		if share_difficulty < state.minimum_share_difficulty {
 			// Return error status

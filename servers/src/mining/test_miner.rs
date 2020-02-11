@@ -115,7 +115,11 @@ impl Miner {
 				.unwrap();
 			if let Ok(proofs) = ctx.find_cycles() {
 				b.header.pow.proof = proofs[0].clone();
-				let proof_diff = b.header.pow.to_difficulty(b.header.height);
+				let proof_diff = b
+					.header
+					.pow
+					.to_difficulty(b.header.height)
+					.enlarge(b.header.price_mmr_size);
 				if proof_diff >= (b.header.total_difficulty() - head.total_difficulty()) {
 					return true;
 				}
