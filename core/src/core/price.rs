@@ -309,13 +309,16 @@ impl Default for VersionedPrice {
 }
 
 /// Util to calculate MMR root
-pub fn prices_root(prices: &Vec<ExchangeRates>) -> Result<Hash, Error> {
+pub fn prices_root(prices: &Vec<ExchangeRates>) -> Result<(Hash, u16), Error> {
 	let mut ba = VecBackend::new();
 	let mut pmmr = PMMR::new(&mut ba);
 	for price in prices {
 		pmmr.push(price).unwrap();
 	}
-	Ok(pmmr.root().map_err(|_| Error::InvalidMMRroot)?)
+	Ok((
+		pmmr.root().map_err(|_| Error::InvalidMMRroot)?,
+		pmmr.unpruned_size() as u16,
+	))
 }
 
 /// Util to calculate median price based on selected prices list

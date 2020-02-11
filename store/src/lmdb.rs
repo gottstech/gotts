@@ -16,7 +16,6 @@
 //! Storage of core types using LMDB.
 
 use std::fs;
-use std::io::{self, Read, Write};
 use std::marker;
 use std::sync::Arc;
 
@@ -39,7 +38,7 @@ const RESIZE_MIN_TARGET_PERCENT: f32 = 0.65;
 pub enum Error {
 	/// Wraps an io error produced when reading or writing
 	#[fail(display = "IOErr: {}", _0)]
-	IOErr(String, io::ErrorKind),
+	IOErr(String, std::io::ErrorKind),
 	/// Couldn't find what we were looking for
 	#[fail(display = "DB Not Found Error: {}", _0)]
 	NotFoundErr(String),

@@ -189,7 +189,9 @@ fn build_block(
 	// Extract current "mineable" prices from the pool.
 	b.prices = price_pool.read().prepare_mineable_prices(&head)?;
 	b.header.median_price = get_median_price(&b.prices)?;
-	b.header.price_root = prices_root(&b.prices)?;
+	let (price_root, price_mmr_size) = prices_root(&b.prices)?;
+	b.header.price_root = price_root;
+	b.header.price_mmr_size = price_mmr_size;
 
 	// making sure we're not spending time mining a useless block
 	let complete_inputs = chain.get_complete_inputs(&b.inputs())?;

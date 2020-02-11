@@ -56,6 +56,8 @@ pub enum Error {
 	PriceRootMismatch,
 	/// The price source uid is invalid
 	PriceInvalidSource,
+	/// The price source uid is duplicated
+	PriceDuplicatedSource,
 	/// The price outdated
 	PriceOutdated,
 	/// The total kernel sum on the block header is wrong
@@ -264,8 +266,10 @@ pub struct BlockHeader {
 	pub kernel_mmr_size: u64,
 	/// Median Price
 	pub median_price: VersionedPrice,
-	/// Merklish root of all selected ExchangeRates in this block
+	/// Merklish root of the ExchangeRates in this block
 	pub price_root: Hash,
+	/// Size of the ExchangeRates MMR in this block
+	pub price_mmr_size: u16,
 	/// Proof of work and related
 	pub pow: ProofOfWork,
 }
@@ -287,6 +291,7 @@ impl Default for BlockHeader {
 			kernel_mmr_size: 0,
 			median_price: VersionedPrice::default(),
 			price_root: ZERO_HASH,
+			price_mmr_size: 0,
 			pow: ProofOfWork::default(),
 		}
 	}
@@ -337,6 +342,7 @@ impl Readable for BlockHeader {
 			ser_multiread!(reader, read_u64, read_u64, read_u64);
 		let median_price = VersionedPrice::read(reader)?;
 		let price_root = Hash::read(reader)?;
+		let price_mmr_size = reader.read_u16()?;
 		let pow = ProofOfWork::read(reader)?;
 
 		if timestamp > MAX_DATE.and_hms(0, 0, 0).timestamp()
@@ -367,6 +373,7 @@ impl Readable for BlockHeader {
 			kernel_mmr_size,
 			median_price,
 			price_root,
+			price_mmr_size,
 			pow,
 		})
 	}
@@ -391,6 +398,7 @@ impl BlockHeader {
 		);
 		self.median_price.write(writer)?;
 		writer.write_fixed_bytes(&self.price_root)?;
+		writer.write_u16(self.price_mmr_size)?;
 		Ok(())
 	}
 
@@ -769,25 +777,41 @@ impl Block {
 
 	/// Verify the prices
 	fn verify_prices(&self, verifier: Arc<RwLock<dyn VerifierCache>>) -> Result<(), Error> {
+		// check whether sorted
 		self.prices.verify_sorted_and_unique()?;
 		let max = consensus::price_feeders_list().len();
+
+		// check whether all source uid are valid
 		self.prices
 			.iter()
 			.position(|p| p.source_uid as usize >= max)
 			.ok_or(Error::PriceInvalidSource)?;
 
+		// check whether all source uid are unique
+		let mut source_uid: Vec<u16> = self.prices.iter().map(|p| p.source_uid).collect();
+		source_uid.sort();
+		source_uid.dedup();
+		if source_uid.len() < self.prices.len() {
+			return Err(Error::PriceDuplicatedSource);
+		}
+
+		// check whether all date are valid
 		self.prices
 			.iter()
 			.position(|p| p.date < self.header.timestamp)
 			.ok_or(Error::PriceOutdated)?;
 
+		// check whether the median price of the header match the prices in block
 		if self.header.median_price != get_median_price(&self.prices)? {
 			return Err(Error::PriceMismatch);
 		}
-		if self.header.price_root != prices_root(&self.prices)? {
+
+		// check whether the prices MMR root match
+		if (self.header.price_root, self.header.price_mmr_size) != prices_root(&self.prices)? {
 			return Err(Error::PriceRootMismatch);
 		}
 
+		// prices signature verification
 		let prices = {
 			let mut verifier = verifier.write();
 			verifier.filter_prices_sig_unverified(&self.prices)
