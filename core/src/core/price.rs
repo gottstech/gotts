@@ -21,6 +21,7 @@ use crate::consensus;
 use crate::core::hash::{DefaultHashable, Hash, Hashed};
 use crate::core::pmmr::{VecBackend, PMMR};
 use crate::core::verifier_cache::VerifierCache;
+use crate::keychain::{ExtKeychain, Keychain};
 use crate::libtx::secp_ser;
 use crate::ser::{
 	self, read_multi, FixedLength, PMMRIndexHashable, PMMRable, Readable, Reader,
@@ -323,17 +324,27 @@ pub fn prices_root(prices: &Vec<ExchangeRates>) -> Result<(Hash, u16), Error> {
 
 /// Util to calculate median price based on selected prices list
 pub fn get_median_price(prices: &Vec<ExchangeRates>) -> Result<VersionedPrice, Error> {
+	if prices.is_empty() {
+		return Err(Error::EmptyPrice);
+	}
+
 	prices.verify_sorted_and_unique()?;
-	prices
+	if prices
 		.iter()
 		.position(|r| r.version != PriceVersion(0))
-		.ok_or(Error::InvalidVersion)?;
+		.is_some()
+	{
+		return Err(Error::InvalidVersion);
+	}
 
-	let pairs_size = consensus::price_feeders_list().len();
-	prices
+	let pairs_size = consensus::currency_pairs().len();
+	if prices
 		.iter()
 		.position(|r| r.pairs.len() != pairs_size)
-		.ok_or(Error::InvalidSize)?;
+		.is_some()
+	{
+		return Err(Error::InvalidSize);
+	}
 
 	let float_point_prices: Vec<Vec<f64>> = prices.iter().map(|r| r.pairs.clone()).collect();
 	let mut median_prices: Vec<i64> = Vec::with_capacity(pairs_size);
@@ -341,6 +352,7 @@ pub fn get_median_price(prices: &Vec<ExchangeRates>) -> Result<VersionedPrice, E
 		let mut price_list: Vec<i64> =
 			encode_price(&float_point_prices.iter().map(|a| a[i]).collect());
 		price_list.sort();
+		assert_ne!(price_list.len(), 0);
 		median_prices.push(price_list[price_list.len() / 2]);
 	}
 
@@ -352,7 +364,7 @@ pub fn get_median_price(prices: &Vec<ExchangeRates>) -> Result<VersionedPrice, E
 
 /// Some type safety around price versioning.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct PriceVersion(u16);
+pub struct PriceVersion(pub u16);
 
 impl From<PriceVersion> for u16 {
 	fn from(ver: PriceVersion) -> u16 {
@@ -406,6 +418,9 @@ pub enum Error {
 	/// Invalid size
 	#[fail(display = "Invalid size")]
 	InvalidSize,
+	/// Empty price
+	#[fail(display = "Empty price")]
+	EmptyPrice,
 	/// Invalid MMR root
 	#[fail(display = "Invalid MMR root")]
 	InvalidMMRroot,
@@ -457,7 +472,7 @@ pub fn encode_price(prices: &Vec<f64>) -> Vec<i64> {
 		.map(|r| (*r * GOTTS_PRICE_PRECISION).round() as i64)
 		.collect();
 
-	debug!("encode price pairs = {:?}", price_pairs);
+	trace!("encode price pairs = {:?}", price_pairs);
 	price_pairs
 }
 
@@ -468,7 +483,7 @@ pub fn decode_price(encoded: &Vec<i64>) -> Vec<f64> {
 		.iter()
 		.map(|r| *r as f64 / GOTTS_PRICE_PRECISION)
 		.collect();
-	debug!("decode price pairs = {:?}", decoded);
+	trace!("decode price pairs = {:?}", decoded);
 	decoded
 }
 
@@ -543,16 +558,43 @@ pub fn calculate_full_price_pairs(aggregated_rates: &Vec<ExchangeRate>) -> Resul
 	Ok(())
 }
 
+/// Util for AutomatedTest price feeder keychain
+pub fn auto_test_feeder_keychain() -> ExtKeychain {
+	let rec_phrase_1 =
+		"fat twenty mean degree forget shell check candy immense awful \
+		 flame next during february bulb bike sun wink theory day kiwi embrace peace lunch";
+	ExtKeychain::from_mnemonic(rec_phrase_1, "", false).unwrap()
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::consensus;
+	use crate::keychain::ExtKeychain;
 	use gotts_util::to_hex;
+
+	#[test]
+	fn test_automated_test_feeder_keychain() {
+		let keychain = auto_test_feeder_keychain();
+
+		let key_id_0 = ExtKeychain::derive_key_id(3, 1, 0, 0, 0);
+		let prikey_0 = keychain.derive_key(&key_id_0).unwrap();
+		let pubkey_0 = PublicKey::from_secret_key(keychain.secp(), &prikey_0).unwrap();
+
+		let price_feeders_list = consensus::AUTOTEST_PRICE_FEEDERS_LIST;
+		assert_eq!(pubkey_0.to_string(), price_feeders_list[0]);
+
+		let key_id_1 = ExtKeychain::derive_key_id(3, 1, 0, 1, 0);
+		let prikey_1 = keychain.derive_key(&key_id_1).unwrap();
+		let pubkey_1 = PublicKey::from_secret_key(keychain.secp(), &prikey_1).unwrap();
+		assert_eq!(pubkey_1.to_string(), price_feeders_list[1]);
+	}
 
 	#[test]
 	fn price_sig_msg() {
 		let date = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0x5e19a248, 0), Utc);
 		let rates = ExchangeRates {
-			version: PriceVersion::default(),
+			version: PriceVersion(0),
 			source_uid: 0,
 			pairs: vec![
 				7944.59_f64,
@@ -571,7 +613,7 @@ mod tests {
 		assert_eq!(
 			msg,
 			secp::Message::from_str(
-				"b4de08c8eccd8214adafd8db438fcbd17afafb9d128066df2bc50b228ba1945a"
+				"b0d37fd9d3a0c78543878716f0623b01188305b9bfc81f9b2ee71d0cba595522"
 			)
 			.unwrap(),
 		);

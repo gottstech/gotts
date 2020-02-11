@@ -76,7 +76,7 @@ fn test_verifier_cache_unlocker() {
 	// Add our inputs to the cache.
 	{
 		let mut cache = cache.write();
-		cache.add_unlocker_verified(inputs.clone());
+		cache.add_unlocker_verified(&inputs.clone());
 	}
 
 	// Check it shows as verified according to the cache.

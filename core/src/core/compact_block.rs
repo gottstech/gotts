@@ -24,7 +24,7 @@ use crate::core::{Output, ShortId, TxKernel};
 use crate::ser::{self, read_multi, Readable, Reader, VerifySortedAndUnique, Writeable, Writer};
 
 /// Container for full (full) outputs and kernels and kern_ids for a compact block.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct CompactBlockBody {
 	/// List of full outputs - specifically the coinbase output(s)
 	pub out_full: Vec<Output>,
@@ -128,7 +128,7 @@ impl Into<CompactBlockBody> for CompactBlock {
 /// A node is reasonably likely to have already seen all tx data (tx broadcast
 /// before block) and can go request missing tx data from peers if necessary to
 /// hydrate a compact block into a full block.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct CompactBlock {
 	/// The header with metadata and commitments to the rest of the data
 	pub header: BlockHeader,

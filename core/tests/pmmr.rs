@@ -13,11 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod vec_backend;
+pub mod vec_backend;
 
 use self::core::core::hash::Hash;
 use self::core::core::pmmr::{self, VecBackend, PMMR};
 use self::core::ser::PMMRIndexHashable;
+use crate::vec_backend::TestElem;
 use chrono::prelude::Utc;
 use gotts_core as core;
 use std::u64;

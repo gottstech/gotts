@@ -18,6 +18,7 @@
 use crate::util::RwLock;
 use chrono::naive::{MAX_DATE, MIN_DATE};
 use chrono::prelude::{DateTime, NaiveDateTime, Utc};
+use chrono::Duration;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::iter::FromIterator;
@@ -782,10 +783,14 @@ impl Block {
 		let max = consensus::price_feeders_list().len();
 
 		// check whether all source uid are valid
-		self.prices
+		if self
+			.prices
 			.iter()
 			.position(|p| p.source_uid as usize >= max)
-			.ok_or(Error::PriceInvalidSource)?;
+			.is_some()
+		{
+			return Err(Error::PriceInvalidSource);
+		}
 
 		// check whether all source uid are unique
 		let mut source_uid: Vec<u16> = self.prices.iter().map(|p| p.source_uid).collect();
@@ -796,10 +801,14 @@ impl Block {
 		}
 
 		// check whether all date are valid
-		self.prices
+		if self
+			.prices
 			.iter()
-			.position(|p| p.date < self.header.timestamp)
-			.ok_or(Error::PriceOutdated)?;
+			.position(|p| p.date + Duration::seconds(60) < self.header.timestamp)
+			.is_some()
+		{
+			return Err(Error::PriceOutdated);
+		}
 
 		// check whether the median price of the header match the prices in block
 		if self.header.median_price != get_median_price(&self.prices)? {

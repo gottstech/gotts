@@ -27,6 +27,8 @@ use crate::core::core::BlockHeader;
 use crate::p2p;
 use crate::util::OneTime;
 use crate::util::RwLock;
+use chrono::prelude::{DateTime, Utc};
+use chrono::Duration;
 
 /// Price pool implementation
 pub struct PricePool {
@@ -140,15 +142,15 @@ impl PricePool {
 	/// appropriate to put in a mined block.
 	pub fn prepare_mineable_prices(
 		&self,
-		header: &BlockHeader,
+		timestamp: DateTime<Utc>,
 	) -> Result<Vec<ExchangeRates>, PoolError> {
 		// Get all the new prices, sort and remove duplicated prices from same source.
-		let prev_timestamp = header.timestamp;
+		// The prices timestamp is at least within 60 seconds.
 		let mut mineable_prices: Vec<ExchangeRates> = self
 			.entries
 			.clone()
 			.into_iter()
-			.filter(|p| p.date > prev_timestamp)
+			.filter(|p| p.date + Duration::seconds(60) > timestamp)
 			.collect();
 		mineable_prices.sort_by(|a, b| a.date.partial_cmp(&b.date).unwrap());
 		mineable_prices.dedup_by_key(|p| p.source_uid);

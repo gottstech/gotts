@@ -22,6 +22,7 @@ use self::core::core::block::Error::KernelLockHeight;
 use self::core::core::hash::{Hashed, ZERO_HASH};
 use self::core::core::verifier_cache::{LruVerifierCache, VerifierCache};
 use self::core::core::{aggregate, deaggregate, KernelFeatures, OutputEx, Transaction, Weighting};
+use self::core::global;
 use self::core::libtx::build::{
 	self, initial_tx, input, output, with_excess, with_fee, with_lock_height,
 };
@@ -590,6 +591,7 @@ fn tx_build_exchange() {
 
 #[test]
 fn reward_empty_block() {
+	global::set_mining_mode(global::ChainTypes::AutomatedTesting);
 	let keychain = keychain::ExtKeychain::from_random_seed(false).unwrap();
 	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
 	let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
@@ -606,6 +608,7 @@ fn reward_empty_block() {
 
 #[test]
 fn reward_with_tx_block() {
+	global::set_mining_mode(global::ChainTypes::AutomatedTesting);
 	let keychain = keychain::ExtKeychain::from_random_seed(false).unwrap();
 	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
 	let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
@@ -634,6 +637,7 @@ fn reward_with_tx_block() {
 
 #[test]
 fn simple_block() {
+	global::set_mining_mode(global::ChainTypes::AutomatedTesting);
 	let keychain = keychain::ExtKeychain::from_random_seed(false).unwrap();
 	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
 	let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
@@ -657,6 +661,7 @@ fn simple_block() {
 
 #[test]
 fn test_block_with_timelocked_tx() {
+	global::set_mining_mode(global::ChainTypes::AutomatedTesting);
 	let keychain = keychain::ExtKeychain::from_random_seed(false).unwrap();
 	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
 	let key_id1 = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);

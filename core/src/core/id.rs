@@ -17,16 +17,28 @@
 
 use std::cmp::min;
 use std::cmp::Ordering;
+use std::fmt;
 
 use byteorder::{ByteOrder, LittleEndian};
+use hex;
+use serde::{self, Deserialize, Deserializer};
 use siphasher::sip::SipHasher24;
 
 use crate::core::hash::{DefaultHashable, Hash, Hashed};
+use crate::libtx::secp_ser::u8_to_hex;
 use crate::ser::{self, Readable, Reader, Writeable, Writer};
 use crate::util;
 
 /// The size of a short id used to identify inputs|outputs|kernels (6 bytes)
 pub const SHORT_ID_SIZE: usize = 6;
+
+struct ExpectedString(pub String);
+
+impl serde::de::Expected for ExpectedString {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "{}", self.0)
+	}
+}
 
 /// A trait for types that have a short_id (inputs/outputs/kernels)
 pub trait ShortIdentifiable {
@@ -66,13 +78,38 @@ impl<H: Hashed> ShortIdentifiable for H {
 		// significant bytes)
 		let mut buf = [0; 8];
 		LittleEndian::write_u64(&mut buf, res);
-		ShortId::from_bytes(&buf[0..6])
+		ShortId::from_bytes(&buf[0..SHORT_ID_SIZE])
 	}
+}
+
+/// Creates a [u8; 6] from a hex string
+pub fn hex_to_shortid<'de, D>(deserializer: D) -> Result<[u8; SHORT_ID_SIZE], D::Error>
+where
+	D: Deserializer<'de>,
+{
+	String::deserialize(deserializer)
+		.and_then(|string| {
+			hex::decode(string).map_err(|err| serde::de::Error::custom(err.to_string()))
+		})
+		.and_then(|bytes: Vec<u8>| {
+			let mut ret = [0u8; SHORT_ID_SIZE];
+			match bytes.len() {
+				SHORT_ID_SIZE => ret[..].copy_from_slice(&bytes),
+				_ => Err(serde::de::Error::invalid_length(
+					bytes.len(),
+					&ExpectedString("a 6-byte hex string".to_owned()),
+				))?,
+			}
+			Ok(ret)
+		})
 }
 
 /// Short id for identifying inputs/outputs/kernels
 #[derive(Clone, Serialize, Deserialize, Hash)]
-pub struct ShortId([u8; 6]);
+pub struct ShortId(
+	#[serde(serialize_with = "u8_to_hex", deserialize_with = "hex_to_shortid")]
+	pub  [u8; SHORT_ID_SIZE],
+);
 
 impl DefaultHashable for ShortId {}
 // We want to sort short_ids in a canonical and consistent manner so we can

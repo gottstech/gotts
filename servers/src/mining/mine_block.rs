@@ -153,6 +153,7 @@ fn build_block(
 	if now_sec <= head_sec {
 		now_sec = head_sec + 1;
 	}
+	let timestamp = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(now_sec, 0), Utc);
 
 	// Determine the difficulty our block should be at.
 	// Note: do not keep the difficulty_iter in scope (it has an active batch).
@@ -187,7 +188,7 @@ fn build_block(
 	let mut b = core::Block::from_reward(&head, txs, output, kernel, difficulty.difficulty)?;
 
 	// Extract current "mineable" prices from the pool.
-	b.prices = price_pool.read().prepare_mineable_prices(&head)?;
+	b.prices = price_pool.read().prepare_mineable_prices(timestamp)?;
 	b.header.median_price = get_median_price(&b.prices)?;
 	let (price_root, price_mmr_size) = prices_root(&b.prices)?;
 	b.header.price_root = price_root;
@@ -199,7 +200,7 @@ fn build_block(
 
 	b.header.pow.nonce = thread_rng().gen();
 	b.header.pow.secondary_scaling = difficulty.secondary_scaling;
-	b.header.timestamp = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(now_sec, 0), Utc);
+	b.header.timestamp = timestamp;
 
 	debug!(
 		"Built new block with {} inputs and {} outputs, block difficulty: {}, cumulative difficulty {}",

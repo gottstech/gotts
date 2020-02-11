@@ -363,8 +363,8 @@ pub fn secondary_pow_scaling(height: u64, diff_data: &[HeaderInfo]) -> u32 {
 	max(MIN_AR_SCALE, scale) as u32
 }
 
-/// PriceVersion(0) Price Feeders List
-pub const PRICE_FEEDERS_LIST_V0: &'static [&'static str] = &[
+/// FlooNet PriceVersion(0) Price Feeders List
+pub const FLOONET_PRICE_FEEDERS_LIST_V0: &'static [&'static str] = &[
 	"031096938bd4f2807ca3b4e27d7375d60881d439af2c26efba903f184cd31368f0",
 	"029bee959551888a1c2062aef6ebf7737894bddb2c20293c8068c0101a22efc768",
 	"033fc000d1022ca86b4ca560fde3a970f7691e192e58acf15fe5cffc4fa5875097",
@@ -378,9 +378,26 @@ pub const PRICE_FEEDERS_LIST_V0: &'static [&'static str] = &[
 	"02861edda68d7ced301ca673a119fc1d225b37ac015086028eee97c89a06692f8e",
 ];
 
+/// MainNet PriceVersion(0) Price Feeders List
+/// To Be Defined.
+pub const MAINNET_PRICE_FEEDERS_LIST_V0: &'static [&'static str] =
+	&["031096938bd4f2807ca3b4e27d7375d60881d439af2c26efba903f184cd31368f0"];
+
+/// AutoTest PriceVersion(0) Price Feeders List
+pub const AUTOTEST_PRICE_FEEDERS_LIST: &'static [&'static str] = &[
+	"02b934a725919985776e6c4e072451046fa00e092e8799cfdece8759f8604f792b",
+	"02a77b948ada7b2b2eab40a7cbc1c73ee8cfa3314a068279d1a38b0f659d8ca6e3",
+];
+
 /// Get Price Feeders List
 pub fn price_feeders_list() -> &'static [&'static str] {
-	PRICE_FEEDERS_LIST_V0
+	let chain_type = global::CHAIN_TYPE.read().clone();
+	match chain_type {
+		global::ChainTypes::Floonet => FLOONET_PRICE_FEEDERS_LIST_V0,
+		global::ChainTypes::Mainnet => MAINNET_PRICE_FEEDERS_LIST_V0,
+		global::ChainTypes::AutomatedTesting => AUTOTEST_PRICE_FEEDERS_LIST,
+		_ => FLOONET_PRICE_FEEDERS_LIST_V0,
+	}
 }
 
 /// Max price feeders in one block, selected from above lists with some algorithm.

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod chain_test_helper;
+pub mod chain_test_helper;
 
 use self::chain_test_helper::{clean_output_dir, mine_chain};
 

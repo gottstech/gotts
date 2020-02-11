@@ -33,8 +33,9 @@ use gotts_util as util;
 use std::sync::Arc;
 
 mod chain_test_helper;
-
-use self::chain_test_helper::{clean_output_dir, init_chain, mine_chain};
+use self::chain_test_helper::{
+	clean_output_dir, generate_prices_for_block, init_chain, mine_chain,
+};
 
 /// Adapter to retrieve last status
 pub struct StatusAdapter {
@@ -767,6 +768,7 @@ fn output_header_mappings() {
 					.unwrap();
 			b.header.timestamp = prev.timestamp + Duration::seconds(60);
 			b.header.pow.secondary_scaling = next_header_info.secondary_scaling;
+			generate_prices_for_block(&mut b);
 
 			chain.set_txhashset_roots(&mut b).unwrap();
 
@@ -859,6 +861,8 @@ where
 	b.header.timestamp = prev.timestamp + Duration::seconds(60);
 	b.header.pow.total_difficulty = prev.total_difficulty() + Difficulty::from_num(diff);
 	b.header.pow.proof = pow::Proof::random(proof_size);
+	generate_prices_for_block(&mut b);
+
 	b
 }
 
