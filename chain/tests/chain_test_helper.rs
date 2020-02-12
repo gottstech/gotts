@@ -17,6 +17,8 @@ use self::chain::types::NoopAdapter;
 use self::chain::types::Options;
 use self::chain::Chain;
 use self::core::core::hash::Hashed;
+use self::core::core::price;
+use self::core::core::price::{get_median_price, prices_root, ExchangeRates, PriceVersion};
 use self::core::core::verifier_cache::LruVerifierCache;
 use self::core::core::Block;
 use self::core::genesis;
@@ -24,8 +26,11 @@ use self::core::global::ChainTypes;
 use self::core::libtx::{self, reward};
 use self::core::{consensus, global, pow};
 use self::keychain::{ExtKeychainPath, Identifier, Keychain};
+use self::util::secp;
+use self::util::secp::key::PublicKey;
+use self::util::secp::Signature;
 use self::util::RwLock;
-use chrono::Duration;
+use chrono::{DateTime, Duration, Utc};
 use gotts_chain as chain;
 use gotts_core as core;
 use gotts_keychain as keychain;
@@ -69,6 +74,70 @@ where
 	genesis::genesis_dev().with_reward(reward.0, reward.1)
 }
 
+/// Generate test prices for a block.
+pub fn generate_prices_for_block(b: &mut Block) {
+	let mut prices: Vec<ExchangeRates> = vec![];
+	prices.push(generate_a_price(
+		b.header.timestamp - Duration::seconds(1),
+		0,
+		0f64,
+	));
+	prices.push(generate_a_price(
+		b.header.timestamp - Duration::seconds(2),
+		1,
+		0.01f64,
+	));
+
+	prices.sort_unstable();
+	b.prices = prices;
+	b.header.median_price = get_median_price(&b.prices).unwrap();
+	let (price_root, price_mmr_size) = prices_root(&b.prices).unwrap();
+	b.header.price_root = price_root;
+	b.header.price_mmr_size = price_mmr_size;
+}
+
+/// Generate a test price.
+fn generate_a_price(timestamp: DateTime<Utc>, source_uid: u16, price_bias: f64) -> ExchangeRates {
+	let keychain = price::auto_test_feeder_keychain();
+
+	let key_id = keychain::ExtKeychain::derive_key_id(3, 1, 0, source_uid as u32, 0);
+	let prikey = keychain.derive_key(&key_id).unwrap();
+	let pubkey = PublicKey::from_secret_key(keychain.secp(), &prikey).unwrap();
+	let mut price = ExchangeRates {
+		version: PriceVersion(0),
+		source_uid,
+		pairs: vec![
+			7944.59_f64,
+			138.95_f64,
+			1.1116_f64,
+			1.3111_f64,
+			6.9481_f64,
+			109.22_f64,
+			1.3037_f64,
+		],
+		date: timestamp,
+		sig: Signature::from(secp::ffi::Signature::new()),
+	};
+	for i in 0..price.pairs.len() {
+		price.pairs[i] += price_bias;
+	}
+
+	let secp = keychain.secp();
+	price.sig = secp::aggsig::sign_single(
+		&secp,
+		&price.price_sig_msg().unwrap(),
+		&prikey,
+		None,
+		None,
+		None,
+		Some(&pubkey),
+		None,
+	)
+	.unwrap();
+
+	price
+}
+
 /// Mine a chain of specified length to assist with automated tests.
 /// Probably a good idea to call clean_output_dir at the beginning and end of each test.
 pub fn mine_chain(dir_name: &str, chain_length: u64) -> Chain {
@@ -76,6 +145,7 @@ pub fn mine_chain(dir_name: &str, chain_length: u64) -> Chain {
 	let keychain = keychain::ExtKeychain::from_random_seed(false).unwrap();
 	let genesis = genesis_block(&keychain);
 	let mut chain = init_chain(dir_name, genesis.clone());
+
 	mine_some_on_top(&mut chain, chain_length, &keychain);
 	chain
 }
@@ -101,6 +171,7 @@ where
 				.unwrap();
 		b.header.timestamp = prev.timestamp + Duration::seconds(60);
 		b.header.pow.secondary_scaling = next_header_info.secondary_scaling;
+		generate_prices_for_block(&mut b);
 
 		chain.set_txhashset_roots(&mut b).unwrap();
 

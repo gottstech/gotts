@@ -16,5 +16,7 @@
 //! Mining + Mining server
 
 mod mine_block;
+pub mod price_oracle;
+pub mod price_store;
 pub mod stratumserver;
 pub mod test_miner;

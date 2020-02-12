@@ -13,12 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod vec_backend;
+pub mod vec_backend;
 
 use self::core::core::merkle_proof::MerkleProof;
-use self::core::core::pmmr::PMMR;
+use self::core::core::pmmr::{VecBackend, PMMR};
 use self::core::ser::{self, PMMRIndexHashable};
-use crate::vec_backend::{TestElem, VecBackend};
+use crate::vec_backend::TestElem;
 use gotts_core as core;
 
 #[test]

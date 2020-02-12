@@ -36,6 +36,9 @@ const RESIZE_MIN_TARGET_PERCENT: f32 = 0.65;
 /// Main error type for this lmdb
 #[derive(Clone, Eq, PartialEq, Debug, Fail)]
 pub enum Error {
+	/// Wraps an io error produced when reading or writing
+	#[fail(display = "IOErr: {}", _0)]
+	IOErr(String, std::io::ErrorKind),
 	/// Couldn't find what we were looking for
 	#[fail(display = "DB Not Found Error: {}", _0)]
 	NotFoundErr(String),
@@ -46,6 +49,9 @@ pub enum Error {
 	/// Wraps a serialization error for Writeable or Readable
 	#[fail(display = "Serialization Error")]
 	SerErr(String),
+	/// Generic error
+	#[fail(display = "Generic Error: {}", _0)]
+	Generic(String),
 }
 
 impl From<lmdb::error::Error> for Error {

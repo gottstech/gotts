@@ -24,7 +24,7 @@ use crate::core::{Output, ShortId, TxKernel};
 use crate::ser::{self, read_multi, Readable, Reader, VerifySortedAndUnique, Writeable, Writer};
 
 /// Container for full (full) outputs and kernels and kern_ids for a compact block.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct CompactBlockBody {
 	/// List of full outputs - specifically the coinbase output(s)
 	pub out_full: Vec<Output>,
@@ -128,12 +128,14 @@ impl Into<CompactBlockBody> for CompactBlock {
 /// A node is reasonably likely to have already seen all tx data (tx broadcast
 /// before block) and can go request missing tx data from peers if necessary to
 /// hydrate a compact block into a full block.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct CompactBlock {
 	/// The header with metadata and commitments to the rest of the data
 	pub header: BlockHeader,
 	/// Nonce for connection specific short_ids
 	pub nonce: u64,
+	/// List of prices (short_ids)
+	pub prices_ids: Vec<ShortId>,
 	/// Container for out_full, kern_full and kern_ids in the compact block.
 	body: CompactBlockBody,
 }
@@ -144,7 +146,13 @@ impl CompactBlock {
 	/// "Lightweight" validation.
 	fn validate_read(&self) -> Result<(), Error> {
 		self.body.validate_read()?;
+		self.prices_ids.verify_sorted_and_unique()?;
 		Ok(())
+	}
+
+	/// Get prices_ids
+	pub fn prices_ids(&self) -> &Vec<ShortId> {
+		&self.prices_ids
 	}
 
 	/// Get kern_ids
@@ -166,6 +174,7 @@ impl CompactBlock {
 impl From<Block> for CompactBlock {
 	fn from(block: Block) -> Self {
 		let header = block.header.clone();
+		let hash = header.hash();
 		let nonce = thread_rng().gen();
 
 		let out_full = block
@@ -182,8 +191,13 @@ impl From<Block> for CompactBlock {
 			if k.is_coinbase() {
 				kern_full.push(k.clone());
 			} else {
-				kern_ids.push(k.short_id(&header.hash(), nonce));
+				kern_ids.push(k.short_id(&hash, nonce));
 			}
+		}
+
+		let mut prices_ids: Vec<ShortId> = Vec::with_capacity(block.prices.len());
+		for p in &block.prices {
+			prices_ids.push(p.short_id(&hash, nonce));
 		}
 
 		// Initialize a compact block body and sort everything.
@@ -193,6 +207,7 @@ impl From<Block> for CompactBlock {
 		CompactBlock {
 			header,
 			nonce,
+			prices_ids,
 			body,
 		}
 	}
@@ -207,6 +222,8 @@ impl Writeable for CompactBlock {
 
 		if writer.serialization_mode() != ser::SerializationMode::Hash {
 			writer.write_u64(self.nonce)?;
+			writer.write_u16(self.prices_ids.len() as u16)?;
+			self.prices_ids.write(writer)?;
 			self.body.write(writer)?;
 		}
 
@@ -220,11 +237,14 @@ impl Readable for CompactBlock {
 	fn read(reader: &mut dyn Reader) -> Result<CompactBlock, ser::Error> {
 		let header = BlockHeader::read(reader)?;
 		let nonce = reader.read_u64()?;
+		let prices_ids_len = reader.read_u16()?;
+		let prices_ids = read_multi(reader, prices_ids_len as u64)?;
 		let body = CompactBlockBody::read(reader)?;
 
 		let cb = CompactBlock {
 			header,
 			nonce,
+			prices_ids,
 			body,
 		};
 

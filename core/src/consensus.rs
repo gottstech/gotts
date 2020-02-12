@@ -363,6 +363,58 @@ pub fn secondary_pow_scaling(height: u64, diff_data: &[HeaderInfo]) -> u32 {
 	max(MIN_AR_SCALE, scale) as u32
 }
 
+/// FlooNet PriceVersion(0) Price Feeders List
+pub const FLOONET_PRICE_FEEDERS_LIST_V0: &'static [&'static str] = &[
+	"031096938bd4f2807ca3b4e27d7375d60881d439af2c26efba903f184cd31368f0",
+	"029bee959551888a1c2062aef6ebf7737894bddb2c20293c8068c0101a22efc768",
+	"033fc000d1022ca86b4ca560fde3a970f7691e192e58acf15fe5cffc4fa5875097",
+	"03d6c6c0c572fabd61b67a7bbd42979ec591b752be9ac68cf905a4c04c6b0de9db",
+	"03dd5f56e8eb52d4dbeb855cd7a7a0921782dd9e1d440c0b693bc6d6aad3c5c97f",
+	"02171297f4ff38badf89b2497a764eb87f45dcda9543e4aef816f7a7c5f3bf62b4",
+	"02bf07119900ce2f3a45b011f6798ef6c5698edc7c359d0e44f4cb4dd594e2c744",
+	"03ba1a0977971fc6952ca3c3334b2ecbf36de230f3ccc5d13eafe434ab56a57ac8",
+	"02dceb1932ce4258f889f764b5934eb1ad74df5c41e619b46237f1ef8960a0d09f",
+	"02777510948bbca160df6f73a795da3643086adb701b4047b65ef594d5e1dd47b1",
+	"02861edda68d7ced301ca673a119fc1d225b37ac015086028eee97c89a06692f8e",
+];
+
+/// MainNet PriceVersion(0) Price Feeders List
+/// To Be Defined.
+pub const MAINNET_PRICE_FEEDERS_LIST_V0: &'static [&'static str] =
+	&["031096938bd4f2807ca3b4e27d7375d60881d439af2c26efba903f184cd31368f0"];
+
+/// AutoTest PriceVersion(0) Price Feeders List
+pub const AUTOTEST_PRICE_FEEDERS_LIST: &'static [&'static str] = &[
+	"02b934a725919985776e6c4e072451046fa00e092e8799cfdece8759f8604f792b",
+	"02a77b948ada7b2b2eab40a7cbc1c73ee8cfa3314a068279d1a38b0f659d8ca6e3",
+	"02a0b037f9c11006b8d557ce0f1dc1f6663a8bc63a32acc97148f72b693cebd70a",
+];
+
+/// Get Price Feeders List
+pub fn price_feeders_list() -> &'static [&'static str] {
+	let chain_type = global::CHAIN_TYPE.read().clone();
+	match chain_type {
+		global::ChainTypes::Floonet => FLOONET_PRICE_FEEDERS_LIST_V0,
+		global::ChainTypes::Mainnet => MAINNET_PRICE_FEEDERS_LIST_V0,
+		global::ChainTypes::AutomatedTesting => AUTOTEST_PRICE_FEEDERS_LIST,
+		_ => FLOONET_PRICE_FEEDERS_LIST_V0,
+	}
+}
+
+/// Max price feeders in one block, selected from above lists with some algorithm.
+/// Note that we may increase this value in the future as we get more feeders.
+pub const BLOCK_MAX_FEEDERS: usize = 15;
+
+/// PriceVersion(0) currency pairs
+pub const CURRENCY_PAIRS_V0: &'static [&'static str] = &[
+	"BTC2USD", "ETH2USD", "EUR2USD", "GBP2USD", "USD2CNY", "USD2JPY", "USD2CAD",
+];
+
+/// Get currency pairs consensus
+pub fn currency_pairs() -> &'static [&'static str] {
+	CURRENCY_PAIRS_V0
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;

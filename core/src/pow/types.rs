@@ -103,6 +103,11 @@ impl Difficulty {
 	pub fn to_num(&self) -> u64 {
 		self.num
 	}
+
+	/// Enlarge the difficulty according to prices MMR size
+	pub fn enlarge(&self, price_mmr_size: u16) -> Difficulty {
+		Difficulty::from_num(self.num * (price_mmr_size as u64 + 1))
+	}
 }
 
 impl fmt::Display for Difficulty {

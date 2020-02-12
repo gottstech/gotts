@@ -188,6 +188,13 @@ pub trait Writer {
 		self.write_fixed_bytes(&bytes)
 	}
 
+	/// Writes a f64 as bytes
+	fn write_f64(&mut self, n: f64) -> Result<(), Error> {
+		let mut bytes = [0; 8];
+		BigEndian::write_f64(&mut bytes, n);
+		self.write_fixed_bytes(&bytes)
+	}
+
 	/// Writes a variable number of bytes. The length is encoded as a 64-bit
 	/// prefix.
 	fn write_bytes<T: AsFixedBytes>(&mut self, bytes: &T) -> Result<(), Error> {
@@ -215,6 +222,8 @@ pub trait Reader {
 	fn read_i32(&mut self) -> Result<i32, Error>;
 	/// Read a i64 from the underlying Read
 	fn read_i64(&mut self) -> Result<i64, Error>;
+	/// Read a f64 from the underlying Read
+	fn read_f64(&mut self) -> Result<f64, Error>;
 	/// Read a u64 len prefix followed by that number of exact bytes.
 	fn read_bytes_len_prefix(&mut self) -> Result<Vec<u8>, Error>;
 	/// Read a fixed number of bytes from the underlying reader.
@@ -430,6 +439,9 @@ impl<'a> Reader for BinReader<'a> {
 	fn read_i64(&mut self) -> Result<i64, Error> {
 		self.source.read_i64::<BigEndian>().map_err(map_io_err)
 	}
+	fn read_f64(&mut self) -> Result<f64, Error> {
+		self.source.read_f64::<BigEndian>().map_err(map_io_err)
+	}
 	/// Read a variable size vector from the underlying Read. Expects a usize
 	fn read_bytes_len_prefix(&mut self) -> Result<Vec<u8>, Error> {
 		let len = self.read_u64()?;
@@ -516,6 +528,10 @@ impl<'a> Reader for StreamingReader<'a> {
 	fn read_i64(&mut self) -> Result<i64, Error> {
 		let buf = self.read_fixed_bytes(8)?;
 		Ok(BigEndian::read_i64(&buf[..]))
+	}
+	fn read_f64(&mut self) -> Result<f64, Error> {
+		let buf = self.read_fixed_bytes(8)?;
+		Ok(BigEndian::read_f64(&buf[..]))
 	}
 
 	/// Read a variable size vector from the underlying stream. Expects a usize
@@ -777,6 +793,7 @@ impl_int!(u32, write_u32, read_u32);
 impl_int!(i32, write_i32, read_i32);
 impl_int!(u64, write_u64, read_u64);
 impl_int!(i64, write_i64, read_i64);
+impl_int!(f64, write_f64, read_f64);
 
 impl<T> Readable for Vec<T>
 where

@@ -26,6 +26,7 @@ use rand::thread_rng;
 use crate::chain;
 use crate::core::core;
 use crate::core::core::hash::{Hash, Hashed};
+use crate::core::core::price::{self, ExchangeRates};
 use crate::core::global;
 use crate::core::pow::Difficulty;
 use crate::peer::Peer;
@@ -366,6 +367,18 @@ impl Peers {
 		);
 	}
 
+	/// Broadcasts the provided price to all our connected peers.
+	/// A peer implementation may drop the broadcast request
+	/// if it knows the remote peer already has the price.
+	pub fn broadcast_price(&self, price: &ExchangeRates) {
+		let count = self.broadcast("price", |p| p.send_price(price));
+		debug!(
+			"broadcast_price: {} to {} peers, done.",
+			price.hash(),
+			count,
+		);
+	}
+
 	/// Ping all our connected peers. Always automatically expects a pong back
 	/// or disconnects. This acts as a liveness test.
 	pub fn check_all(&self, total_difficulty: Difficulty, height: u64) {
@@ -589,6 +602,44 @@ impl ChainAdapter for Peers {
 		stem: bool,
 	) -> Result<bool, chain::Error> {
 		self.adapter.transaction_received(tx, stem)
+	}
+
+	fn price_received(
+		&self,
+		price: core::ExchangeRates,
+		peer_info: &PeerInfo,
+	) -> Result<bool, chain::Error> {
+		let hash = price.hash();
+		let ret = self.adapter.price_received(price, peer_info);
+		match ret {
+			Err(ref e) => {
+				debug!("Price {} rejected: {:?}", hash, e);
+				match e.kind() {
+					chain::ErrorKind::PricePool(pe) => {
+						match pe {
+							price::PoolError::InvalidPrice(e) => match e {
+								price::Error::InvalidSource(_)
+								| price::Error::IncorrectSignature => {
+									// if the peer sent us a price that's intrinsically bad
+									// they are either mistaken or malevolent, both of which require a ban
+									debug!(
+										"Received a bad price {} from  {}, the peer will be banned",
+										hash, peer_info.addr,
+									);
+									self.ban_peer(peer_info.addr, ReasonForBan::BadPrice);
+									return Ok(false);
+								}
+								_ => {}
+							},
+							_ => {}
+						}
+					}
+					_ => {}
+				}
+			}
+			_ => {}
+		}
+		ret
 	}
 
 	fn block_received(

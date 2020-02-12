@@ -18,6 +18,7 @@
 use crate::util::RwLock;
 use chrono::naive::{MAX_DATE, MIN_DATE};
 use chrono::prelude::{DateTime, NaiveDateTime, Utc};
+use chrono::Duration;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::iter::FromIterator;
@@ -27,7 +28,9 @@ use crate::consensus::{self, reward, REWARD};
 use crate::core::committed::{self, Committed};
 use crate::core::compact_block::{CompactBlock, CompactBlockBody};
 use crate::core::hash::{DefaultHashable, Hash, Hashed, ZERO_HASH};
+use crate::core::price;
 use crate::core::verifier_cache::VerifierCache;
+use crate::core::{batch_sig_verify, get_median_price, prices_root, ExchangeRates, VersionedPrice};
 use crate::core::{
 	transaction, Commitment, Input, InputEx, KernelFeatures, Output, OutputEx, Transaction,
 	TransactionBody, TxKernel, Weighting,
@@ -37,7 +40,8 @@ use crate::global;
 use crate::keychain::{self};
 use crate::pow::{Difficulty, Proof, ProofOfWork};
 use crate::ser::{
-	self, FixedLength, PMMRIndexHashable, PMMRable, Readable, Reader, Writeable, Writer,
+	self, read_multi, FixedLength, PMMRIndexHashable, PMMRable, Readable, Reader,
+	VerifySortedAndUnique, Writeable, Writer,
 };
 use crate::util::{secp, static_secp_instance};
 
@@ -47,6 +51,16 @@ pub enum Error {
 	/// The sum of output minus input commitments does not
 	/// match the sum of kernel commitments
 	KernelSumMismatch,
+	/// The median price in header does not match the prices in block
+	PriceMismatch,
+	/// The price root in header does not match the prices in block
+	PriceRootMismatch,
+	/// The price source uid is invalid
+	PriceInvalidSource,
+	/// The price source uid is duplicated
+	PriceDuplicatedSource,
+	/// The price outdated
+	PriceOutdated,
 	/// The total kernel sum on the block header is wrong
 	InvalidTotalKernelSum,
 	/// Same as above but for the coinbase part of a block, including reward
@@ -66,6 +80,8 @@ pub enum Error {
 	Keychain(keychain::Error),
 	/// Underlying Merkle proof error
 	MerkleProof,
+	/// Median price in block header and prices in block body not match
+	PriceNotMatch,
 	/// Error when verifying kernel sums via committed trait.
 	Committed(committed::Error),
 	/// Validation error relating to cut-through.
@@ -73,8 +89,16 @@ pub enum Error {
 	CutThrough,
 	/// Underlying serialization error.
 	Serialization(ser::Error),
+	/// Underlying price error.
+	Price(price::Error),
 	/// Other unspecified error condition
 	Other(String),
+}
+
+impl From<price::Error> for Error {
+	fn from(e: price::Error) -> Error {
+		Error::Price(e)
+	}
 }
 
 impl From<committed::Error> for Error {
@@ -241,6 +265,12 @@ pub struct BlockHeader {
 	pub output_ii_mmr_size: u64,
 	/// Total size of the kernel MMR after applying this block
 	pub kernel_mmr_size: u64,
+	/// Median Price
+	pub median_price: VersionedPrice,
+	/// Merklish root of the ExchangeRates in this block
+	pub price_root: Hash,
+	/// Size of the ExchangeRates MMR in this block
+	pub price_mmr_size: u16,
 	/// Proof of work and related
 	pub pow: ProofOfWork,
 }
@@ -260,6 +290,9 @@ impl Default for BlockHeader {
 			output_i_mmr_size: 0,
 			output_ii_mmr_size: 0,
 			kernel_mmr_size: 0,
+			median_price: VersionedPrice::default(),
+			price_root: ZERO_HASH,
+			price_mmr_size: 0,
 			pow: ProofOfWork::default(),
 		}
 	}
@@ -308,6 +341,9 @@ impl Readable for BlockHeader {
 		let kernel_root = Hash::read(reader)?;
 		let (output_i_mmr_size, output_ii_mmr_size, kernel_mmr_size) =
 			ser_multiread!(reader, read_u64, read_u64, read_u64);
+		let median_price = VersionedPrice::read(reader)?;
+		let price_root = Hash::read(reader)?;
+		let price_mmr_size = reader.read_u16()?;
 		let pow = ProofOfWork::read(reader)?;
 
 		if timestamp > MAX_DATE.and_hms(0, 0, 0).timestamp()
@@ -336,6 +372,9 @@ impl Readable for BlockHeader {
 			output_i_mmr_size,
 			output_ii_mmr_size,
 			kernel_mmr_size,
+			median_price,
+			price_root,
+			price_mmr_size,
 			pow,
 		})
 	}
@@ -358,6 +397,9 @@ impl BlockHeader {
 			[write_u64, self.output_ii_mmr_size],
 			[write_u64, self.kernel_mmr_size]
 		);
+		self.median_price.write(writer)?;
+		writer.write_fixed_bytes(&self.price_root)?;
+		writer.write_u16(self.price_mmr_size)?;
 		Ok(())
 	}
 
@@ -407,6 +449,8 @@ impl BlockHeader {
 pub struct Block {
 	/// The header with metadata and commitments to the rest of the data
 	pub header: BlockHeader,
+	/// The price feeds
+	pub prices: Vec<ExchangeRates>,
 	/// The body - inputs/outputs/kernels
 	body: TransactionBody,
 }
@@ -426,6 +470,8 @@ impl Writeable for Block {
 		self.header.write(writer)?;
 
 		if writer.serialization_mode() != ser::SerializationMode::Hash {
+			writer.write_u16(self.prices.len() as u16)?;
+			self.prices.write(writer)?;
 			self.body.write(writer)?;
 		}
 		Ok(())
@@ -437,6 +483,8 @@ impl Writeable for Block {
 impl Readable for Block {
 	fn read(reader: &mut dyn Reader) -> Result<Block, ser::Error> {
 		let header = BlockHeader::read(reader)?;
+		let prices_len = reader.read_u16()?;
+		let prices = read_multi(reader, prices_len as u64)?;
 
 		let body = TransactionBody::read(reader)?;
 
@@ -447,7 +495,12 @@ impl Readable for Block {
 		body.validate_read(Weighting::AsBlock)
 			.map_err(|_| ser::Error::CorruptedData)?;
 
-		Ok(Block { header, body })
+		let b = Block {
+			header,
+			prices,
+			body,
+		};
+		Ok(b)
 	}
 }
 
@@ -472,6 +525,7 @@ impl Default for Block {
 	fn default() -> Block {
 		Block {
 			header: Default::default(),
+			prices: Default::default(),
 			body: Default::default(),
 		}
 	}
@@ -507,8 +561,17 @@ impl Block {
 	/// Hydrate a block from a compact block.
 	/// Note: caller must validate the block themselves, we do not validate it
 	/// here.
-	pub fn hydrate_from(cb: CompactBlock, txs: Vec<Transaction>) -> Result<Block, Error> {
-		trace!("block: hydrate_from: {}, {} txs", cb.hash(), txs.len(),);
+	pub fn hydrate_from(
+		cb: CompactBlock,
+		prices: Vec<ExchangeRates>,
+		txs: Vec<Transaction>,
+	) -> Result<Block, Error> {
+		trace!(
+			"block: hydrate_from: {}, {} prices, {} txs",
+			cb.hash(),
+			prices.len(),
+			txs.len(),
+		);
 
 		let header = cb.header.clone();
 
@@ -542,7 +605,12 @@ impl Block {
 		// Finally return the full block.
 		// Note: we have not actually validated the block here,
 		// caller must validate the block.
-		Block { header, body }.cut_through()
+		Block {
+			header,
+			prices,
+			body,
+		}
+		.cut_through()
 	}
 
 	/// Build a new empty block from a specified header
@@ -595,6 +663,7 @@ impl Block {
 				},
 				..Default::default()
 			},
+			prices: Default::default(),
 			body: agg_tx.into(),
 		}
 		.cut_through()
@@ -664,6 +733,7 @@ impl Block {
 
 		Ok(Block {
 			header: self.header,
+			prices: self.prices,
 			body,
 		})
 	}
@@ -690,19 +760,78 @@ impl Block {
 	) -> Result<Commitment, Error> {
 		self.body.validate(
 			Weighting::AsBlock,
-			verifier,
+			verifier.clone(),
 			complete_inputs,
 			self.header.height,
 		)?;
 
 		self.verify_kernel_lock_heights()?;
 		self.verify_coinbase()?;
+		self.verify_prices(verifier)?;
 
 		// take the kernel offset for this block (block offset minus previous) and
 		// verify.body.outputs and kernel sums
 		let (_utxo_sum, kernel_sum) = self.verify_kernel_sums()?;
 
 		Ok(kernel_sum)
+	}
+
+	/// Verify the prices
+	fn verify_prices(&self, verifier: Arc<RwLock<dyn VerifierCache>>) -> Result<(), Error> {
+		// check whether sorted
+		self.prices.verify_sorted_and_unique()?;
+		let max = consensus::price_feeders_list().len();
+
+		// check whether all source uid are valid
+		if self
+			.prices
+			.iter()
+			.position(|p| p.source_uid as usize >= max)
+			.is_some()
+		{
+			return Err(Error::PriceInvalidSource);
+		}
+
+		// check whether all source uid are unique
+		let mut source_uid: Vec<u16> = self.prices.iter().map(|p| p.source_uid).collect();
+		source_uid.sort();
+		source_uid.dedup();
+		if source_uid.len() < self.prices.len() {
+			return Err(Error::PriceDuplicatedSource);
+		}
+
+		// check whether all date are valid
+		if self
+			.prices
+			.iter()
+			.position(|p| p.date + Duration::seconds(60) < self.header.timestamp)
+			.is_some()
+		{
+			return Err(Error::PriceOutdated);
+		}
+
+		// check whether the median price of the header match the prices in block
+		if self.header.median_price != get_median_price(&self.prices)? {
+			return Err(Error::PriceMismatch);
+		}
+
+		// check whether the prices MMR root match
+		if (self.header.price_root, self.header.price_mmr_size) != prices_root(&self.prices)? {
+			return Err(Error::PriceRootMismatch);
+		}
+
+		// prices signature verification
+		let prices = {
+			let mut verifier = verifier.write();
+			verifier.filter_prices_sig_unverified(&self.prices)
+		};
+		if !prices.is_empty() {
+			batch_sig_verify(&self.prices)?;
+			let mut verifier = verifier.write();
+			verifier.add_prices_sig_verified(&prices);
+		}
+
+		Ok(())
 	}
 
 	/// Validate the coinbase.body.outputs generated by miners.

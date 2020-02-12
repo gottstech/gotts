@@ -408,6 +408,67 @@ fn comments() -> HashMap<String, String> {
 	);
 
 	retval.insert(
+		"[server.price_feeder_oracle_config]".to_string(),
+		"
+################################################
+###   PRICE FEEDER ORACLE SERVER CONFIG      ###
+################################################
+"
+		.to_string(),
+	);
+
+	retval.insert(
+		"enable_price_feeder_oracle_server".to_string(),
+		"
+#whether price feeder oracle server is enabled
+"
+		.to_string(),
+	);
+
+	retval.insert(
+		"price_feeder_key_id".to_string(),
+		"
+#The key identifier string of this price feeder, which is corresponded to
+# one public key of the price_feeders_list list in the consensus.
+"
+		.to_string(),
+	);
+
+	retval.insert(
+		"price_feeder_source_uid".to_string(),
+		"
+#The unique id (index) of this price oracle server,
+# which is one of the consensus PRICE_FEEDERS_LIST.
+#The default value '30000' is invalid, change me when oracle server enabled.
+"
+		.to_string(),
+	);
+
+	retval.insert(
+		"oracle_server_url".to_string(),
+		"
+#which oracle server url to query the prices from
+"
+		.to_string(),
+	);
+
+	retval.insert(
+		"wallet_owner_api_listener_url".to_string(),
+		"
+#the wallet owner api url of HTTP wallet
+"
+		.to_string(),
+	);
+
+	retval.insert(
+		"owner_api_secret_path".to_string(),
+		"
+#location of wallet owner api secret for basic auth.
+"
+		.to_string(),
+	);
+
+	retval.insert(
 		"[logging]".to_string(),
 		"
 #########################################

@@ -33,7 +33,7 @@ fn data_files() {
 		let chain = mine_chain(chain_dir, 4);
 		chain.validate(false).unwrap();
 		assert_eq!(chain.head().unwrap().height, 3);
-	};
+	}
 
 	// Now reload the chain from existing data files and check it is valid.
 	{

@@ -40,6 +40,7 @@ use crate::core::core::hash::Hashed;
 use crate::core::core::verifier_cache::VerifierCache;
 use crate::core::core::Block;
 use crate::core::{pow, ser};
+use crate::gotts::price_pool::PricePool;
 use crate::keychain;
 use crate::mining::mine_block;
 use crate::pool;
@@ -390,7 +391,12 @@ impl Handler {
 		}
 
 		// Get share difficulty
-		share_difficulty = b.header.pow.to_difficulty(b.header.height).to_num();
+		share_difficulty = b
+			.header
+			.pow
+			.to_difficulty(b.header.height)
+			.enlarge(b.header.price_mmr_size)
+			.to_num();
 		// If the difficulty is too low its an error
 		if share_difficulty < state.minimum_share_difficulty {
 			// Return error status
@@ -519,6 +525,7 @@ impl Handler {
 		&self,
 		config: &StratumServerConfig,
 		tx_pool: &Arc<RwLock<pool::TransactionPool>>,
+		price_pool: &Arc<RwLock<PricePool>>,
 		verifier_cache: Arc<RwLock<dyn VerifierCache>>,
 	) {
 		debug!("Run main loop");
@@ -551,6 +558,7 @@ impl Handler {
 					let (new_block, block_fees) = mine_block::get_block(
 						&self.chain,
 						tx_pool,
+						price_pool,
 						verifier_cache.clone(),
 						state.current_key_id.clone(),
 						wallet_listener_url,
@@ -782,6 +790,7 @@ pub struct StratumServer {
 	config: StratumServerConfig,
 	chain: Arc<chain::Chain>,
 	tx_pool: Arc<RwLock<pool::TransactionPool>>,
+	price_pool: Arc<RwLock<PricePool>>,
 	verifier_cache: Arc<RwLock<dyn VerifierCache>>,
 	sync_state: Arc<SyncState>,
 	stratum_stats: Arc<RwLock<StratumStats>>,
@@ -793,6 +802,7 @@ impl StratumServer {
 		config: StratumServerConfig,
 		chain: Arc<chain::Chain>,
 		tx_pool: Arc<RwLock<pool::TransactionPool>>,
+		price_pool: Arc<RwLock<PricePool>>,
 		verifier_cache: Arc<RwLock<dyn VerifierCache>>,
 		stratum_stats: Arc<RwLock<StratumStats>>,
 	) -> StratumServer {
@@ -801,6 +811,7 @@ impl StratumServer {
 			config,
 			chain,
 			tx_pool,
+			price_pool,
 			verifier_cache,
 			sync_state: Arc::new(SyncState::new()),
 			stratum_stats: stratum_stats,
@@ -852,7 +863,12 @@ impl StratumServer {
 			thread::sleep(Duration::from_millis(50));
 		}
 
-		handler.run(&self.config, &self.tx_pool, self.verifier_cache.clone());
+		handler.run(
+			&self.config,
+			&self.tx_pool,
+			&self.price_pool,
+			self.verifier_cache.clone(),
+		);
 	} // fn run_loop()
 } // StratumServer
 
