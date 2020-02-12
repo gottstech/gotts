@@ -65,6 +65,7 @@ impl PriceStore {
 		.map_err(|e| e.into())
 	}
 
+	#[allow(dead_code)]
 	pub fn delete(&self, source_uid: u16, date: DateTime<Utc>) -> Result<(), Error> {
 		let mut k = [0u8; 2];
 		BigEndian::write_u16(&mut k, source_uid);
@@ -77,6 +78,7 @@ impl PriceStore {
 		Ok(())
 	}
 
+	#[allow(dead_code)]
 	/// List all known prices
 	/// Used for /v1/prices/all api endpoint
 	pub fn all_prices(&self) -> Result<Vec<ExchangeRates>, Error> {
@@ -88,6 +90,7 @@ impl PriceStore {
 			.collect::<Vec<_>>())
 	}
 
+	#[allow(dead_code)]
 	/// Iterate over all price pairs stored by the backend with same date
 	pub fn iter_date<'a>(
 		&'a self,
@@ -97,6 +100,7 @@ impl PriceStore {
 		Box::new(self.db.iter(&key).unwrap().map(|o| o.1))
 	}
 
+	#[allow(dead_code)]
 	/// Delete prices from the storage that satisfy some condition `predicate`
 	pub fn delete_prices<F>(&self, predicate: F) -> Result<(), Error>
 	where

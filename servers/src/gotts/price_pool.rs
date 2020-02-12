@@ -16,7 +16,7 @@
 
 use std::sync::{Arc, Weak};
 
-use crate::chain::{self, SyncState};
+use crate::chain;
 use crate::common::types::PriceOracleServerConfig;
 use crate::core::consensus;
 use crate::core::core::hash::{Hash, Hashed};
@@ -34,27 +34,21 @@ use chrono::Duration;
 pub struct PricePool {
 	/// Price Entries
 	pub entries: Vec<ExchangeRates>,
-	config: PriceOracleServerConfig,
-	chain: Arc<chain::Chain>,
 	peers: OneTime<Weak<p2p::Peers>>,
 	verifier_cache: Arc<RwLock<dyn VerifierCache>>,
-	sync_state: Arc<SyncState>,
 }
 
 impl PricePool {
 	/// Creates a new price pool.
 	pub fn new(
-		config: PriceOracleServerConfig,
-		chain: Arc<chain::Chain>,
+		_config: PriceOracleServerConfig,
+		_chain: Arc<chain::Chain>,
 		verifier_cache: Arc<RwLock<dyn VerifierCache>>,
 	) -> PricePool {
 		PricePool {
 			entries: vec![],
-			config,
-			chain,
 			peers: OneTime::new(),
 			verifier_cache,
-			sync_state: Arc::new(SyncState::new()),
 		}
 	}
 
