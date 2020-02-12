@@ -17,7 +17,7 @@
 use chrono::{Duration, Timelike};
 use itertools::Itertools;
 use serde_json::{json, Value};
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 use std::thread;
 use std::time;
 
@@ -35,7 +35,6 @@ use crate::gotts::price_pool::PricePool;
 use crate::p2p;
 use crate::util::file::get_first_line;
 use crate::util::secp::{self, Signature};
-use crate::util::OneTime;
 use crate::util::{RwLock, StopState};
 
 /// Call the oracle API to create a price feeder message.
@@ -139,8 +138,6 @@ pub struct PriceOracleServer {
 	stop_state: Arc<StopState>,
 	chain: Arc<chain::Chain>,
 	price_pool: Arc<RwLock<PricePool>>,
-	peers: OneTime<Weak<p2p::Peers>>,
-	verifier_cache: Arc<RwLock<dyn VerifierCache>>,
 	sync_state: Arc<SyncState>,
 }
 
@@ -151,31 +148,19 @@ impl PriceOracleServer {
 		config: PriceOracleServerConfig,
 		chain: Arc<chain::Chain>,
 		price_pool: Arc<RwLock<PricePool>>,
-		peers: Arc<p2p::Peers>,
-		verifier_cache: Arc<RwLock<dyn VerifierCache>>,
+		_peers: Arc<p2p::Peers>,
+		_verifier_cache: Arc<RwLock<dyn VerifierCache>>,
 		stop_state: Arc<StopState>,
 	) -> Result<PriceOracleServer, Error> {
 		let store = Arc::new(PriceStore::new(&db_root)?);
-		let p: OneTime<Weak<p2p::Peers>> = OneTime::new();
-		p.init(Arc::downgrade(&peers));
-
 		Ok(PriceOracleServer {
 			store,
 			config,
 			stop_state,
 			chain,
 			price_pool,
-			peers: p,
-			verifier_cache,
 			sync_state: Arc::new(SyncState::new()),
 		})
-	}
-
-	fn peers(&self) -> Arc<p2p::Peers> {
-		self.peers
-			.borrow()
-			.upgrade()
-			.expect("Failed to upgrade weak ref to our peers.")
 	}
 
 	/// "main()" - Starts the price feeder oracle server.

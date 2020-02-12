@@ -88,7 +88,7 @@ pub trait Committed {
 
 	/// Verify the sum of the kernel excesses equals the
 	/// sum of the outputs, taking into account the kernel_offset.
-	fn verify_kernel_sums(&self) -> Result<((Commitment, Commitment)), Error> {
+	fn verify_kernel_sums(&self) -> Result<(Commitment, Commitment), Error> {
 		// Sum all input|output|overage commitments.
 		let utxo_sum = self.sum_commitments()?;
 
