@@ -387,6 +387,7 @@ pub const MAINNET_PRICE_FEEDERS_LIST_V0: &'static [&'static str] =
 pub const AUTOTEST_PRICE_FEEDERS_LIST: &'static [&'static str] = &[
 	"02b934a725919985776e6c4e072451046fa00e092e8799cfdece8759f8604f792b",
 	"02a77b948ada7b2b2eab40a7cbc1c73ee8cfa3314a068279d1a38b0f659d8ca6e3",
+	"02a0b037f9c11006b8d557ce0f1dc1f6663a8bc63a32acc97148f72b693cebd70a",
 ];
 
 /// Get Price Feeders List

@@ -588,6 +588,11 @@ mod tests {
 		let prikey_1 = keychain.derive_key(&key_id_1).unwrap();
 		let pubkey_1 = PublicKey::from_secret_key(keychain.secp(), &prikey_1).unwrap();
 		assert_eq!(pubkey_1.to_string(), price_feeders_list[1]);
+
+		let key_id_2 = ExtKeychain::derive_key_id(3, 1, 0, 2, 0);
+		let prikey_2 = keychain.derive_key(&key_id_2).unwrap();
+		let pubkey_2 = PublicKey::from_secret_key(keychain.secp(), &prikey_2).unwrap();
+		assert_eq!(pubkey_2.to_string(), price_feeders_list[2]);
 	}
 
 	#[test]

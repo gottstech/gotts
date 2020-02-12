@@ -76,7 +76,20 @@ where
 
 /// Generate test prices for a block.
 pub fn generate_prices_for_block(b: &mut Block) {
-	b.prices = generate_test_prices(b.header.timestamp);
+	let mut prices: Vec<ExchangeRates> = vec![];
+	prices.push(generate_a_price(
+		b.header.timestamp - Duration::seconds(1),
+		0,
+		0f64,
+	));
+	prices.push(generate_a_price(
+		b.header.timestamp - Duration::seconds(2),
+		1,
+		0.01f64,
+	));
+
+	prices.sort_unstable();
+	b.prices = prices;
 	b.header.median_price = get_median_price(&b.prices).unwrap();
 	let (price_root, price_mmr_size) = prices_root(&b.prices).unwrap();
 	b.header.price_root = price_root;
@@ -84,17 +97,15 @@ pub fn generate_prices_for_block(b: &mut Block) {
 }
 
 /// Generate a test price.
-fn generate_test_prices(header_timestamp: DateTime<Utc>) -> Vec<ExchangeRates> {
-	let mut prices: Vec<ExchangeRates> = vec![];
+fn generate_a_price(timestamp: DateTime<Utc>, source_uid: u16, price_bias: f64) -> ExchangeRates {
 	let keychain = price::auto_test_feeder_keychain();
 
-	let key_id_0 = keychain::ExtKeychain::derive_key_id(3, 1, 0, 0, 0);
-	let prikey_0 = keychain.derive_key(&key_id_0).unwrap();
-	let pubkey_0 = PublicKey::from_secret_key(keychain.secp(), &prikey_0).unwrap();
-
+	let key_id = keychain::ExtKeychain::derive_key_id(3, 1, 0, source_uid as u32, 0);
+	let prikey = keychain.derive_key(&key_id).unwrap();
+	let pubkey = PublicKey::from_secret_key(keychain.secp(), &prikey).unwrap();
 	let mut price = ExchangeRates {
 		version: PriceVersion(0),
-		source_uid: 0,
+		source_uid,
 		pairs: vec![
 			7944.59_f64,
 			138.95_f64,
@@ -104,44 +115,27 @@ fn generate_test_prices(header_timestamp: DateTime<Utc>) -> Vec<ExchangeRates> {
 			109.22_f64,
 			1.3037_f64,
 		],
-		date: header_timestamp - Duration::seconds(1),
+		date: timestamp,
 		sig: Signature::from(secp::ffi::Signature::new()),
 	};
+	for i in 0..price.pairs.len() {
+		price.pairs[i] += price_bias;
+	}
 
 	let secp = keychain.secp();
 	price.sig = secp::aggsig::sign_single(
 		&secp,
 		&price.price_sig_msg().unwrap(),
-		&prikey_0,
+		&prikey,
 		None,
 		None,
 		None,
-		Some(&pubkey_0),
-		None,
-	)
-	.unwrap();
-	prices.push(price.clone());
-
-	let key_id_1 = keychain::ExtKeychain::derive_key_id(3, 1, 0, 1, 0);
-	let prikey_1 = keychain.derive_key(&key_id_1).unwrap();
-	let pubkey_1 = PublicKey::from_secret_key(keychain.secp(), &prikey_1).unwrap();
-	price.source_uid = 1;
-	price.date = header_timestamp - Duration::seconds(2);
-	price.sig = secp::aggsig::sign_single(
-		&secp,
-		&price.price_sig_msg().unwrap(),
-		&prikey_1,
-		None,
-		None,
-		None,
-		Some(&pubkey_1),
+		Some(&pubkey),
 		None,
 	)
 	.unwrap();
-	prices.push(price);
 
-	prices.sort_unstable();
-	prices
+	price
 }
 
 /// Mine a chain of specified length to assist with automated tests.
