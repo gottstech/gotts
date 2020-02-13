@@ -22,6 +22,7 @@ use rand::prelude::*;
 
 use crate::api;
 use crate::chain;
+use crate::core::core::price;
 use crate::core::global::ChainTypes;
 use crate::core::{core, libtx, pow};
 use crate::keychain;
@@ -29,10 +30,13 @@ use crate::p2p;
 use crate::pool;
 use crate::pool::types::DandelionConfig;
 use crate::store;
+use crate::util::secp;
 
 /// Error type wrapping underlying module errors.
 #[derive(Debug)]
 pub enum Error {
+	/// Underlying Secp256k1 error (signature validation or invalid public key typically)
+	Secp(secp::Error),
 	/// Error originating from the core implementation.
 	Core(core::block::Error),
 	/// Error originating from the libtx implementation.
@@ -49,6 +53,10 @@ pub enum Error {
 	Cuckoo(pow::Error),
 	/// Error originating from the transaction pool.
 	Pool(pool::PoolError),
+	/// Error originating from the price pool.
+	PricePool(price::PoolError),
+	/// Error originating from the price.
+	Price(price::Error),
 	/// Error originating from the keychain.
 	Keychain(keychain::Error),
 	/// Invalid Arguments.
@@ -63,6 +71,21 @@ pub enum Error {
 	General(String),
 }
 
+impl From<price::Error> for Error {
+	fn from(e: price::Error) -> Error {
+		Error::Price(e)
+	}
+}
+impl From<price::PoolError> for Error {
+	fn from(e: price::PoolError) -> Error {
+		Error::PricePool(e)
+	}
+}
+impl From<secp::Error> for Error {
+	fn from(e: secp::Error) -> Error {
+		Error::Secp(e)
+	}
+}
 impl From<core::block::Error> for Error {
 	fn from(e: core::block::Error) -> Error {
 		Error::Core(e)
@@ -197,6 +220,10 @@ pub struct ServerConfig {
 	#[serde(default)]
 	pub stratum_mining_config: Option<StratumServerConfig>,
 
+	/// Configuration for the price feeder oracle daemon
+	#[serde(default)]
+	pub price_feeder_oracle_config: Option<PriceOracleServerConfig>,
+
 	/// Configuration for the webhooks that trigger on certain events
 	#[serde(default)]
 	pub webhook_config: WebHooksConfig,
@@ -213,6 +240,7 @@ impl Default for ServerConfig {
 			p2p_config: p2p::P2PConfig::default(),
 			dandelion_config: pool::DandelionConfig::default(),
 			stratum_mining_config: Some(StratumServerConfig::default()),
+			price_feeder_oracle_config: Some(PriceOracleServerConfig::default()),
 			chain_type: ChainTypes::default(),
 			archive_mode: Some(false),
 			pruning_kernel_index: Some(true),
@@ -261,6 +289,42 @@ impl Default for StratumServerConfig {
 			minimum_share_difficulty: 1,
 			enable_stratum_server: Some(false),
 			stratum_server_addr: Some("127.0.0.1:3516".to_string()),
+		}
+	}
+}
+
+/// Price Feeder Oracle server configuration
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PriceOracleServerConfig {
+	/// Run a price feeder oracle mining server
+	pub enable_price_feeder_oracle_server: Option<bool>,
+
+	/// The key identifier string of this price feeder, which is corresponded to
+	/// one public key of the price_feeders_list list in the consensus.
+	pub price_feeder_key_id: Option<String>,
+
+	/// The unique id (index) of this price oracle server among the consensus PRICE_FEEDERS_LIST.
+	pub price_feeder_source_uid: u16,
+
+	/// If enabled, the oracle address and port to query the prices from
+	pub oracle_server_url: Option<String>,
+
+	/// URL of HTTP wallet owner API
+	pub wallet_owner_api_listener_url: String,
+
+	/// Location of wallet owner api secret for basic auth.
+	pub owner_api_secret_path: Option<String>,
+}
+
+impl Default for PriceOracleServerConfig {
+	fn default() -> PriceOracleServerConfig {
+		PriceOracleServerConfig {
+			enable_price_feeder_oracle_server: Some(false),
+			price_feeder_key_id: Some("03000000000000000000000000".to_string()),
+			price_feeder_source_uid: 30_000u16,
+			oracle_server_url: Some("http://127.0.0.1:3518".to_string()),
+			wallet_owner_api_listener_url: "http://127.0.0.1:3520".to_string(),
+			owner_api_secret_path: Some(".api_secret".to_string()),
 		}
 	}
 }

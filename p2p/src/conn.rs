@@ -367,6 +367,11 @@ where
 				}
 			}
 
+			// set the stop flag if it's not
+			if !reader_stopped.load(Ordering::Relaxed) {
+				reader_stopped.store(true, Ordering::Relaxed);
+			}
+
 			debug!(
 				"Shutting down reader connection with {}",
 				reader
@@ -381,6 +386,7 @@ where
 		.name("peer_write".to_string())
 		.spawn(move || {
 			let mut retry_send = Err(());
+			let mut retry_count = 0;
 			loop {
 				let maybe_data = retry_send.or_else(|_| send_rx.recv_timeout(IO_TIMEOUT));
 				retry_send = Err(());
@@ -388,12 +394,26 @@ where
 					let written = try_break!(writer.write_all(&data[..]).map_err(&From::from));
 					if written.is_none() {
 						retry_send = Ok(data);
+						retry_count += 1;
+						// stop retrying if always fail on sending
+						if retry_count > 10 {
+							debug!("peer_write failed and retried too many times, force to quit thread");
+							break;
+						}
+						thread::sleep(Duration::from_millis(10));
+					} else {
+						retry_count = 0;
 					}
 				}
 				// check the close channel
 				if stopped.load(Ordering::Relaxed) {
 					break;
 				}
+			}
+
+			// set the stop flag if it's not
+			if !stopped.load(Ordering::Relaxed) {
+				stopped.store(true, Ordering::Relaxed);
 			}
 
 			debug!(

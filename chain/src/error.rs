@@ -14,6 +14,7 @@
 // limitations under the License.
 
 //! Error types for chain
+use crate::core::core::price;
 use crate::core::core::{block, committed, transaction};
 use crate::core::ser;
 use crate::keychain;
@@ -153,6 +154,9 @@ pub enum ErrorKind {
 	/// Error during chain sync
 	#[fail(display = "Sync error")]
 	SyncError(String),
+	/// Error from PricePool.
+	#[fail(display = "PricePool Error: {}", _0)]
+	PricePool(price::PoolError),
 }
 
 impl Display for Error {
@@ -214,6 +218,15 @@ impl From<ErrorKind> for Error {
 impl From<Context<ErrorKind>> for Error {
 	fn from(inner: Context<ErrorKind>) -> Error {
 		Error { inner: inner }
+	}
+}
+
+impl From<price::PoolError> for Error {
+	fn from(error: price::PoolError) -> Error {
+		let ec = error.clone();
+		Error {
+			inner: error.context(ErrorKind::PricePool(ec)),
+		}
 	}
 }
 

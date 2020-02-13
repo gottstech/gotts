@@ -18,6 +18,7 @@ use std::fs::File;
 use croaring::Bitmap;
 
 use crate::core::hash::Hash;
+use crate::core::pmmr;
 use crate::core::BlockHeader;
 use crate::ser::PMMRable;
 
@@ -77,4 +78,90 @@ pub trait Backend<T: PMMRable> {
 
 	/// For debugging purposes so we can see how compaction is doing.
 	fn dump_stats(&self);
+}
+
+/// Simple MMR backend implementation based on a Vector. Pruning does not
+/// compact the Vec itself.
+#[derive(Clone, Debug)]
+pub struct VecBackend<T: PMMRable> {
+	/// Backend elements
+	pub data: Vec<T>,
+	/// Hashes
+	pub hashes: Vec<Hash>,
+	/// Positions of removed elements
+	pub remove_list: Vec<u64>,
+}
+
+impl<T: PMMRable> Backend<T> for VecBackend<T> {
+	fn append(&mut self, data: &T, hashes: Vec<Hash>) -> Result<(), String> {
+		self.data.push(data.clone());
+		self.hashes.append(&mut hashes.clone());
+		Ok(())
+	}
+
+	fn rewind(&mut self, position: u64, _rewind_rm_pos: &Bitmap) -> Result<(), String> {
+		let idx = pmmr::n_leaves(position);
+		self.data = self.data[0..(idx as usize) + 1].to_vec();
+		self.hashes = self.hashes[0..(position as usize) + 1].to_vec();
+		Ok(())
+	}
+
+	fn get_hash(&self, position: u64) -> Option<Hash> {
+		if self.remove_list.contains(&position) {
+			None
+		} else {
+			self.get_from_file(position)
+		}
+	}
+
+	fn get_data(&self, position: u64) -> Option<T::E> {
+		if self.remove_list.contains(&position) {
+			None
+		} else {
+			self.get_data_from_file(position)
+		}
+	}
+
+	fn get_from_file(&self, position: u64) -> Option<Hash> {
+		let hash = &self.hashes[(position - 1) as usize];
+		Some(hash.clone())
+	}
+
+	fn get_data_from_file(&self, position: u64) -> Option<T::E> {
+		let idx = pmmr::n_leaves(position);
+		let data = self.data[(idx - 1) as usize].clone();
+		Some(data.as_elmt())
+	}
+
+	fn leaf_pos_iter(&self) -> Box<dyn Iterator<Item = u64> + '_> {
+		unimplemented!()
+	}
+
+	fn remove(&mut self, position: u64) -> Result<(), String> {
+		self.remove_list.push(position);
+		Ok(())
+	}
+
+	fn data_as_temp_file(&self) -> Result<File, String> {
+		unimplemented!()
+	}
+
+	fn release_files(&mut self) {}
+
+	fn snapshot(&self, _header: &BlockHeader) -> Result<(), String> {
+		Ok(())
+	}
+
+	fn dump_stats(&self) {}
+}
+
+impl<T: PMMRable> VecBackend<T> {
+	/// Instantiates a new VecBackend<T>
+	pub fn new() -> VecBackend<T> {
+		VecBackend {
+			data: vec![],
+			hashes: vec![],
+			remove_list: vec![],
+		}
+	}
 }

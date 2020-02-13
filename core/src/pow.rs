@@ -103,7 +103,7 @@ pub fn pow_size(
 		ctx.set_header_nonce(bh.pre_pow(), None, true)?;
 		if let Ok(proofs) = ctx.find_cycles() {
 			bh.pow.proof = proofs[0].clone();
-			if bh.pow.to_difficulty(bh.height) >= diff {
+			if bh.pow.to_difficulty(bh.height).enlarge(bh.price_mmr_size) >= diff {
 				return Ok(());
 			}
 		}
@@ -145,7 +145,13 @@ mod test {
 		.unwrap();
 		println!("nonce {}", b.header.pow.nonce);
 		assert_ne!(b.header.pow.nonce, 310);
-		assert!(b.header.pow.to_difficulty(0) >= Difficulty::min());
+		assert!(
+			b.header
+				.pow
+				.to_difficulty(0)
+				.enlarge(b.header.price_mmr_size)
+				>= Difficulty::min()
+		);
 		assert!(verify_size(&b.header).is_ok());
 	}
 }

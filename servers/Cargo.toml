@@ -10,10 +10,13 @@ workspace = ".."
 edition = "2018"
 
 [dependencies]
+byteorder = "1"
 hyper = "0.12"
 hyper-rustls = "0.14"
 fs2 = "0.4"
 futures = "0.1"
+failure = "0.1"
+failure_derive = "0.1"
 http = "0.1"
 itertools = "0.7"
 lmdb-zero = "0.4.4"
@@ -22,8 +25,10 @@ serde = "1"
 log = "0.4"
 serde_derive = "1"
 serde_json = "1"
-chrono = "0.4.4"
+chrono = { version = "0.4.7", features = ["serde"] }
 tokio =  "0.1.11"
+
+diff0 = { path = "../diff0", version = "0.1.0" }
 
 gotts_api = { path = "../api", version = "0.0.6" }
 gotts_chain = { path = "../chain", version = "0.0.6" }

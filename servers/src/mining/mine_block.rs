@@ -28,10 +28,12 @@ use crate::api;
 use crate::chain;
 use crate::common::types::Error;
 use crate::core::core::verifier_cache::VerifierCache;
+use crate::core::core::{get_median_price, prices_root};
 use crate::core::core::{Output, TxKernel};
 use crate::core::libtx::secp_ser;
 use crate::core::libtx::ProofBuilder;
 use crate::core::{consensus, core, global};
+use crate::gotts::price_pool::PricePool;
 use crate::keychain::{ExtKeychain, Identifier, Keychain};
 use crate::pool;
 
@@ -73,6 +75,7 @@ pub struct CbData {
 pub fn get_block(
 	chain: &Arc<chain::Chain>,
 	tx_pool: &Arc<RwLock<pool::TransactionPool>>,
+	price_pool: &Arc<RwLock<PricePool>>,
 	verifier_cache: Arc<RwLock<dyn VerifierCache>>,
 	key_id: Option<Identifier>,
 	wallet_listener_url: Option<String>,
@@ -82,6 +85,7 @@ pub fn get_block(
 	let mut result = build_block(
 		chain,
 		tx_pool,
+		price_pool,
 		verifier_cache.clone(),
 		key_id.clone(),
 		wallet_listener_url.clone(),
@@ -122,6 +126,7 @@ pub fn get_block(
 		result = build_block(
 			chain,
 			tx_pool,
+			price_pool,
 			verifier_cache.clone(),
 			new_key_id,
 			wallet_listener_url.clone(),
@@ -135,6 +140,7 @@ pub fn get_block(
 fn build_block(
 	chain: &Arc<chain::Chain>,
 	tx_pool: &Arc<RwLock<pool::TransactionPool>>,
+	price_pool: &Arc<RwLock<PricePool>>,
 	verifier_cache: Arc<RwLock<dyn VerifierCache>>,
 	key_id: Option<Identifier>,
 	wallet_listener_url: Option<String>,
@@ -147,6 +153,7 @@ fn build_block(
 	if now_sec <= head_sec {
 		now_sec = head_sec + 1;
 	}
+	let timestamp = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(now_sec, 0), Utc);
 
 	// Determine the difficulty our block should be at.
 	// Note: do not keep the difficulty_iter in scope (it has an active batch).
@@ -180,13 +187,20 @@ fn build_block(
 	let (output, kernel, block_fees) = get_coinbase(wallet_listener_url, block_fees)?;
 	let mut b = core::Block::from_reward(&head, txs, output, kernel, difficulty.difficulty)?;
 
+	// Extract current "mineable" prices from the pool.
+	b.prices = price_pool.read().prepare_mineable_prices(timestamp)?;
+	b.header.median_price = get_median_price(&b.prices)?;
+	let (price_root, price_mmr_size) = prices_root(&b.prices)?;
+	b.header.price_root = price_root;
+	b.header.price_mmr_size = price_mmr_size;
+
 	// making sure we're not spending time mining a useless block
 	let complete_inputs = chain.get_complete_inputs(&b.inputs())?;
 	b.validate(verifier_cache, Some(&complete_inputs))?;
 
 	b.header.pow.nonce = thread_rng().gen();
 	b.header.pow.secondary_scaling = difficulty.secondary_scaling;
-	b.header.timestamp = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(now_sec, 0), Utc);
+	b.header.timestamp = timestamp;
 
 	debug!(
 		"Built new block with {} inputs and {} outputs, block difficulty: {}, cumulative difficulty {}",

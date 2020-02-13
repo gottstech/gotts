@@ -82,6 +82,8 @@ fn very_empty_block() {
 #[test]
 // builds a block with a tx spending another and check that cut_through occurred
 fn block_with_cut_through() {
+	util::init_test_logger();
+	global::set_mining_mode(ChainTypes::AutomatedTesting);
 	let keychain = ExtKeychain::from_random_seed(false).unwrap();
 	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
 	let key_id1 = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
@@ -121,6 +123,8 @@ fn block_with_cut_through() {
 
 #[test]
 fn empty_block_with_coinbase_is_valid() {
+	util::init_test_logger();
+	global::set_mining_mode(ChainTypes::AutomatedTesting);
 	let keychain = ExtKeychain::from_random_seed(false).unwrap();
 	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
 	let prev = BlockHeader::default();
@@ -156,6 +160,8 @@ fn empty_block_with_coinbase_is_valid() {
 // invalidates the block and specifically it causes verify_coinbase to fail
 // additionally verifying the merkle_inputs_outputs also fails
 fn remove_coinbase_output_flag() {
+	util::init_test_logger();
+	global::set_mining_mode(ChainTypes::AutomatedTesting);
 	let keychain = ExtKeychain::from_random_seed(false).unwrap();
 	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
 	let prev = BlockHeader::default();
@@ -179,6 +185,8 @@ fn remove_coinbase_output_flag() {
 // test that flipping the COINBASE flag on the kernel features
 // invalidates the block and specifically it causes verify_coinbase to fail
 fn remove_coinbase_kernel_flag() {
+	util::init_test_logger();
+	global::set_mining_mode(ChainTypes::AutomatedTesting);
 	let keychain = ExtKeychain::from_random_seed(false).unwrap();
 	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
 	let prev = BlockHeader::default();
@@ -218,12 +226,18 @@ fn serialize_deserialize_header_version() {
 
 #[test]
 fn serialize_deserialize_block_header() {
+	util::init_test_logger();
+	global::set_mining_mode(ChainTypes::AutomatedTesting);
 	let keychain = ExtKeychain::from_random_seed(false).unwrap();
 	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
 	let prev = BlockHeader::default();
 	let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 	let b = new_block(vec![], &keychain, &builder, &prev, &key_id);
 	let header1 = b.header;
+	println!(
+		"header = {}",
+		serde_json::to_string_pretty(&header1).unwrap()
+	);
 
 	let mut vec = Vec::new();
 	ser::serialize_default(&mut vec, &header1).expect("serialization failed");
@@ -235,6 +249,8 @@ fn serialize_deserialize_block_header() {
 
 #[test]
 fn serialize_deserialize_block() {
+	util::init_test_logger();
+	global::set_mining_mode(ChainTypes::AutomatedTesting);
 	let tx1 = tx1i2o();
 	let keychain = ExtKeychain::from_random_seed(false).unwrap();
 	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
@@ -255,6 +271,7 @@ fn serialize_deserialize_block() {
 
 #[test]
 fn empty_block_serialized_size() {
+	util::init_test_logger();
 	global::set_mining_mode(ChainTypes::AutomatedTesting);
 	let keychain = ExtKeychain::from_random_seed(false).unwrap();
 	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
@@ -263,12 +280,13 @@ fn empty_block_serialized_size() {
 	let b = new_block(vec![], &keychain, &builder, &prev, &key_id);
 	let mut vec = Vec::new();
 	ser::serialize_default(&mut vec, &b).expect("serialization failed");
-	let target_len = 397;
+	let target_len = 629;
 	assert_eq!(vec.len(), target_len);
 }
 
 #[test]
 fn block_single_tx_serialized_size() {
+	util::init_test_logger();
 	global::set_mining_mode(ChainTypes::AutomatedTesting);
 	let keychain = ExtKeychain::from_random_seed(false).unwrap();
 	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
@@ -276,14 +294,16 @@ fn block_single_tx_serialized_size() {
 	let prev = BlockHeader::default();
 	let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 	let b = new_block(vec![&tx1], &keychain, &builder, &prev, &key_id);
+	println!("b = {}", serde_json::to_string_pretty(&b).unwrap());
 	let mut vec = Vec::new();
 	ser::serialize_default(&mut vec, &b).expect("serialization failed");
-	let target_len = 642;
+	let target_len = 874;
 	assert_eq!(vec.len(), target_len);
 }
 
 #[test]
 fn empty_compact_block_serialized_size() {
+	util::init_test_logger();
 	global::set_mining_mode(ChainTypes::AutomatedTesting);
 	let keychain = ExtKeychain::from_random_seed(false).unwrap();
 	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
@@ -293,12 +313,13 @@ fn empty_compact_block_serialized_size() {
 	let cb: CompactBlock = b.into();
 	let mut vec = Vec::new();
 	ser::serialize_default(&mut vec, &cb).expect("serialization failed");
-	let target_len = 405;
+	let target_len = 507;
 	assert_eq!(vec.len(), target_len);
 }
 
 #[test]
 fn compact_block_single_tx_serialized_size() {
+	util::init_test_logger();
 	global::set_mining_mode(ChainTypes::AutomatedTesting);
 	let keychain = ExtKeychain::from_random_seed(false).unwrap();
 	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
@@ -307,14 +328,16 @@ fn compact_block_single_tx_serialized_size() {
 	let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 	let b = new_block(vec![&tx1], &keychain, &builder, &prev, &key_id);
 	let cb: CompactBlock = b.into();
+	println!("cb = {}", serde_json::to_string_pretty(&cb).unwrap());
 	let mut vec = Vec::new();
 	ser::serialize_default(&mut vec, &cb).expect("serialization failed");
-	let target_len = 411;
+	let target_len = 513;
 	assert_eq!(vec.len(), target_len);
 }
 
 #[test]
 fn block_10_tx_serialized_size() {
+	util::init_test_logger();
 	global::set_mining_mode(global::ChainTypes::AutomatedTesting);
 	let keychain = ExtKeychain::from_random_seed(false).unwrap();
 	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
@@ -329,12 +352,13 @@ fn block_10_tx_serialized_size() {
 	let b = new_block(txs.iter().collect(), &keychain, &builder, &prev, &key_id);
 	let mut vec = Vec::new();
 	ser::serialize_default(&mut vec, &b).expect("serialization failed");
-	let target_len = 2_847;
+	let target_len = 3079;
 	assert_eq!(vec.len(), target_len,);
 }
 
 #[test]
 fn compact_block_10_tx_serialized_size() {
+	util::init_test_logger();
 	global::set_mining_mode(ChainTypes::AutomatedTesting);
 	let keychain = ExtKeychain::from_random_seed(false).unwrap();
 	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
@@ -350,12 +374,14 @@ fn compact_block_10_tx_serialized_size() {
 	let cb: CompactBlock = b.into();
 	let mut vec = Vec::new();
 	ser::serialize_default(&mut vec, &cb).expect("serialization failed");
-	let target_len = 465;
+	let target_len = 567;
 	assert_eq!(vec.len(), target_len,);
 }
 
 #[test]
 fn compact_block_hash_with_nonce() {
+	util::init_test_logger();
+	global::set_mining_mode(ChainTypes::AutomatedTesting);
 	let keychain = ExtKeychain::from_random_seed(false).unwrap();
 	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
 	let tx = tx1i2o();
@@ -387,6 +413,8 @@ fn compact_block_hash_with_nonce() {
 
 #[test]
 fn convert_block_to_compact_block() {
+	util::init_test_logger();
+	global::set_mining_mode(ChainTypes::AutomatedTesting);
 	let keychain = ExtKeychain::from_random_seed(false).unwrap();
 	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
 	let tx1 = tx1i2o();
@@ -411,13 +439,15 @@ fn convert_block_to_compact_block() {
 
 #[test]
 fn hydrate_empty_compact_block() {
+	util::init_test_logger();
+	global::set_mining_mode(ChainTypes::AutomatedTesting);
 	let keychain = ExtKeychain::from_random_seed(false).unwrap();
 	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
 	let prev = BlockHeader::default();
 	let key_id = ExtKeychain::derive_key_id(1, 1, 0, 0, 0);
 	let b = new_block(vec![], &keychain, &builder, &prev, &key_id);
 	let cb: CompactBlock = b.clone().into();
-	let hb = Block::hydrate_from(cb, vec![]).unwrap();
+	let hb = Block::hydrate_from(cb, vec![], vec![]).unwrap();
 	assert_eq!(hb.header, b.header);
 	assert_eq!(hb.outputs(), b.outputs());
 	assert_eq!(hb.kernels(), b.kernels());
@@ -425,6 +455,8 @@ fn hydrate_empty_compact_block() {
 
 #[test]
 fn serialize_deserialize_compact_block() {
+	util::init_test_logger();
+	global::set_mining_mode(ChainTypes::AutomatedTesting);
 	let keychain = ExtKeychain::from_random_seed(false).unwrap();
 	let builder = ProofBuilder::new(&keychain, &Identifier::zero());
 	let tx1 = tx1i2o();

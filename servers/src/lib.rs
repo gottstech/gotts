@@ -41,5 +41,6 @@ mod gotts;
 mod mining;
 
 pub use crate::common::stats::{DiffBlock, PeerStats, ServerStats, StratumStats, WorkerStats};
-pub use crate::common::types::{ServerConfig, StratumServerConfig};
+pub use crate::common::types::{PriceOracleServerConfig, ServerConfig, StratumServerConfig};
+pub use crate::gotts::price_pool::PricePool;
 pub use crate::gotts::server::Server;

@@ -28,6 +28,7 @@ use chrono::prelude::*;
 use crate::chain;
 use crate::core::core;
 use crate::core::core::hash::Hash;
+use crate::core::core::price::ExchangeRates;
 use crate::core::global;
 use crate::core::pow::Difficulty;
 use crate::core::ser::{self, ProtocolVersion, Readable, Reader, Writeable, Writer};
@@ -383,6 +384,7 @@ enum_from_primitive! {
 		ManualBan = 5,
 		FraudHeight = 6,
 		BadHandshake = 7,
+		BadPrice = 8,
 	}
 }
 
@@ -515,6 +517,13 @@ pub trait ChainAdapter: Sync + Send {
 		-> Result<bool, chain::Error>;
 
 	fn get_transaction(&self, kernel_hash: Hash) -> Option<core::Transaction>;
+
+	/// A price has been received from one of our peers
+	fn price_received(
+		&self,
+		price: ExchangeRates,
+		peer_info: &PeerInfo,
+	) -> Result<bool, chain::Error>;
 
 	fn tx_kernel_received(
 		&self,

@@ -974,8 +974,8 @@ impl TransactionBody {
 		// todo: failed verification result no need to cache?
 		{
 			let mut verifier = verifier.write();
-			verifier.add_kernel_sig_verified(kernels);
-			verifier.add_unlocker_verified(inputs);
+			verifier.add_kernel_sig_verified(&kernels);
+			verifier.add_unlocker_verified(&inputs);
 		}
 		Ok(())
 	}

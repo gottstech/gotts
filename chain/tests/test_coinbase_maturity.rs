@@ -31,6 +31,9 @@ use gotts_util as util;
 use std::fs;
 use std::sync::Arc;
 
+pub mod chain_test_helper;
+use self::chain_test_helper::generate_prices_for_block;
+
 fn clean_output_dir(dir_name: &str) {
 	let _ = fs::remove_dir_all(dir_name);
 }
@@ -72,6 +75,7 @@ fn test_coinbase_maturity() {
 		let mut block = core::core::Block::new(&prev, vec![], Difficulty::min(), reward).unwrap();
 		block.header.timestamp = prev.timestamp + Duration::seconds(60);
 		block.header.pow.secondary_scaling = next_header_info.secondary_scaling;
+		generate_prices_for_block(&mut block);
 
 		chain.set_txhashset_roots(&mut block).unwrap();
 
@@ -155,6 +159,7 @@ fn test_coinbase_maturity() {
 
 			block.header.timestamp = prev.timestamp + Duration::seconds(60);
 			block.header.pow.secondary_scaling = next_header_info.secondary_scaling;
+			generate_prices_for_block(&mut block);
 
 			chain.set_txhashset_roots(&mut block).unwrap();
 
@@ -238,6 +243,7 @@ fn test_coinbase_maturity() {
 					consensus::next_difficulty(1, chain.difficulty_iter().unwrap());
 				block.header.timestamp = prev.timestamp + Duration::seconds(60);
 				block.header.pow.secondary_scaling = next_header_info.secondary_scaling;
+				generate_prices_for_block(&mut block);
 
 				chain.set_txhashset_roots(&mut block).unwrap();
 
@@ -266,6 +272,7 @@ fn test_coinbase_maturity() {
 
 			block.header.timestamp = prev.timestamp + Duration::seconds(60);
 			block.header.pow.secondary_scaling = next_header_info.secondary_scaling;
+			generate_prices_for_block(&mut block);
 
 			chain.set_txhashset_roots(&mut block).unwrap();
 

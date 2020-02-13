@@ -15,6 +15,9 @@
 
 //! Common test functions
 
+use chrono::{DateTime, Duration, Utc};
+use gotts_core::core::price;
+use gotts_core::core::price::{get_median_price, prices_root, ExchangeRates, PriceVersion};
 use gotts_core::core::{
 	block::{Block, BlockHeader},
 	Transaction,
@@ -27,6 +30,9 @@ use gotts_core::libtx::{
 use gotts_core::pow::Difficulty;
 use gotts_keychain as keychain;
 use gotts_keychain::{Identifier, Keychain};
+use gotts_util::secp;
+use gotts_util::secp::key::PublicKey;
+use gotts_util::secp::Signature;
 
 // utility producing a transaction with 2 inputs and a single outputs
 pub fn tx2i1o() -> Transaction {
@@ -91,6 +97,57 @@ pub fn tx1i2o() -> Transaction {
 	.unwrap()
 }
 
+/// Generate a test price for a block.
+pub fn generate_prices_for_block(b: &mut Block) {
+	b.prices = generate_test_prices(b.header.timestamp);
+	b.header.median_price = get_median_price(&b.prices).unwrap();
+	let (price_root, price_mmr_size) = prices_root(&b.prices).unwrap();
+	b.header.price_root = price_root;
+	b.header.price_mmr_size = price_mmr_size;
+}
+
+/// Generate a test price.
+fn generate_test_prices(header_timestamp: DateTime<Utc>) -> Vec<ExchangeRates> {
+	let mut prices: Vec<ExchangeRates> = vec![];
+	let keychain = price::auto_test_feeder_keychain();
+
+	let key_id_0 = keychain::ExtKeychain::derive_key_id(3, 1, 0, 0, 0);
+	let prikey_0 = keychain.derive_key(&key_id_0).unwrap();
+	let pubkey_0 = PublicKey::from_secret_key(keychain.secp(), &prikey_0).unwrap();
+
+	let mut price = ExchangeRates {
+		version: PriceVersion(0),
+		source_uid: 0,
+		pairs: vec![
+			7944.59_f64,
+			138.95_f64,
+			1.1116_f64,
+			1.3111_f64,
+			6.9481_f64,
+			109.22_f64,
+			1.3037_f64,
+		],
+		date: header_timestamp - Duration::seconds(1),
+		sig: Signature::from(secp::ffi::Signature::new()),
+	};
+
+	let secp = keychain.secp();
+	price.sig = secp::aggsig::sign_single(
+		&secp,
+		&price.price_sig_msg().unwrap(),
+		&prikey_0,
+		None,
+		None,
+		None,
+		Some(&pubkey_0),
+		None,
+	)
+	.unwrap();
+	prices.push(price.clone());
+
+	prices
+}
+
 // utility to create a block without worrying about the key or previous
 // header
 pub fn new_block<K, B>(
@@ -106,13 +163,15 @@ where
 {
 	let fees = txs.iter().map(|tx| tx.fee()).sum();
 	let reward_output = reward::output(keychain, builder, &key_id, fees, false).unwrap();
-	Block::new(
+	let mut b = Block::new(
 		&previous_header,
 		txs.into_iter().cloned().collect(),
 		Difficulty::min(),
 		reward_output,
 	)
-	.unwrap()
+	.unwrap();
+	generate_prices_for_block(&mut b);
+	b
 }
 
 // utility producing a transaction that spends an output with the provided
