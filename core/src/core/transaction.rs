@@ -443,7 +443,7 @@ impl TxKernel {
 			msgs.push(tx_kernel.msg_to_sign()?);
 		}
 
-		if !secp::aggsig::verify_batch(&secp, &sigs, &msgs, &pubkeys) {
+		if !secp::verify_batch(&secp, &sigs, &msgs, &pubkeys) {
 			return Err(Error::IncorrectSignature);
 		}
 
@@ -964,7 +964,7 @@ impl TransactionBody {
 				let secp = static_secp_instance();
 				let secp = secp.lock();
 
-				if !secp::aggsig::verify_batch(&secp, &sigs, &msgs, &pubkeys) {
+				if !secp::verify_batch(&secp, &sigs, &msgs, &pubkeys) {
 					return Err(Error::UnlockerIncorrectSignature);
 				}
 			}
