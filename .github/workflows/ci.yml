@@ -31,19 +31,19 @@ jobs:
           cargo test --release && \
           cd - > /dev/null || exit 1
         done
-  macos:
-    name: macOS CI
-    runs-on: macos-latest
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v2
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
-    - name: Tests
-      run: cargo test --release --all
+#  macos:
+#    name: macOS CI
+#    runs-on: macos-latest
+#    steps:
+#    - name: Checkout
+#      uses: actions/checkout@v2
+#    - name: Install Rust
+#      uses: actions-rs/toolchain@v1
+#      with:
+#        profile: minimal
+#        toolchain: stable
+#    - name: Tests
+#      run: export CPATH=`xcrun --show-sdk-path`/usr/include && cargo test --release --all
 
   windows:
     name: Windows CI

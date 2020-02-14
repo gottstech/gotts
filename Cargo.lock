@@ -911,7 +911,7 @@ dependencies = [
 [[package]]
 name = "gotts_secp256k1zkp"
 version = "0.7.10"
-source = "git+https://github.com/gottstech/rust-secp256k1-zkp?rev=51798f2#51798f2748a4064016e3b3c6d35ad75900013703"
+source = "git+https://github.com/gottstech/rust-secp256k1-zkp?rev=98c2c2c#98c2c2c69248b0a14287c69610438130a938669e"
 dependencies = [
  "arrayvec 0.3.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "cc 1.0.45 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -986,7 +986,7 @@ dependencies = [
  "backtrace 0.3.37 (registry+https://github.com/rust-lang/crates.io-index)",
  "base64 0.9.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "gotts_secp256k1zkp 0.7.10 (git+https://github.com/gottstech/rust-secp256k1-zkp?rev=51798f2)",
+ "gotts_secp256k1zkp 0.7.10 (git+https://github.com/gottstech/rust-secp256k1-zkp?rev=98c2c2c)",
  "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2931,7 +2931,7 @@ dependencies = [
 "checksum getrandom 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)" = "473a1265acc8ff1e808cd0a1af8cee3c2ee5200916058a2ca113c29f2d903571"
 "checksum git2 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)" = "39f27186fbb5ec67ece9a56990292bc5aed3c3fc51b9b07b0b52446b1dfb4a82"
 "checksum glob 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)" = "8be18de09a56b60ed0edf84bc9df007e30040691af7acd1c41874faac5895bfb"
-"checksum gotts_secp256k1zkp 0.7.10 (git+https://github.com/gottstech/rust-secp256k1-zkp?rev=51798f2)" = "<none>"
+"checksum gotts_secp256k1zkp 0.7.10 (git+https://github.com/gottstech/rust-secp256k1-zkp?rev=98c2c2c)" = "<none>"
 "checksum h2 0.1.26 (registry+https://github.com/rust-lang/crates.io-index)" = "a5b34c246847f938a410a03c5458c7fee2274436675e76d8b903c08efc29c462"
 "checksum hashbrown 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "29fba9abe4742d586dfd0c06ae4f7e73a1c2d86b856933509b269d82cdf06e18"
 "checksum hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "805026a5d0141ffc30abb3be3173848ad46a1b1664fe632428479619a3644d77"
