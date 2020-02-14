@@ -1,8 +1,8 @@
 diff --git a/Cargo.toml b/Cargo.toml
-index fd9a311..26889d7 100644
+index 336272f..2d80295 100644
 --- a/Cargo.toml
 +++ b/Cargo.toml
-@@ -46,8 +46,6 @@ cursive = { version = "0.12", default-features = false, features = ["pancurses-b
+@@ -48,8 +48,6 @@ cursive = { version = "0.12", default-features = false, features = ["pancurses-b
  [target.'cfg(windows)'.dependencies.pancurses]
  version = "0.16.0"
  features = ["win32"]
@@ -10,4 +10,4 @@ index fd9a311..26889d7 100644
 -cursive = "0.12"
  
  [build-dependencies]
- built = "0.3"
+ built = "0.4" 
