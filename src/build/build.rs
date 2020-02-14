@@ -17,7 +17,6 @@
 
 use built;
 
-use std::env;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -43,10 +42,8 @@ fn main() {
 	// build and versioning information
 	let mut opts = built::Options::default();
 	opts.set_dependencies(true);
-	// don't fail the build if something's missing, may just be cargo release
-	let _ = built::write_built_file_with_opts(
-		&opts,
-		std::path::Path::new(env!("CARGO_MANIFEST_DIR")),
-		std::path::Path::new(format!("{}{}", env::var("OUT_DIR").unwrap(), "/built.rs").as_str()),
-	);
+	let src = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+	let dst = std::path::Path::new(&std::env::var("OUT_DIR").unwrap()).join("built.rs");
+	built::write_built_file_with_opts(&opts, src.as_ref(), &dst)
+		.expect("Failed to acquire build-time information");
 }
