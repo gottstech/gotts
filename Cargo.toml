@@ -21,7 +21,7 @@ path = "src/bin/gotts.rs"
 
 [dependencies]
 blake2-rfc = "0.2"
-chrono = "0.4.4"
+chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "2.31", features = ["yaml"] }
 ctrlc = { version = "3.1", features = ["termination"] }
 humansize = "1.1.0"
@@ -31,6 +31,8 @@ log = "0.4"
 term = "0.5"
 failure = "0.1"
 failure_derive = "0.1"
+built = { version = "0.4", features = ["git2", "chrono", "semver"] }
+semver = "0.9"
 
 gotts_api = { path = "./api", version = "0.0.6" }
 gotts_chain = { path = "./chain", version = "0.0.6" }
@@ -50,7 +52,7 @@ features = ["win32"]
 cursive = "0.12"
 
 [build-dependencies]
-built = "0.3"
+built = "0.4" 
 
 [dev-dependencies]
 gotts_chain = { path = "./chain", version = "0.0.6" }

@@ -11,14 +11,13 @@ edition = "2018"
 
 [dependencies]
 byteorder = "1"
-croaring = "0.3.9"
-env_logger = "0.5"
+croaring = "0.4.4"
 libc = "0.2"
 failure = "0.1"
 failure_derive = "0.1"
 lmdb-zero = "0.4.4"
 memmap = "0.7"
-tempfile = "3.0.5"
+tempfile = "3.1"
 serde = "1"
 serde_derive = "1"
 log = "0.4"
@@ -27,6 +26,6 @@ gotts_core = { path = "../core", version = "0.0.6" }
 gotts_util = { path = "../util", version = "0.0.6" }
 
 [dev-dependencies]
-chrono = "0.4.4"
-rand = "0.6"
+chrono = { version = "0.4", features = ["serde"] }
+rand = "0.7"
 filetime = "0.2"
