@@ -29,5 +29,4 @@ gotts_store = { path = "../store", version = "0.0.6" }
 gotts_util = { path = "../util", version = "0.0.6" }
 
 [dev-dependencies]
-env_logger = "0.5"
 rand = "0.7"

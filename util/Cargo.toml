@@ -22,7 +22,7 @@ log4rs = { version = "0.8.1", features = ["rolling_file_appender", "compound_pol
 log = "0.4"
 walkdir = "2"
 zip = { version = "0.5", default-features = false }
-parking_lot = {version = "0.7"}
+parking_lot = {version = "0.10"}
 zeroize = "0.9"
 
 [dependencies.gotts_secp256k1zkp]

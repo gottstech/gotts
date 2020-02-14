@@ -30,7 +30,7 @@ http = "0.1.5"
 hyper-rustls = "0.14"
 futures = "0.1.21"
 rustls = "0.13"
-url = "1.7.0"
+url = "2.1"
 
 gotts_core = { path = "../core", version = "0.0.6" }
 gotts_chain = { path = "../chain", version = "0.0.6" }
