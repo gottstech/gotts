@@ -24,11 +24,11 @@ uuid = { version = "0.6", features = ["serde", "v4"] }
 lazy_static = "1"
 zeroize = "0.9"
 
-digest = "0.7"
+digest = "0.8"
 hex = "0.4"
-hmac = "0.6"
-ripemd160 = "0.7"
-sha2 = "0.7"
-pbkdf2 = "0.2"
+hmac = "0.7"
+ripemd160 = "0.8"
+sha2 = "0.8"
+pbkdf2 = "0.3"
 
 gotts_util = { path = "../util", version = "0.0.6" }
