@@ -729,7 +729,7 @@ mod tests {
 		}
 		fn result_sha512(&mut self) -> [u8; 64] {
 			let mut result = [0; 64];
-			result.copy_from_slice(self.hmac_sha512.result().code().as_slice());
+			result.copy_from_slice(self.hmac_sha512.clone().result().code().as_slice());
 			result
 		}
 		fn sha_256(&self, input: &[u8]) -> [u8; 32] {

@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use env_logger;
 use gotts_core as core;
 use gotts_store as store;
+use gotts_util as util;
 
 use std::fs;
 
@@ -874,10 +874,7 @@ fn create_numbered_files(
 }
 
 fn setup(tag: &str) -> (String, Vec<TestElem>) {
-	match env_logger::try_init() {
-		Ok(_) => println!("Initializing env logger"),
-		Err(e) => println!("env logger already initialized: {:?}", e),
-	};
+	util::init_test_logger();
 	let t = Utc::now();
 	let data_dir = format!(
 		"./target/tmp/{}.{}-{}",
@@ -992,10 +989,7 @@ fn variable_load(
 }
 
 fn variable_setup(tag: &str) -> (String, Vec<TestVariableElem>) {
-	match env_logger::try_init() {
-		Ok(_) => println!("Initializing env logger"),
-		Err(e) => println!("env logger already initialized: {:?}", e),
-	};
+	util::init_test_logger();
 	let t = Utc::now();
 	let data_dir = format!(
 		"./target/tmp/{}.{}-{}",

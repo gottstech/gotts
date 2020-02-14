@@ -23,7 +23,6 @@ use self::core::{consensus, pow};
 use self::keychain::{ExtKeychain, ExtKeychainPath, Identifier, Keychain};
 use self::util::RwLock;
 use chrono::Duration;
-use env_logger;
 use gotts_chain as chain;
 use gotts_core as core;
 use gotts_keychain as keychain;
@@ -40,7 +39,7 @@ fn clean_output_dir(dir_name: &str) {
 
 #[test]
 fn test_coinbase_maturity() {
-	let _ = env_logger::init();
+	util::init_test_logger();
 	let chain_dir = ".gotts_coinbase";
 	clean_output_dir(chain_dir);
 	global::set_mining_mode(ChainTypes::AutomatedTesting);

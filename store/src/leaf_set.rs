@@ -118,7 +118,7 @@ impl LeafSet {
 		// First remove pos from leaf_set that were
 		// added after the point we are rewinding to.
 		let marker_from = cutoff_pos;
-		let marker_to = self.bitmap.maximum().unwrap() as u64;
+		let marker_to = self.bitmap.maximum().unwrap_or(0) as u64;
 		let rewind_add_pos: Bitmap = ((marker_from + 1)..=marker_to).map(|x| x as u32).collect();
 		bitmap.andnot_inplace(&rewind_add_pos);
 
@@ -139,7 +139,7 @@ impl LeafSet {
 		// First remove pos from leaf_set that were
 		// added after the point we are rewinding to.
 		let marker_from = cutoff_pos;
-		let marker_to = self.bitmap.maximum().unwrap() as u64;
+		let marker_to = self.bitmap.maximum().unwrap_or(0) as u64;
 		let rewind_add_pos: Bitmap = ((marker_from + 1)..=marker_to).map(|x| x as u32).collect();
 		self.bitmap.andnot_inplace(&rewind_add_pos);
 

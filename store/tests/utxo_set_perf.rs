@@ -13,9 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use env_logger;
-
 use gotts_store as store;
+use gotts_util as util;
 
 use chrono::prelude::Utc;
 use std::fs;
@@ -97,7 +96,7 @@ fn test_leaf_set_performance() {
 }
 
 fn setup(test_name: &str) -> (LeafSet, String) {
-	let _ = env_logger::init();
+	util::init_test_logger();
 	let data_dir = format!("./target/{}-{}", test_name, Utc::now().timestamp());
 	fs::create_dir_all(data_dir.clone()).unwrap();
 	let leaf_set = LeafSet::open(&format!("{}/{}", data_dir, "utxo.bin")).unwrap();

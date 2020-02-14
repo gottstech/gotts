@@ -11,14 +11,14 @@ edition = "2018"
 
 [dependencies]
 backtrace = "0.3"
-base64 = "0.9"
+base64 = "0.11"
 byteorder = "1"
 hex = "0.4"
 lazy_static = "1"
 rand = "0.7"
 serde = "1"
 serde_derive = "1"
-log4rs = { version = "0.8.1", features = ["rolling_file_appender", "compound_policy", "size_trigger", "fixed_window_roller"] }
+log4rs = { version = "0.10", features = ["rolling_file_appender", "compound_policy", "size_trigger", "fixed_window_roller"] }
 log = "0.4"
 walkdir = "2"
 zip = { version = "0.5", default-features = false }
