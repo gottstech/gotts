@@ -1,4 +1,5 @@
-[![Build Status](https://img.shields.io/travis/gottstech/gotts/master.svg)](https://travis-ci.org/gottstech/gotts)
+[![Build Status](https://github.com/gottstech/gotts/workflows/Continuous%20Integration/badge.svg
+)](https://github.com/gottstech/gotts/actions)
 [![Coverage Status](https://img.shields.io/codecov/c/github/gottstech/gotts/master.svg)](https://codecov.io/gh/gottstech/gotts)
 [![Chat](https://img.shields.io/gitter/room/gotts_community/Lobby.svg)](https://gitter.im/gotts_community/lobby)
 [![Documentation Wiki](https://img.shields.io/badge/doc-wiki-blue.svg)](https://github.com/gottstech/docs/wiki)
@@ -41,6 +42,10 @@ Find us:
 To learn more about the technology, read our [introduction](docs/intro.md).
 
 To build and try out Gotts, see the [build docs](docs/build.md).
+
+## WiKi
+
+https://github.com/gottstech/gotts/wiki
 
 ## Philosophy
 
