@@ -51,9 +51,9 @@ jobs:
         profile: minimal
         toolchain: stable
     - name: Tests
-      run: cargo test --release --all
+      run: export CPATH=`xcrun --show-sdk-path`/usr/include && cargo test --release --all
     - name: Build
-      run: cargo build --release
+      run: export CPATH=`xcrun --show-sdk-path`/usr/include && cargo build --release
     - name: Set release version
       run: echo ::set-env name=RELEASE_VERSION::$(echo ${GITHUB_REF:10})
     - name: Create archive

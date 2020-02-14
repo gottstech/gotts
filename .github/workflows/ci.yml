@@ -43,7 +43,7 @@ jobs:
         profile: minimal
         toolchain: stable
     - name: Tests
-      run: cargo test --release --all
+      run: export CPATH=`xcrun --show-sdk-path`/usr/include && cargo test --release --all
 
   windows:
     name: Windows CI
