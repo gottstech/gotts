@@ -14,13 +14,13 @@ bitflags = "1"
 bytes = "0.4"
 enum_primitive = "0.1"
 net2 = "0.2"
-num = "0.1"
-rand = "0.6"
+num = "0.2"
+rand = "0.7"
 serde = "1"
 serde_derive = "1"
 tempfile = "3.0.5"
 log = "0.4"
-chrono = { version = "0.4.4", features = ["serde"] }
+chrono = { version = "0.4", features = ["serde"] }
 
 gotts_core = { path = "../core", version = "0.0.6" }
 gotts_store = { path = "../store", version = "0.0.6" }

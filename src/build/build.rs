@@ -46,7 +46,7 @@ fn main() {
 	// don't fail the build if something's missing, may just be cargo release
 	let _ = built::write_built_file_with_opts(
 		&opts,
-		env!("CARGO_MANIFEST_DIR"),
-		format!("{}{}", env::var("OUT_DIR").unwrap(), "/built.rs"),
+		std::path::Path::new(env!("CARGO_MANIFEST_DIR")),
+		std::path::Path::new(format!("{}{}", env::var("OUT_DIR").unwrap(), "/built.rs").as_str()),
 	);
 }

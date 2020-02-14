@@ -27,6 +27,6 @@ gotts_core = { path = "../core", version = "0.0.6" }
 gotts_util = { path = "../util", version = "0.0.6" }
 
 [dev-dependencies]
-chrono = "0.4.4"
-rand = "0.6"
+chrono = { version = "0.4", features = ["serde"] }
+rand = "0.7"
 filetime = "0.2"

@@ -20,12 +20,12 @@ failure_derive = "0.1"
 http = "0.1"
 itertools = "0.7"
 lmdb-zero = "0.4.4"
-rand = "0.6"
+rand = "0.7"
 serde = "1"
 log = "0.4"
 serde_derive = "1"
 serde_json = "1"
-chrono = { version = "0.4.7", features = ["serde"] }
+chrono = { version = "0.4", features = ["serde"] }
 tokio =  "0.1.11"
 
 diff0 = { path = "../diff0", version = "0.1.0" }
