@@ -1,5 +1,7 @@
 # New Design of Gotts Non-Interactive Transaction
 
+## Old Design
+
 The [original design of Gotts Non-Interactive Transaction](https://github.com/gottstech/gotts/blob/v0.0.6/docs/intro.md#gotts-non-interactive-transaction) has been completely implemented on node version [v0.0.6](https://github.com/gottstech/gotts/releases/tag/v0.0.6) and wallet version [v0.0.6](https://github.com/gottstech/gotts-wallet/releases/tag/v0.0.6).
 
 It use the Bitcoin style Public Key Hash to lock the output. To spend a Non-Interactive Output, a Signature with the corresponding revealed Public Key must be provided as the unlocker. This is an intuitive and simple design, since the concept of P2PKH (Pay-To-Public-Key-Hash) is well known in crypto world.
@@ -27,7 +29,7 @@ struct InputUnlocker {
 }
 ```
 
-To implement this NIT design, make all works fluently and kill all those bugs, I had spent two months. So, as a summary of the privious NIT design, let's present an example here taken from the working wallet version [v0.0.6](https://github.com/gottstech/gotts-wallet/releases/tag/v0.0.6).
+Some examples here for the old design, taken from the working wallet version [v0.0.6](https://github.com/gottstech/gotts-wallet/releases/tag/v0.0.6).
 
 <details>
  <summary>An Example of OutputLocker</summary>
@@ -175,7 +177,7 @@ The transaction size of above non-interactive transaction example (1 Input witho
 
 The transaction size of above non-interactive transaction example (1 Input with the _Unlocker_ and 2 Outputs) is 412 bytes.
 
-Recently, I have been thinking whether it will be a better design to change back to Mimblewimble style "locker", i.e. the Pedersen Commitment, to get a more compact Non-Interactive Transaction solution.
+Recently, I have been thinking whether it will be a better design to change back to pure Mimblewimble style "locker", i.e. the Pedersen Commitment, to get a more compact Non-Interactive Transaction solution.
 
 ## Mimblewimble-Style "Locker"
 
@@ -210,31 +212,31 @@ A prerequisite research on the stealth address has been done [here](https://gith
 ### Warm-up and Review: Mimblewimble/Grin Interactive Transaction Design
 
 Looking back the Mimblewimble/Grin Interactive Transaction design, with 1 input and 2 outputs as example:
-```
-(ri*G + vi*H) + (excess'+ offset*G) = (rc*G + vc*H) + (rr*G + vr*H) + (0+fee*H)
-```
+
+_(r<sub>i</sub>&ast;G + v<sub>i</sub>&ast;H) + (excess'+ offset&ast;G) = (r<sub>c</sub>&ast;G + v<sub>c</sub>&ast;H) + (r<sub>r</sub>&ast;G + v<sub>r</sub>&ast;H) + (0+fee&ast;H)_
+
 Where
 
-- `(ri*G + vi*H)` is the spending coin, i.e. the input, which is selected by the sender.
-- `(rc*G + vc*H)` is the change coin, which is created by the sender.
-- `(rr*G + vr*H)` is the sending coin which is created by the receiver.
-- `ri` and `rc` are sender's private keys, `rr` is receiver's private key.
-- `vi` is the input/spending coin amount, `vr` is the sending coin amount for the receiver, `vc` is the change amount.
-- `fee` is the transaction fee for miner who validate and package this transaction.
-- `offset` is the so-called "kernel offset", which is a random value selected by the sender. `offset` is transmitted as part of the transaction data, but only packaged into the block header as the "total offset", which accumulate all transaction `offset` value since the Genesis block. i.e. `offset` is not available on the chain data.
-- `excess'` is the so-called "public excess", which is the public key for transaction kernel signature.
+- _(r<sub>i</sub>&ast;G + v<sub>i</sub>&ast;H)_ is the spending coin, i.e. the input, which is selected by the sender.
+- _(r<sub>c</sub>&ast;G + v<sub>c</sub>&ast;H)_ is the change coin, which is created by the sender.
+- _(r<sub>r</sub>&ast;G + v<sub>r</sub>&ast;H)_ is the sending coin which is created by the receiver.
+- _r<sub>i</sub>_ and _r<sub>c</sub>_ are sender's private keys, _r<sub>r</sub>_ is receiver's private key.
+- _v<sub>i</sub>_ is the input/spending coin amount, _v<sub>r</sub>_ is the sending coin amount for the receiver, _v<sub>c</sub>_ is the change amount.
+- _fee_ is the transaction fee for miner who validate and package this transaction.
+- _offset_ is the so-called "kernel offset", which is a random value selected by the sender. _offset_ is transmitted as part of the transaction data, but only packaged into the block header as the "total offset", which accumulate all transaction _offset_ value since the Genesis block. i.e. _offset_ is not available on the chain data.
+- _excess'_ is the so-called "public excess", which is the public key for transaction kernel signature.
 
 And we have the following relationships:
 
-- `vi = vc + vr + fee`, which is used to calculate the change coin amount `vc`. 
-- `excess' = (rc-ri-offset)*G + rr*G`, which is used to calculate the "public excess".
+- _v<sub>i</sub> = v<sub>c</sub> + v<sub>r</sub> + fee_, which is used to calculate the change coin amount _v<sub>c</sub>_. 
+- _excess' = (r<sub>c</sub>-r<sub>i</sub>-offset)&ast;G + r<sub>r</sub>&ast;G_, which is used to calculate the "public excess".
 
 The Mimblewimble/Grin signature theme is the standard usage of Schonorr 2-of-2 aggregated signature: 
 
-1. The sender notify the receiver his/her public key `P1 = (rc-ri-offset)*G` and a nonce `R1 = k1*G`.
-2. The receiver take his/her public key `P2 = rr*G` and a nonce `R2 = k2*G`, calculate `P = P1+P2` and `R = R1+R2`.
-3. The receiver send back to the sender: `P2`, `R2`, and the partial signature `s1 = k2+e*rr`, where `e = Hash(R || P || m)`.
-4. The sender calculate his/her own partial signature `s2 = k1+e*(rc-ri-offset)`, then aggregate both partial signatures by `s = s1+s2`, to get the final aggregated signature: `(R, s)` and the final public key (i.e. the public excess): `P = P1+P2`.
+1. The sender notify the receiver his/her public key _P<sub>1</sub> = (r<sub>c</sub>-r<sub>i</sub>-offset)&ast;G_ and a nonce _R<sub>1</sub> = k<sub>1</sub>&ast;G_.
+2. The receiver take his/her public key _P<sub>2</sub> = r<sub>r</sub>&ast;G_ and a nonce _R<sub>2</sub> = k<sub>2</sub>&ast;G_, calculate _P = P<sub>1</sub>+P<sub>2</sub>_ and _R = R<sub>1</sub>+R<sub>2</sub>_.
+3. The receiver send back to the sender: _P<sub>2</sub>_, _R<sub>2</sub>_, and the partial signature _s<sub>1</sub> = k<sub>2</sub>+e*r<sub>r</sub>_, where _e = Hash(R || P || m)_.
+4. The sender calculate his/her own partial signature __s<sub>2</sub> = k<sub>1</sub>+e*(r<sub>c</sub>-r<sub>i</sub>-offset)_, then aggregate both partial signatures by _s = s<sub>1</sub>+s<sub>2</sub>_, to get the final aggregated signature: _(R, s)_ and the final public key (i.e. the public excess): _P = P<sub>1</sub>+P<sub>2</sub>_.
 
 Then, we have a "Transaction Kernel" as part of this transaction data, which include the transaction fee info and the signature data. Here is the pseudo-code of a transaction kernel data structure:
 ```Rust
@@ -251,20 +253,20 @@ Comparing to above Mimblewimble/Grin Interactive Transaction theme, now let's co
 
 Still with the example which has 1 input and 2 outputs:
 
-_(x<sub>i</sub>*G + w<sub>i</sub>*H) + Excess = (x<sub>c</sub>*G + w<sub>c</sub>*H) + (A<sub>i</sub>+B<sub>i</sub> + R'.x*H)_
+_(x<sub>i</sub>&ast;G + w<sub>i</sub>&ast;H) + Excess = (x<sub>c</sub>&ast;G + w<sub>c</sub>&ast;H) + (A<sub>i</sub>+B<sub>i</sub> + R'.x&ast;H)_
 
 Where
 
-- _(x<sub>i</sub>*G + w<sub>i</sub>*H)_ is the spending coin, i.e. the input, which is selected by the sender.
-- _(x<sub>c</sub>*G + w<sub>c</sub>*H)_ is the change coin, which is created by the sender.
+- _(x<sub>i</sub>&ast;G + w<sub>i</sub>&ast;H)_ is the spending coin, i.e. the input, which is selected by the sender.
+- _(x<sub>c</sub>&ast;G + w<sub>c</sub>&ast;H)_ is the change coin, which is created by the sender.
 - _x<sub>i</sub>_ and _x<sub>c</sub>_ are sender's private keys.
-- _(A<sub>i</sub>+B<sub>i</sub> + R'.x*H)_ is the sending coin which is **also** created by the **sender**, where _A<sub>i</sub>_ and _B<sub>i</sub>_ are the elements of a receiver's wallet address, and _R'=r*B<sub>i</sub>_ where _r_ is a random secret selected by the sender, _R'.x_ is the point _R'_ x-coordinator.
+- _(A<sub>i</sub>+B<sub>i</sub> + R'.x*H)_ is the sending coin which is **also** created by the **sender**, where _A<sub>i</sub>_ and _B<sub>i</sub>_ are the elements of a receiver's wallet address, and _R'=r&ast;B<sub>i</sub>_ where _r_ is a random secret selected by the sender, _R'.x_ is the point _R'_ x-coordinator.
 - _Excess_ is the transaction public excess.
 
 And we have the following relationships:
 
 - _v<sub>i</sub> = v<sub>c</sub> + v<sub>r</sub> + fee_, which is used to calculate the change coin amount _v<sub>c</sub>_. 
-- _Excess = (x<sub>c</sub>-x<sub>i</sub>)*G + (A<sub>i</sub>+B<sub>i</sub> + w<sub>e</sub>*H_, where _w<sub>e</sub> = (w<sub>c</sub> - w<sub>i</sub> + R'.x) mod p_.
+- _Excess = (x<sub>c</sub>-x<sub>i</sub>)&ast;G + (A<sub>i</sub>+B<sub>i</sub> + w<sub>e</sub>&ast;H)_, where _w<sub>e</sub> = (w<sub>c</sub> - w<sub>i</sub> + R'.x) mod p_.
 
 The _Excess_ is transmitted as part of the transaction data, but only packaged into the block header as the _Total Excess_, which accumulates all transactions _Excess_ value since the Genesis block. i.e. _Excess_ is not available on the block and chain data.
 
@@ -272,7 +274,7 @@ For the transaction signature public key, we define a _I_ for non-interactive tr
 
 _I = SUM(inputs)_
 
-Where, _I = x<sub>i</sub>*G + w<sub>i</sub>*H_ for above example with single input.
+Where, _I = x<sub>i</sub>&ast;G + w<sub>i</sub>&ast;H_ for above example with single input.
 
 Using the _ComSig_ signature scheme, which only need to be executed on the sender side, a 96-bytes signature will be attached into the transaction, and as the additional data, both the _R_ and the _i_ (or an encoded _i'_) will be packed into the transaction.
 
@@ -283,7 +285,7 @@ struct Output {
 	commit: Commitment,
 	v: u64,
 	R: PublicKey,
-    i: u32,
+	i: u32,
 }
 ```
 The size of this _Output_ data structure is `1+33+8+33+4 = 79` bytes.
@@ -301,7 +303,7 @@ The size of this _Transaction Kernel_ data structure for a plain feature is `1+4
 The _Transaction_ data structure may be defined as:
 ```Rust
 struct Transaction {
-    excess: Commitment,
+	excess: Commitment,
 	inputs: Vec<Input>,
 	outputs: Vec<Output>,
 	kernels: Vec<TxKernel>,
