@@ -222,7 +222,7 @@ pub fn batch_sig_verify(prices: &Vec<ExchangeRates>) -> Result<(), Error> {
 		msgs.push(price.price_sig_msg()?);
 	}
 
-	if !secp::aggsig::verify_batch(&secp, &sigs, &msgs, &pubkeys) {
+	if !secp::verify_batch(&secp, &sigs, &msgs, &pubkeys) {
 		return Err(Error::IncorrectSignature);
 	}
 
@@ -560,8 +560,7 @@ pub fn calculate_full_price_pairs(aggregated_rates: &Vec<ExchangeRate>) -> Resul
 
 /// Util for AutomatedTest price feeder keychain
 pub fn auto_test_feeder_keychain() -> ExtKeychain {
-	let rec_phrase_1 =
-		"fat twenty mean degree forget shell check candy immense awful \
+	let rec_phrase_1 = "fat twenty mean degree forget shell check candy immense awful \
 		 flame next during february bulb bike sun wink theory day kiwi embrace peace lunch";
 	ExtKeychain::from_mnemonic(rec_phrase_1, "", false).unwrap()
 }
