@@ -235,8 +235,8 @@ The Mimblewimble/Grin signature theme is the standard usage of Schonorr 2-of-2 a
 
 1. The sender notify the receiver his/her public key _P<sub>1</sub> = (r<sub>c</sub>-r<sub>i</sub>-offset)&ast;G_ and a nonce _R<sub>1</sub> = k<sub>1</sub>&ast;G_.
 2. The receiver take his/her public key _P<sub>2</sub> = r<sub>r</sub>&ast;G_ and a nonce _R<sub>2</sub> = k<sub>2</sub>&ast;G_, calculate _P = P<sub>1</sub>+P<sub>2</sub>_ and _R = R<sub>1</sub>+R<sub>2</sub>_.
-3. The receiver send back to the sender: _P<sub>2</sub>_, _R<sub>2</sub>_, and the partial signature _s<sub>1</sub> = k<sub>2</sub>+e*r<sub>r</sub>_, where _e = Hash(R || P || m)_.
-4. The sender calculate his/her own partial signature __s<sub>2</sub> = k<sub>1</sub>+e*(r<sub>c</sub>-r<sub>i</sub>-offset)_, then aggregate both partial signatures by _s = s<sub>1</sub>+s<sub>2</sub>_, to get the final aggregated signature: _(R, s)_ and the final public key (i.e. the public excess): _P = P<sub>1</sub>+P<sub>2</sub>_.
+3. The receiver send back to the sender: _P<sub>2</sub>_, _R<sub>2</sub>_, and the partial signature _s<sub>2</sub> = k<sub>2</sub>+e*r<sub>r</sub>_, where _e = Hash(R || P || m)_.
+4. The sender calculate his/her own partial signature _s<sub>1</sub> = k<sub>1</sub>+e*(r<sub>c</sub>-r<sub>i</sub>-offset)_, then aggregate both partial signatures by _s = s<sub>1</sub>+s<sub>2</sub>_, to get the final aggregated signature: _(R, s)_ and the final public key (i.e. the public excess): _P = P<sub>1</sub>+P<sub>2</sub>_.
 
 Then, we have a "Transaction Kernel" as part of this transaction data, which include the transaction fee info and the signature data. Here is the pseudo-code of a transaction kernel data structure:
 ```Rust
