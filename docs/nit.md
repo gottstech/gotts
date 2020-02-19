@@ -327,6 +327,91 @@ Notes:
 - Suppose the old interactive transaction doesn't include any _InputUnlocker_, meaning the Input is not a non-interactive transaction output.
 - The new non-interactive transaction has the additional _Stealth Address_ feature.
 
+### Rogue-Key Attack
+
+For single input double outputs, with above non-interactive transaction scheme, the transaction can be expressed as:
+
+_I<sub>1</sub> + excess = C<sub>1</sub> + O<sub>1</sub>_
+
+where
+- _I<sub>1</sub> = x<sub>1</sub>&ast;G+w<sub>1</sub>&ast;H_ is the transaction input
+- _C<sub>1</sub>_ is the change output
+- _O<sub>1</sub>_ is the payment output.
+
+And the owner of the output _I<sub>1</sub>_ must provide the signature to prove his/her ownership, with _I<sub>1</sub>_ as the signature public key. 
+
+For double inputs double outputs, the transaction can be expressed as:
+
+_I<sub>1</sub> + I<sub>2</sub> + excess = C<sub>1</sub> + O<sub>1</sub>_
+
+With above non-interactive transaction scheme, instead of providing two independent signatures for _I<sub>1</sub>_ and _I<sub>2</sub>_, the transaction creator only need provide one single signature for _I = I<sub>1</sub>+I<sub>2</sub>_, since both inputs belongs to same owner.
+
+But obviously, it's easy to give a Rogue-Key attack on this scheme. For example, to steal the money from _I<sub>1</sub>_ which is owned by anyone, the attacker can construct an output _O<sub>attack</sub>_ in advance, where
+
+_O<sub>attack</sub> = x&ast;G+w&ast;H - I1_
+
+then, when this _O<sub>attack</sub>_ has been mined into one block, the attacker can create a transaction to steal other people's output _I<sub>1</sub>_:
+
+- _I<sub>1</sub> + I<sub>2</sub> + excess = C<sub>1</sub> + O<sub>1</sub>_
+- _I<sub>2</sub> = O<sub>attack</sub> = x&ast;G+w&ast;H - I1_
+
+so that _I = I<sub>1</sub>+I<sub>2</sub> = x&ast;G+w&ast;H_. Then the attacker is able to create a signature only by his/her own private key in _x&ast;G+w&ast;H_.
+
+
+### Fix of Rogue-Key Attack
+
+According to [ComSig](https://github.com/gottstech/gotts/wiki/ComSig-Signature) paper, to avoid this Rogue-Key attack, the signature may be revised as follows.
+
+For multiple Pedersen commitment outputs _I<sub>i</sub>_ where _i=[1..n]_:
+
+1. Select _n_ random Pedersen commitments _R<sub>i</sub>_ where _i=[1..n]_, calculate _R=R<sub>1</sub>+R<sub>2</sub>+ ... +R<sub>n</sub>_.
+2. Calculate _a<sub>i</sub> = Hash(I, I<sub>i</sub>)_, where _I={I<sub>1</sub>, I<sub>2</sub>,...,I<sub>n</sub>}_. Calculate _C<sub>i</sub>=a<sub>i</sub>&ast;I<sub>i</sub>_.
+3. Calculate _C = C<sub>1</sub>+C<sub>2</sub>+...+C<sub>n</sub>_.
+4. Calculate _e = Hash(R || C || m)_, where _m_ is the signing message.
+5. Calculate _k<sub>1i</sub> + e&ast;a<sub>i</sub>&ast;x<sub>i</sub>_ as _u<sub>i</sub>_, calculate _k<sub>2i</sub> + e*a<sub>i</sub>*w<sub>i</sub>_ as _v<sub>i</sub>_. Where _k<sub>1i</sub>&ast;G + k<sub>2i</sub>&ast;H = R<sub>i</sub>_.
+6. Calculate _u = u<sub>1</sub>+u<sub>2</sub>+...+u<sub>n</sub>_, and _v = v<sub>1</sub>+v<sub>2</sub>+...+v<sub>n</sub>_.
+7. Done. The signature is (_R,u,v_), for Pedersen Commitments _{I<sub>1</sub>, I<sub>2</sub>,...,I<sub>n</sub>}_ as signature public keys.
+
+Then anyone can verify this signature with the open Pedersen Commitments _{I<sub>1</sub>, I<sub>2</sub>,...,I<sub>n</sub>}_, if:
+
+_u&ast;G + v&ast;H = R + e&ast;C_
+
+#### Correctness
+
+_u&ast;G + v&ast;H = (u<sub>1</sub>+u<sub>2</sub>+...+u<sub>n</sub>)&ast;G + (v<sub>1</sub>+v<sub>2</sub>+...+v<sub>n</sub>)&ast;H_
+
+_u<sub>i</sub>&ast;G + v<sub>i</sub>&ast;H = (k<sub>1i</sub>&ast;G + e&ast;a<sub>i</sub>&ast;x<sub>i</sub>&ast;G) + (k<sub>2i</sub>&ast;H + e&ast;a<sub>i</sub>&ast;w<sub>i</sub>&ast;H) = (k<sub>1i</sub>&ast;G + k<sub>2i</sub>&ast;H) + (e&ast;a<sub>i</sub>&ast;x<sub>i</sub>&ast;G + e&ast;a<sub>i</sub>&ast;w<sub>i</sub>&ast;H) = R<sub>i</sub> + e&ast;a<sub>i</sub>&ast;(x<sub>i</sub>&ast;G + w<sub>i</sub>&ast;H) = R<sub>i</sub> + e&ast;a<sub>i</sub>&ast;I<sub>i</sub> = R<sub>i</sub> + e&ast;C<sub>i</sub>_
+
+_=>  u&ast;G + v&ast;H = (R<sub>1</sub>+R<sub>2</sub>+...+R<sub>n</sub>) + e&ast;(C<sub>1</sub>+C<sub>2</sub>+...+C<sub>n</sub>) = R+e&ast;C_
+
+#### Revised Data Structure
+
+For adaption to above fixing, the _Transaction Kernel_ data structure may be revised as:
+```Rust
+struct TxKernel {
+	features: KernelFeatures,
+	inputs: Vec<Input>,
+	excess_sig: Signature,
+}
+```
+
+And the _Transaction_ data structure may be revised as:
+```Rust
+struct Transaction {
+	excess: Commitment,
+	outputs: Vec<Output>,
+	kernels: Vec<TxKernel>,
+}
+```
+
+
+
+
+
+
+
+
+
 
 
 
