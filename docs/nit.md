@@ -348,12 +348,12 @@ With above non-interactive transaction scheme, instead of providing two independ
 
 But obviously, it's easy to give a Rogue-Key attack on this scheme. For example, to steal the money from _I<sub>1</sub>_ which is owned by anyone, the attacker can construct an output _O<sub>attack</sub>_ in advance, where
 
-_O<sub>attack</sub> = x&ast;G+w&ast;H - I1_
+_O<sub>attack</sub> = x&ast;G+w&ast;H - I<sub>1</sub>_
 
 then, when this _O<sub>attack</sub>_ has been mined into one block, the attacker can create a transaction to steal other people's output _I<sub>1</sub>_:
 
 - _I<sub>1</sub> + I<sub>2</sub> + excess = C<sub>1</sub> + O<sub>1</sub>_
-- _I<sub>2</sub> = O<sub>attack</sub> = x&ast;G+w&ast;H - I1_
+- _I<sub>2</sub> = O<sub>attack</sub> = x&ast;G+w&ast;H - I<sub>1</sub>_
 
 so that _I = I<sub>1</sub>+I<sub>2</sub> = x&ast;G+w&ast;H_. Then the attacker is able to create a signature only by his/her own private key in _x&ast;G+w&ast;H_.
 
