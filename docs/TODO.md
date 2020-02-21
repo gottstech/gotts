@@ -5,6 +5,7 @@ Gotts is still an infant under development. Much is left to be done and contribu
  * [x] Explicit Amount Transaction
  * [x] Non-Interactive Transaction
  * [ ] <ins>New Design of Non-Interactive Transaction</ins>
+ * [ ] <ins>Stealth Address</ins>
  * [ ] Transaction Proof (Wallet Only)
  * [ ] ~~Interactive Transaction Data Encryption (Wallet Only)~~
  * [ ] Transaction Kernel Pruning

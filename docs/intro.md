@@ -1,14 +1,14 @@
-# Introduction to MimbleWimble, Grin & Gotts
+# Introduction to Mimblewimble, Grin & Gotts
 
-[MimbleWimble](https://github.com/gottstech/gotts/wiki/A-Brief-History-of-MimbleWimble-White-Paper) is a blockchain format and protocol that provides extremely good scalability, privacy and fungibility by relying on strong cryptographic primitives.
+[Mimblewimble](https://github.com/gottstech/gotts/wiki/A-Brief-History-of-MimbleWimble-White-Paper) is a blockchain format and protocol that provides extremely good scalability, privacy and fungibility by relying on strong cryptographic primitives.
 
-[Grin](https://github.com/mimblewimble/grin) is the first open source software project that implements a MimbleWimble blockchain, with completely community driven model.
+[Grin](https://github.com/mimblewimble/grin) is the first open source software project that implements a Mimblewimble blockchain, with completely community driven model.
 
 The main technical characteristics of the Grin project are:
 
 * Privacy by default. This enables complete fungibility.
 * Scales mostly with the number of users and minimally with the number of transactions, resulting in a large space saving compared to other blockchains.
-* Strong and proven cryptography. MimbleWimble only relies on Elliptic Curve Cryptography which has been tried and tested for decades.
+* Strong and proven cryptography. Mimblewimble only relies on Elliptic Curve Cryptography which has been tried and tested for decades.
 * Design simplicity that makes it easy to audit and maintain over time.
 
 For the detail, please refer to [Grin Introduction](https://github.com/mimblewimble/grin/blob/master/doc/intro.md).
@@ -16,8 +16,8 @@ For the detail, please refer to [Grin Introduction](https://github.com/mimblewim
 **Gotts** is a new journey that based on Grin codebase, and will implement the following major differences and improvements:
 
 * Decentralized stable-coins, non-collateralized, transaction as immediate conversion.
-* Explicit amount transaction, address and transaction proof. 
-* Both interactive and non-interactive transactions are supported.
+* Public value transaction, <ins>stealth</ins> address and transaction proof. 
+* ~~Both interactive and~~ non-interactive transaction~~s are supported~~.
 * 10x transaction throughput comparing to Grin.
 * Super Lightweight.
 
@@ -30,7 +30,7 @@ Recall the 1st sentence of Bitcoin whitepaper:
 Bitcoin has got an incredible success as a store of value, but we could say it's far from a success for the original "p2p electronic cash" ideal.
 
 > _"Bitcoin is 10 years old now, it’s become impossible to change meaningfully and those 10 years represent a century given how much has been researched and developed since.
-When the MimbleWimble white paper was published, it seemed like a good base to attack the goal head on."_ -- ***Ignotus Peverell, 2019*** 
+When the Mimblewimble white paper was published, it seemed like a good base to attack the goal head on."_ -- ***Ignotus Peverell, 2019*** 
 
 Definitely **Grin** is a vigorous attack to this ideal, with excellent improvements on privacy and scalablity. While **Gotts** will think differently and attack from other sides: currency stability, usability and capacity.
 
@@ -42,17 +42,19 @@ This is where stablecoins come in. We're not going to analyze the existing stabl
 
 Gotts could be the 1st blockchain for non-collateralized stablecoins. With the price info integrated into block headers, which are provided by Gotts price feeders, a native transaction in Gotts can achieve the immediate conversion between the Gotts stablecoins assets. And the redemption is guaranteed by the chain, in a completely decentralized way.
 
-Regarding the usability, ***Interactive Transaction*** is great in some use cases, where the receiver has a public server with a domain and a well https setup. But indeed, it's very difficult for common people when receiving. Although there're some workaround solutions to help on that, the most simple solution must be the ***address*** and the ***Non-Interactive Transaction***. Gotts support both.
+Regarding the usability, ***Interactive Transaction*** is great in some use cases, where the receiver has a public server with a domain and a well https setup. But indeed, it's very difficult for common people when receiving. Although there're some workaround solutions to help on that, the most simple solution must be the ***address*** and the ***Non-Interactive Transaction***. Gotts support the latter.
 
-Gotts remove the bulletproof, the heaviest part of the transaction data, which in MimbleWimble is used to hide the transaction amount but can prove it is in `[0, 2^64]`, to have the explicit amount. We get a fairly well paid off: capacity improvement. Gotts implement the ***10x*** transaction throughput comparing to Grin, even this is still far below the Visa average transaction rate, which was about [4,000 txs](https://usa.visa.com/dam/VCOM/download/corporate/media/visanet-technology/aboutvisafactsheet.pdf) at 2018, but we got it almost free. We believe this improved capacity will also help a lot on the real world adoption for Gotts payment, a further step to the ideal of Peer-to-Peer Electronic Cash.
+Gotts remove the bulletproof, the heaviest part of the transaction data, which in Mimblewimble is used to hide the transaction amount but can prove it is in `[0, 2^64]`, to have the explicit amount. We get a fairly well paid off: capacity improvement. Gotts implement the ***10x*** transaction throughput comparing to Grin, even this is still far below the Visa average transaction rate, which was about [4,000 txs](https://usa.visa.com/dam/VCOM/download/corporate/media/visanet-technology/aboutvisafactsheet.pdf) at 2018, but we got it almost free. We believe this improved capacity will also help a lot on the real world adoption for Gotts payment, a further step to the ideal of Peer-to-Peer Electronic Cash.
 
 ## Table of Contents
 - [Gotts Stablecoins](#gotts-stablecoins)
-- [Explict Amount Transaction](#explicit-amount-transaction) 
+- [Public Value Transaction](#public-value-transaction) 
 - [Gotts Interactive Transaction](#gotts-interactive-transaction)
 - [Gotts Non-Interactive Transaction](#gotts-non-interactive-transaction)
-- [Gotts Transaction Proof](#gotts-transaction-proof)
+- [Gotts Stealth Address](#gotts-stealth-address)
 - [Cut-Through, Pruning and Super Lightweight](#mimblewimble-cut-through-and-lightweight-chain)
+
+And more related contents in the WiKi pages: [https://github.com/gottstech/gotts/wiki](https://github.com/gottstech/gotts/wiki).
 
 ## Gotts Stablecoins
 
@@ -250,11 +252,15 @@ There're two consensus rule for Conversion Transaction:
 
 Since we can have GOUS on Gotts chain, it should be capable to simulate an arbitrary asset. For example, we should be able to have a **GBTC** which is pegged to BTC, a **GETH** to ETH, or even a **GOLD** to the real world gold.
 
-Note: this is not a feature in first release. 
+Note: this is not a feature in first release.
 
-## Explicit Amount Transaction
+### More
 
-Privacy is one of the main characteristics for MimbleWimble/Grin. And it definitely works with cost.
+More researches: [https://github.com/gottstech/gotts/wiki/Gotts-Stable-Coins](https://github.com/gottstech/gotts/wiki/Gotts-Stable-Coins) 
+
+## Public Value Transaction
+
+Privacy is one of the main characteristics for Mimblewimble/Grin. And it definitely works with cost.
 
 The 1st important cost is the big transaction size, comparing to Bitcoin. A typical transaction with single input and double outputs in Grin need about `1,558` bytes:
 
@@ -269,25 +275,25 @@ The heaviest part is the bulletproof which is about `85%` in a typical 1 input 2
 
 The 2nd important invisible cost is about the real-world adoption. No matter how important the privacy is, the privacy coins are grouped as a special type, thought by common people for special use cases, for example the darknet, even actually they're not.
 
-We design this explicit amount transaction for Gotts, but it completely does not mean privacy protection is not important or Gotts does not care about privacy protection. Actually Gotts still provide very good privacy protection for the transaction address.
+We design this public value transaction for Gotts, but it completely does not mean privacy protection is not important or Gotts does not care about privacy protection. Actually Gotts still provide very good privacy protection for the transaction address.
 
-To emphasize it, Gotts want to attack the goal from another side: stability and usability. So, the 1st modification of Gotts on MimbleWimble is: **No privacy of amounts**, but still keep the privacy of addresses.
+To emphasize it, Gotts want to attack the goal from another side: stability and usability. So, the 1st modification of Gotts on Mimblewimble is: **No privacy of amounts**, but still keep the privacy of addresses.
 
 Removing the heaviest bulletproof will get roughly 6 times transaction capacity/throughput:
 ```
 1,590 / (1,590 - 675*2) = 1,590/240 ~= 6.6 
 ``` 
-Another well paid off item is the easiness to support the stablecoins, which will just be some explicit amounts on-chain assets then.
+Another well paid off item is the easiness to support the stablecoins, which will just be some public values on-chain assets then.
 
 Moreover, it's convenient to get complete economic statistics regarding to the usage of these stablecoins assets, also for Gotts asset.
 
-You can't get the total/daily transaction volume data on a privacy MimbleWimble/Grin, because of its perfect obscure amount.
+You can't get the total/daily transaction volume data on a privacy Mimblewimble/Grin, because of its perfect obscure amount.
 
-***Note***: although we modify the MimbleWimble for the explicit amount, we will still have all other wonderful points of MimbleWimble: non-interactive coin-join, cut-through, etc.    
+***Note***: although we modify the Mimblewimble for the explicit amount, we will still have all other wonderful points of MimbleWimble: non-interactive coin-join, cut-through, etc.    
 
-### MimbleWimble Modification for Explicit Amount
+### Mimblewimble Modification for Public Value
 
-In MimbleWimble paper, Tom described:
+In Mimblewimble paper, Tom described:
 
 > the amounts are coded by the following equation:
 > 
@@ -304,7 +310,7 @@ We will give a little modification on above equation:
 - Replace `v` with `w`. And `w` is not the amount anymore, instead it's just a random number, but we still ensure the balance of `w` between inputs and outputs.
 - Attached to this output is an explicit value `v`, instead of a rangeproof.
 
-The reason to keep a random number `w` here is it can keep this Pedersen Commitment equation in MimbleWimble as it was.
+The reason to keep a random number `w` here is it can keep this Pedersen Commitment equation in Mimblewimble as it was.
 ```sh
 C = r*G + w*H
 
@@ -312,75 +318,13 @@ where w is a random number, which can be a negative number,
 and leave the amount value v as an explicit field in the output.
 ```
 
-In MimbleWimble/Grin, this `w` is hidden into the bulletproof and must be positive value. Instead, in Gotts, because we removed the bulletproof, we have to hide this `w` into a secret which can only be decoded by the transaction parties, which will be explained more in next chapter.
+In Mimblewimble/Grin, this `w` is hidden into the bulletproof and must be positive value. Instead, in Gotts, because we removed the bulletproof, we have to hide this `w` into a secret which can only be decoded by the transaction parties, which will be explained more in next chapter.
 
-For the all remaining parts of MimbleWimble, we keep same, except all the validations need check the explicit amount balance also.
+For the all remaining parts of Mimblewimble, we keep same, except all the validations need check the explicit amount balance also.
 
 ## Gotts Interactive Transaction
 
-Same as Grin, Gotts still support ***Interactive Transaction*** with a 2-of-2 schnorr signature from both transaction parties.
-
-And this ***Interactive Transaction*** is quite suitable for the use cases which has a public website/service active 7x24 hours. The typical use cases are the online stores user payment, crypto exchanges depositing, physical stores payment, and so on.
-
-In Gotts, this ***Interactive Transaction*** has the following benefits:
-
-- Lower transaction fee, because it has smaller transaction size than non-interactive transaction.
-- Better privacy, because no "address" open on the public chain, just like Grin.
-
-A typical output of an ***Interactive Transaction*** is:
-```Rust
-struct Output {
-	features: OutputFeatures,
-	commit: Commitment,
-	v: u64,
-	spath: SecuredPath,
-}
-```
-The `spath` is used to store the random `w` and the [BIP-32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) key derivation path, secured by a `rewind_nonce`:
-```sh
-rewind_nonce = Hash(root_pub_key)
-nonce = Hash( rewind_nonce || commit )
-spath = PathMessage XOR nonce
-```
-The `PathMessage` contains 12 bytes as follows:
-```Rust
-struct PathMessage {
-	/// The random 'w' of Pedersen commitment `r*G + w*H`.
-	w: i64,
-	/// The last path index of the key identifier
-	pub key_id_last_path: u32,
-}
-```
-
-With the `rewind_nonce`, a wallet can restore all the owned coins from the chain UTXO sets. And leaking or sharing the wallet `rewind_nonce` will leak or share the coins info of this wallet, but the coins can't be spent without the private key.
-
-### Transaction Validation
-
-A typical transaction with 1 Input 2 Outputs has the following form:
-```sh
-    (ri*G + wi*H) + excess = (rc*G + wc*H) + (rr*G + wr*H)
-    vi = vc + vr + fee
-    
-    Where the ri,rc,rr are the private keys,
-    the 'wr' is a random number chosen by the receiver, wc = wi - wr.
-    'vi' is the input amount, 'vr' is the output amount, and 'vr' is the change amount.
-    Note: 'wi','wc' and 'wr' can be a negative number.  
-```
-Beside the above sum validations, 2 more validations are needed:
-1. Check whether the Input `(ri*G + wi*H)` is a valid unspent output on the chain, and the amount of `vi` is correct.
-2. Check the transaction kernel signature which use `excess` as the public key.
-
-### Transaction Size of Interactive Transaction
-
-A typical transaction with 1 input and 2 outputs in the Gotts ***Interactive Transaction*** need about `280` bytes, if the input is also a simple output without a locker (to be explained in the chapter of [Non-Interactive Transaction](#gotts-non-interactive-transaction)):
-
-```
-1 Input: 1+33 = 34 Bytes
-2 Outputs: 2*(1+33+8+12) = 108 Bytes
-1 Kernel: (1+4+33+64) = 102 Bytes
-
-Total: 34+108+102 = 244
-```
+The interactive transaction scheme has been removed, see the reason summarized [here](https://github.com/gottstech/gotts/wiki/Removing-Interactive-Transaction). The removed interactive transaction scheme can be found [here](https://github.com/gottstech/gotts/blob/v0.0.6/docs/intro.md#gotts-interactive-transaction).
 
 ## Gotts Non-Interactive Transaction
 
@@ -390,140 +334,29 @@ There're some workaround solutions for example making transaction by file asynch
 
 But it's so popular and well-known in cryptocurrency world that the payment can be very easy thanks to "***Pay-to-Address***" / "***Pay-to-Public-Key-Hash***" technology.
 
-So, in Gotts, for better user experience of personal user, and better adoption on common people, we enhance the MimbleWimble transaction so as to also support such kind of "***Pay-to-Address***” / "***Pay-to-Public-Key-Hash***", i.e. the ***Non-Interactive Transaction***.
+So, in Gotts, for better user experience of personal user, and better adoption on common people, we enhance the Mimblewimble transaction so as to support such kind of "***Pay-to-Address***” concept, i.e. the ***Non-Interactive Transaction***.
 
 ### Non-Interactive Transaction Design
 
-A typical output of an ***Non-Interactive Transaction*** is:
-```Rust
-struct Output {
-   features: OutputFeatures,
-   commit: Commitment,
-   v: u64,
-   locker: OutputLocker,
-}
-```
+A dedicated document for non-interactive transaction has been split out as [nit.md](https://github.com/gottstech/gotts/blob/master/docs/nit.md).
 
-And the `OutputLocker` is used as the locker for this output, to make it only spendable for someone who owns the private key of locked public key / address, by `p2pkh` field.
-```Rust
-struct OutputLocker {
-	/// The Hash of 'Pay-to-Public-Key-Hash'.
-	p2pkh: Hash,
-	/// The 'R' for ephemeral key: `q = Hash(secured_w || p*R)`.
-	R: PublicKey,
-	/// A secured path message which hide the key derivation path and the random w of commitment.
-	spath: SecuredPath,
-}
-```
+## Gotts Stealth Address
 
-Accordingly, to spend this ***Non-Interactive Transaction*** output, the ***Input*** must include the correct signature for the locked public key / address in the `OutputLocker`.
-```Rust
-struct InputUnlocker {
-	/// Nonce for the signing message.
-	nonce: u64,
-	/// The signature for the output which has a locked public key / address.
-	sig: Signature,
-	/// The public key.
-	pub_key: PublicKey,
-}
-```
-For the signature, the signed message is `Hash(nonce || (features || commit || value) || ...)`, where each `(features || commit || value)` comes from one output.
+### Stealth Address Design
 
-To avoid any possible replay attack here, the `nonce` should be a random value.
+(To Be Updated)
 
-Regarding the `commit` in the `Output`, we still use the Pedersen Commitment, except the blinding `r` in `r*G+w*H` is not a direct private key of receiver. Instead, we use [ephemeral key](https://en.wikipedia.org/wiki/Ephemeral_key) here, replace `r` with a `q`:
+A dedicated research page in WiKi: [https://github.com/gottstech/gotts/wiki/Stealth-Address](https://github.com/gottstech/gotts/wiki/Stealth-Address) 
 
-```sh
-commit = q*G + w*H
-where q = Hash(value || k*P)
-```
-Here `P` is the receiver's public key which must be given as the receiver's [address](#gotts-address). And we put the `k*G` as the `R` to store into the `OutputLocker`.
+### Gotts Address Encoding
 
-For the receiver, he/she can get this blinding `q` by the following formula:
-```sh
-q = Hash(value || p*R) 
-```
-Here `R` is that in the `OutputLocker`, and `p` is the private key of public `P`.
+(To Be Updated)
 
-Both the sender and the receiver know this ephemeral key `q`, (but only they know, not any others). So, it's convenient for the sender to complete a 2-of-2 schnorr signature by him/her self, no interactive action is needed any more. That's why Gotts can have this ***Non-Interactive Transaction*** for MimbleWimble.
+~~As described above, to construct a non-interactive transaction, the sender must know a public key of the receiver. We name this public key as the **Gotts Address**.~~
 
-### Transaction Size of Non-Interactive Transaction
+~~Inspired by [BIP-0173](https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki) base32 address, we also use base32 coding for **Gotts Address**.~~
 
-A typical transaction with 1 input and 2 outputs in the Gotts ***Non-Interactive Transaction*** need about `426` bytes, if the spending output is also an output with a locker, and the change output is an output with a SecuredPath instead of an OutputLocker (which is the normal case):
-
-```sh
-1 Input: 1+33+(8+64+33) = 137 Bytes
-2 Outputs: (1+33+8+12) + (1+33+8+77) = 173 Bytes
-1 Kernel: (1+4+33+64) = 102 Bytes
-
-Total: 412 Bytes
-```
-
-Even the size is almost `169%` of that typical Interactive Transaction size, considering the convenience for the common people and benefits for the broad adoption, it's fairy deserved.  
-
-And in case the Non-Interactive Transaction has the input without a locker, above transaction size will be smaller: `309` Bytes. Then it will be about `127%` of that typical Interactive Transaction size.
-
-### CoinJoin Forbidden for Non-Interactive Transaction
-
-Let's take a look whether the wonderful non-interactive CoinJoin and non-interactive cut-through feature still works for this non-interactive transaction outputs, which is one of the most interesting features for MimbleWimble.
-
-Suppose we have 2 transactions (`tx1` and `tx2`), `tx2` spends an output of `tx1`:
-```sh
-    tx1:    out1(with sig1 unlock locker1) = out2(with locker2) + out3(with locker3)
-            amount1 = amount2 + amount3 + fee1
-    tx2:    out2(with sig2 unlock locker2) = out4(with locker4) + out5(with locker5)
-            amount2 = amount4 + amount5 + fee2
-```
-Unfortunately, if we combine the lists of inputs and outputs of these two transactions:
-```sh
-    out1(with sig1 unlock locker1) = out3(with locker3) + out4(with locker4) + out5(with locker5)
-    amount1 = amount3 + amount4 + amount5 + fee1 + fee2
-```
-Then we will lose the signature info `sig2` but obviously which should be there to prove the ownership of `out2`.
-
-To correct this, we define a consensus rule in Gotts to avoid this CoinJoin:
-- The CoinJoin of a non-interactive transaction output in same block is forbidden.
-
-The CoinJoin in same block still works for interactive transactions.
-
-### Cut-Through
-
-As described in MimbleWimble, we can imagine each block as one large transaction, then we could combine transactions from two blocks, the result is again a valid transaction, and this can be extended all the way from the genesis block to the latest block. This procedure is called **non-interactive cut-through**, or **Merging Transactions Across Blocks**.
-
-For easiness to describe, suppose we have 2 simple transactions (`tx1` and `tx2`), each represents a block, on block height `h1` and `h2`, `tx2` spends an output of `tx1`:
-```sh
-    tx1:    out1(with sig1 unlock locker1) = out2(with locker2) + out3(with locker3)
-            amount1 = amount2 + amount3 + fee1
-    tx2:    out2(with sig2 unlock locker2) = out4(with locker4) + out5(with locker5)
-            amount2 = amount4 + amount5 + fee2
-```
-The question is: in Gotts non-interactive transaction solution, can we still remove both `out2` without risk of double spent and stealing?
-
-We will look at this question from 2 aspects: double spent and stealing.
-
-#### Double Spent
-
-Suppose we use a transaction `tx3` to double spend the output `out2`, but that's impossible since the `out2` is already marked as spent after `tx2`. The 'marked as spent' here means a deletion from the chain UTXO sets.
-
-#### Stealing
-
-Since both `out2` can be removed in cut-through, probably the transaction sender, who also know that ephemeral key `q` in Gotts Pedersen commitment (`q*G + w*H`), has a chance to steal the receiver's coins. He/She can create a stealing transaction `tx2'` with a fake `sig2` to spend `out2`. Surely this **fake** `sig2` can't unlock the `out2`'s `locker2`, but he/she has a chance to cut-through this `out2` in next blocks, so that nobody can see the raw transaction data of `tx2'`, i.e. hide the fake `sig2`.
-
-The chance here is to force all Gotts nodes into a state syncing, so as to avoid broadcast the block which contains the stealing transaction `tx2`. This will need a huge hashpower advantage of from 7 days to 4 weeks, which is quite impractical for such a deep fork.
-
-To summarize, the conditions of this stealing are as follows:
-1. Knowing the ephemeral key `q` which is a secret of the original transaction parties.
-2. Having a huge hash power advantage to achieve a very deep fork: 7 days blocks at least.
-
-**Note**: this `7 days` and `4 weeks` are the consensus parameter, i.e. the `STATE_SYNC_THRESHOLD` and `CUT_THROUGH_HORIZON`.
-
-### Gotts Address
-
-As described above, to construct a non-interactive transaction, the sender must know a public key of the receiver. We name this public key as the **Gotts Address**.
-
-Inspired by [BIP-0173](https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki) base32 address, we also use base32 coding for **Gotts Address**.
-
-Comparing to [Base58](https://en.wikipedia.org/wiki/Base58) address coding, this base32 address has the following benefits:
+~~Comparing to [Base58](https://en.wikipedia.org/wiki/Base58) address coding, this base32 address has the following benefits:~~
 
 | Address Scheme --> | Base32 | Base58 |
 |:-------------|:-------------|:-----|
@@ -532,16 +365,16 @@ Comparing to [Base58](https://en.wikipedia.org/wiki/Base58) address coding, this
 | Error-Detection | &#9745; Yes | No |
 | Decoding Complexity | &#9745; Faster | Slower |
 
-#### HRP (Human Readable Part)
+~~#### HRP (Human Readable Part)~~
 We define two HRP prefixes for Gotts Address:
 - `gs`:  for Gotts Mainnet address 
 - `ts`:  for Gotts Floonet (testnet) address
 
-#### Address Length
+~~#### Address Length~~
 
-The public key need 33 bytes, and it's `62` characters in this base32 coding address, including the prefix `gs1` or `ts1`.
+~~The public key need 33 bytes, and it's `62` characters in this base32 coding address, including the prefix `gs1` or `ts1`.~~
 
-For example, here are some Gotts addresses:
+~~For example, here are some Gotts addresses:~~
 - `ts1qgun5fxdnpn72kdz3myetqatgkxg7th5y0ymcnjcsf0n8nzzv8tc5q9uhkp`
 - `ts1qgfaqdqyvm8ryd2k6zfp6cm359cs4gnudxhljmd0v38yut4u9r7rg93d4jp`
 - `gs1qvgsq0kd7gvgqksg58fkqm9ms5cplcllev4fnwsvevuqs2jukrtrcguuvze`
@@ -561,58 +394,21 @@ It's quite different from the coinbase output which the miner create for him/her
 
 The `p2pkh` in the output is the rewarded price feeder's public key hash, which can be found in the consensus file. And the `lock_height` is current block height plus `1440`, the locking period is same as the coinbase output.
 
-## Gotts Transaction Proof
-
-For the ***Non-Interactive Transaction***, the output with a OutputLocker on the public chain is the intuitive proof for the transaction existence to the payee, because it includes the Hash of 'Pay-to-Public-Key-Hash', supposing the payee's public key is public somewhere and payee can't deny. So, it's much easy for the payer to create a proof for a payment, with a new signature on a specified message, proving he/she know that secret `k` in the ephemeral key `q = Hash(secured_w || k*P)`.
-
-Surely a merkle proof for that output is also needed in case it has been spent already, if need to be verifiable for any node server of Gotts chain, since the spent output could be pruned. 
-
-But for the ***Interactive Transaction***, that's completely different. The most difficult part in this case is **No Address**, it's impossible to prove to a third party I paid to someone if the receiver could be anyone according to the transaction data on the chain.
-  
-The basic idea here, to provide a solution for proving the ***Interactive Transaction*** output, is using the Schnorr Signature aggregation.
-
-A basic interactive transaction need a 2-of-2 Schnorr Signature, from both transaction parties. Instead, here we need a 3-of-3 Schnorr Signature, with one public key open as the receiver's public "address".
-
-Let's still use the equation [above](#transaction-validation):
-```sh
-    (ri*G + wi*H) + excess = (rc*G + wc*H) + (rr*G + wr*H)
-    vi = vc + vr + fee
-    
-    where 'rr' is the receiver private key, 'rr*G' is the public key.
-```
-Now we modify this `rr*G` as `rr1*G + rr2*G`, where the `rr2*G` is the open public key of the receiver, which must be told to payer and open somewhere to be non-deniable for the receiver.
-
-With this design, the payer only need to keep the evidence and the original raw transaction data in the wallet, with the original partial signature data, then he/she can create the transaction proof in anytime to prove he/she paid the receiver.
-
-This only need to be done in wallet side, and Gotts server can't know whether it's a 2-of-2 signature or a 3-of-3 signature, or what else. So, in Gotts eco-system, we propose all Gotts wallet should implement this 3-of-3 signature as the default for interactive transaction.
-
-### Interactive Transaction Data Encryption
-
-For the ***Interactive Transaction***, the wallets have to communicate each other for creating the final transaction data. If the raw communication data is transparent, there will be a big concern about the security.
-
-The optional solution is to use https. But obviously it's too complex for personal user to deploy and maintain the https server.
-
-Actually, with above Transaction Proof solution, we get a chance to give an end-to-end encryption for the wallet communication data, since the sender already know the public key of the receiver.
-
-Please refer to corresponding design document (when it's ready) about this encryption.
-
-Gotts wallet reference design will have this encryption as the default, for security.  
-
-## MimbleWimble Cut-Through and Lightweight Chain
-One of the most exciting parts in MimbleWimble is the cut-through feature. It can combine the transactions in the transaction pool, and even merge transactions across blocks, all the way down from the genesis block to the latest block. This merging will delete those spent outputs, and what remains are only the unspent outputs, and those transaction kernels.
+## Mimblewimble Cut-Through and Lightweight Chain
+One of the most exciting parts in Mimblewimble is the cut-through feature. It can combine the transactions in the transaction pool, and even merge transactions across blocks, all the way down from the genesis block to the latest block. This merging will delete those spent outputs, and what remains are only the unspent outputs, and those transaction kernels.
 
 Till 2019 Aug., Bitcoin has about total [450M](https://www.blockchain.com/charts/n-transactions-total) transactions, and need about [236GB](https://www.blockchain.com/en/charts/blocks-size) to save all these transactions in block chain database, because all the old transaction data must be kept there for security.
 
-Comparing to Bitcoin, MimbleWimble scales mostly with the number of users and minimally with the number of transactions. Only that about [20M](https://bitinfocharts.com/top-100-richest-bitcoin-addresses.html) (at this time) Bitcoin non-empty addresses make sense here for estimating the total size of the necessary MimbleWimble chain data. Moreover, in MimbleWimble block chain, we can encourage combining UTXOs (the Input number has a negative weight when calculating the transaction fee), which will make the actual UTXO sets even much smaller than Bitcoin.
+Comparing to Bitcoin, Mimblewimble scales mostly with the number of users and minimally with the number of transactions. Only that about [20M](https://bitinfocharts.com/top-100-richest-bitcoin-addresses.html) (at this time) Bitcoin non-empty addresses make sense here for estimating the total size of the necessary MimbleWimble chain data. Moreover, in MimbleWimble block chain, we can encourage combining UTXOs (the Input number has a negative weight when calculating the transaction fee), which will make the actual UTXO sets even much smaller than Bitcoin.
  
-With above reasonable assumption, MimbleWimble/Gotts only need about **2GB** chain data for same level of users amount as Bitcoin today, with a rough assumption of an average 100 bytes for each unspent output in Gotts. A super lightweight chain!
+With above reasonable assumption, Mimblewimble/Gotts only need about **2GB** chain data for same level of users amount as Bitcoin today, with a rough assumption of an average 100 bytes for each unspent output in Gotts. A super lightweight chain!
 
 ### Super Fast Sync
-Because of the much smaller size of the chain validation data, MimbleWimble block chain can have the super fast sync procedure. Only the following data are necessary to validate the whole chain:
+Because of the much smaller size of the chain validation data, Mimblewimble block chain can have the super fast sync procedure. Only the following data are necessary to validate the whole chain:
 
 - All block headers.
 - All unspent outputs.
-- All? transaction kernels (Note: to be discussed in [kernel pruning](#transaction-kernel-pruning)).
+- All transaction kernels (Note: to be discussed in [kernel pruning](#transaction-kernel-pruning)).
 - Recent full blocks, for example from two days to one week (i.e. a cut-through horizon size).
 
 
@@ -628,17 +424,17 @@ tx3:    change2 = out3 + change3
 ...     ...
 txn:    change(n-1) = out(n) + change(n)                 
 ```
-In MimbleWimble, all above n transactions will look like one single transaction:
+In Mimblewimble, all above n transactions will look like one single transaction:
 ```
     in = out1 + out2 + out3 + ... + out(n) + change(n)
 ```
 but with `n` transaction kernels instead of 1 transaction kernel for a simple transaction.
 
-The MimbleWimble transaction pool accepts all of them as valid transactions, from `tx1` to `tx(n)`, with 0-confirmation of outputs `change1, change2, ... , change(n-1)`, at the exact same security level as the unspent output `in` (the 1st input of these transactions). 
+The Mimblewimble transaction pool accepts all of them as valid transactions, from `tx1` to `tx(n)`, with 0-confirmation of outputs `change1, change2, ... , change(n-1)`, at the exact same security level as the unspent output `in` (the 1st input of these transactions). 
 
 ### Transaction Kernel Pruning
 
-At previous chapter, we say MimbleWimble is a super lightweight chain, because almost only unspent outputs need be kept as chain validation data, plus the block headers. And we also mentioned that all transaction kernel data are needed.
+At previous chapter, we say Mimblewimble is a super lightweight chain, because almost only unspent outputs need be kept as chain validation data, plus the block headers. And we also mentioned that all transaction kernel data are needed.
 
 A typical transaction kernel in Gotts need about `1+4+33+64 = 102` bytes, refers to the pseudo-code here:
 ```Rust
@@ -659,7 +455,7 @@ The meaning of a transaction kernel for the **block** validation:
 - The signature of a transaction kernel must be ok, which proves the `excess` is a combined public key of the transaction parties (means somebody know the private keys), and implicitly proves the excess's amount component is zero. Otherwise, an illegal inflation happened.
 - The `excess` sum of all the transaction kernels will be used to validate the big 0-sum of the block: all inputs plus reward, all output commitments, all kernels `excess`, plus the kernel offset in the header.
 
-In MimbleWimble privacy transaction solution, it's so important for the chain validation to have the full transaction kernels signature verified, since which also implicitly proves the excess's amount component is zero, no any illegal inflation happened.
+In Mimblewimble privacy transaction solution, it's so important for the chain validation to have the full transaction kernels signature verified, since which also implicitly proves the excess's amount component is zero, no any illegal inflation happened.
 
 But in Gotts, we don't rely on that signature verification to detect illegal inflation, since all the amount are explicit here. So, for Gotts, comparing to the important meaning of a transaction kernel on the **block** validation, it is not much interesting for a quite old kernel on the **chain** validation, which becomes a pure dead weight.
 
