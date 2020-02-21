@@ -49,6 +49,7 @@ Gotts remove the bulletproof, the heaviest part of the transaction data, which i
 ## Table of Contents
 - [Gotts Stablecoins](#gotts-stablecoins)
 - [Public Value Transaction](#public-value-transaction) 
+- [Gotts Interactive Transaction](#gotts-interactive-transaction)
 - [Gotts Non-Interactive Transaction](#gotts-non-interactive-transaction)
 - [Gotts Stealth Address](#gotts-stealth-address)
 - [Cut-Through, Pruning and Super Lightweight](#mimblewimble-cut-through-and-lightweight-chain)

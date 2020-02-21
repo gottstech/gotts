@@ -1,8 +1,8 @@
-# New Design of Gotts Non-Interactive Transaction
+# Design of Gotts Non-Interactive Transaction
 
 ## Old Design
 
-The [original design of Gotts Non-Interactive Transaction](https://github.com/gottstech/gotts/blob/v0.0.6/docs/intro.md#gotts-non-interactive-transaction) has been completely implemented on node version [v0.0.6](https://github.com/gottstech/gotts/releases/tag/v0.0.6) and wallet version [v0.0.6](https://github.com/gottstech/gotts-wallet/releases/tag/v0.0.6).
+The [old design of Gotts Non-Interactive Transaction](https://github.com/gottstech/gotts/blob/v0.0.6/docs/intro.md#gotts-non-interactive-transaction) has been completely implemented on node version [v0.0.6](https://github.com/gottstech/gotts/releases/tag/v0.0.6) and wallet version [v0.0.6](https://github.com/gottstech/gotts-wallet/releases/tag/v0.0.6).
 
 It use the Bitcoin style Public Key Hash to lock the output. To spend a Non-Interactive Output, a Signature with the corresponding revealed Public Key must be provided as the unlocker. This is an intuitive and simple design, since the concept of P2PKH (Pay-To-Public-Key-Hash) is well known in crypto world.
 
