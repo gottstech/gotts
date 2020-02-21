@@ -313,20 +313,6 @@ With all these data structures, the size of a typical transaction with 1 Input a
 
 In case one transaction contains multiple payments (i.e. multiple outputs), this non-interactive transaction design is even more optimal than the interactive transaction even only on the size point of view. For example, for a transaction with 1 Input and 3 Outputs, the size is `33+(1+33)+79*3+134 = 438` bytes, whereas two old interactive transactions need `(1+33)*2+(1+33+8+12)*4+102*2 = 488` bytes, which contains 2 Inputs, 4 Outputs and 2 transaction kernels.
 
-### Transaction Size Comparing
-
-| Size (Bytes) | Old Interactive Transaction | Old Non-Interactive Transaction | New Non-Interactive Transaction |
-|:-------------|:-------------|:-------------|:-------------|
-| 1 payment with 1 Input   | 244 | 309  | 359 |
-| 2 payments with 1 Input   | 244*2=488  | 309*2=618  | 359+79=438 |
-| 3 payments with 1 Input   | 244*3=732  | 309*3=927  | 359+79*2=517 |
-
-Notes:
-
-- Suppose the old non-interactive transaction doesn't include any _InputUnlocker_, meaning the Input is not a non-interactive transaction output.
-- Suppose the old interactive transaction doesn't include any _InputUnlocker_, meaning the Input is not a non-interactive transaction output.
-- The new non-interactive transaction has the additional _Stealth Address_ feature.
-
 ### Rogue-Key Attack
 
 For single input double outputs, with above non-interactive transaction scheme, the transaction can be expressed as:
@@ -360,7 +346,7 @@ so that _I = I<sub>1</sub>+I<sub>2</sub> = x&ast;G+w&ast;H_. Then the attacker i
 
 ### Fix of Rogue-Key Attack
 
-According to [ComSig](https://github.com/gottstech/gotts/wiki/ComSig-Signature) paper, to avoid this Rogue-Key attack, the signature may be revised as follows.
+According to [ComSig](https://github.com/gottstech/gotts/wiki/ComSig-Signature) paper, to avoid this Rogue-Key attack, the signature may be revised as follows. The core idea is to use a _weighted aggregated public key_ for signature, instead of a simple sum of multiple public keys.
 
 For multiple Pedersen commitment outputs _I<sub>i</sub>_ where _i=[1..n]_:
 
@@ -376,7 +362,9 @@ Then anyone can verify this signature with the open Pedersen Commitments _{I<sub
 
 _u&ast;G + v&ast;H = R + e&ast;C_
 
-#### Correctness
+The _C_ here is called _weighted aggregated public key_ which is the core factor to fix Rogue-Key attack.
+
+### Correctness
 
 _u&ast;G + v&ast;H = (u<sub>1</sub>+u<sub>2</sub>+...+u<sub>n</sub>)&ast;G + (v<sub>1</sub>+v<sub>2</sub>+...+v<sub>n</sub>)&ast;H_
 
@@ -384,7 +372,33 @@ _u<sub>i</sub>&ast;G + v<sub>i</sub>&ast;H = (k<sub>1i</sub>&ast;G + e&ast;a<sub
 
 _=>  u&ast;G + v&ast;H = (R<sub>1</sub>+R<sub>2</sub>+...+R<sub>n</sub>) + e&ast;(C<sub>1</sub>+C<sub>2</sub>+...+C<sub>n</sub>) = R+e&ast;C_
 
-#### Revised Data Structure
+Now, let's go back to the [rogue-key attack example](#Rogue-Key-Attack) above, with this fixing, we have:
+
+1. There are 2 unspent output _I<sub>1</sub>_ and _I<sub>2</sub>_, where _I<sub>2</sub> = I<sub>2</sub>'-I<sub>1</sub>_.
+2. Calculate _a<sub>1</sub> = Hash(I, I<sub>1</sub>)_ and _a<sub>2</sub> = Hash(I, I<sub>2</sub>)_, where _I={I<sub>1</sub>, I<sub>2</sub>}_. Calculate _C<sub>1</sub>=a<sub>1</sub>&ast;I<sub>1</sub>_ and _C<sub>2</sub>=a<sub>2</sub>&ast;I<sub>2</sub>_.
+3. Calculate _C = C<sub>1</sub>+C<sub>2</sub>_.
+4. Calculate _e = Hash(R || C || m)_, where _m_ is the signing message.
+5. Calculate _u<sub>1</sub> = k<sub>11</sub> + e&ast;a<sub>1</sub>&ast;x<sub>1</sub>_ and _u<sub>2</sub> = k<sub>12</sub> + e&ast;a<sub>2</sub>&ast;x<sub>2</sub>_.
+
+But obviously the attacker does not know the private key of _I<sub>2</sub>_, therefore can not calculate that _u<sub>2</sub>_, the Rogue-Key attack fail.
+
+### Signature Optimization for Multiple Inputs Singer Signer
+
+The revised signature scheme at [above](#Fix-of-Rogue-Key-Attack) makes use of multiple random _R_, because normally it is forbidden to reuse same _R_ for signature to avoid _De-Randomization attack_ (refer to _ComSig_ [paper](https://github.com/gottstech/gotts/wiki/ComSig-Signature)).
+
+But in case of only one single signer, meaning all those inputs _I<sub>i</sub>_ belongs to same owner, and the signer can make sure the security of those intermediate internal variables _u<sub>i</sub>_ and _v<sub>i</sub>_, which is the normal case since no need to export these intermediate variables, there is an optimized procedure for this signing calculation, making use of a single random _R_ instead of multiple.
+
+For multiple Pedersen commitment outputs _I<sub>i</sub>_ where _i=[1..n]_:
+
+1. Select a single random Pedersen commitments _R = k<sub>1</sub>&ast;G + k<sub>2</sub>&ast;H_.
+2. Calculate _a<sub>i</sub> = Hash(I, I<sub>i</sub>)_, where _I={I<sub>1</sub>, I<sub>2</sub>, ... ,I<sub>n</sub>}_ and _i=[1..n]_.
+3. Calculate a _weighted aggregated_ _C = a<sub>1</sub>&ast;I<sub>1</sub>+a<sub>2</sub>&ast;I<sub>2</sub>+ ... +a<sub>n</sub>&ast;I<sub>n</sub>_.
+4. Calculate _e = Hash(R || C || m)_, where _m_ is the signing message.
+5. Calculate a _weighted aggregated_ _x = a<sub>1</sub>&ast;x<sub>1</sub>+ ... +a<sub>n</sub>&ast;x<sub>n</sub>_. Calculate a _weighted aggregated_ _w = a<sub>1</sub>&ast;w<sub>1</sub>+ ... +a<sub>n</sub>&ast;w<sub>n</sub>_.
+6. Calculate _u = k<sub>1</sub> + e&ast;x_, and _v = k<sub>2</sub> + e&ast;w_.
+7. Done. The signature is (_R,u,v_), for Pedersen Commitments _{I<sub>1</sub>, I<sub>2</sub>,...,I<sub>n</sub>}_ as signature public keys.
+
+### Revised Data Structure
 
 For adaption to above fixing, the _Transaction Kernel_ data structure may be revised as:
 ```Rust
@@ -403,6 +417,42 @@ struct Transaction {
 	kernels: Vec<TxKernel>,
 }
 ```
+
+### Side Effect of this Revising
+
+Because moving the `inputs` from `Transaction` structure into the `TxKernel` structure, an obvious side effect is the consolidated relationship among the `inputs` in same transaction. Even after some CoinJoin, this relationship can not be hidden anymore, since the `TxKernel` can not be aggregated.
+
+This will hurt the core value of the CoinJoin.
+
+For example:
+
+- _T<sub>a</sub> = {..., kernels: {{..., inputs: {I<sub>1</sub>, I<sub>2</sub>},...}}}_
+- _T<sub>b</sub> = {..., kernels: {{..., inputs: {I<sub>3</sub>, I<sub>4</sub>},...}}}_
+
+After a CoinJoin, these 2 transactions can be merged as:
+
+_T<sub>m</sub> = {..., kernels: {{..., inputs: {I<sub>1</sub>, I<sub>2</sub>},...}, {..., inputs: {I<sub>3</sub>, I<sub>4</sub>},...}}}_
+
+(To Be Continued)
+
+TODO: Research a fix solution.
+
+### Transaction Size Comparing
+
+| Size (Bytes) | Old Interactive Transaction | Old Non-Interactive Transaction | New Non-Interactive Transaction |
+|:-------------|:-------------|:-------------|:-------------|
+| 1 payment with 1 Input   | 244 | 412  | 327 |
+
+Notes:
+
+- Suppose the old non-interactive transaction include _InputUnlocker_, meaning the Input is a non-interactive transaction output.
+- Suppose the old interactive transaction doesn't include any _InputUnlocker_, meaning the Input is not a non-interactive transaction output.
+- The new non-interactive transaction has the additional _Stealth Address_ feature.
+- The old interactive transaction scheme has the optimal transaction size, but unfortunately there is a [rogue-key attack flaw](https://github.com/gottstech/gotts/wiki/Removing-Interactive-Transaction#rogue-key-attack), therefore it can not be used directly. 
+
+
+
+ 
 
 
 
