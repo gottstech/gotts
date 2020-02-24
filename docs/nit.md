@@ -382,7 +382,7 @@ Now, let's go back to the [rogue-key attack example](#Rogue-Key-Attack) above, w
 
 But obviously the attacker does not know the private key of _I<sub>2</sub>_, therefore can not calculate that _u<sub>2</sub>_, the Rogue-Key attack fail.
 
-### Signature Optimization for Multiple Inputs Singer Signer
+### Signature Optimization for Multiple Inputs Single Signer
 
 The revised signature scheme at [above](#Fix-of-Rogue-Key-Attack) makes use of multiple random _R_, because normally it is forbidden to reuse same _R_ for signature to avoid _De-Randomization attack_ (refer to _ComSig_ [paper](https://github.com/gottstech/gotts/wiki/ComSig-Signature)).
 
@@ -392,50 +392,105 @@ For multiple Pedersen commitment outputs _I<sub>i</sub>_ where _i=[1..n]_:
 
 1. Select a single random Pedersen commitments _R = k<sub>1</sub>&ast;G + k<sub>2</sub>&ast;H_.
 2. Calculate _a<sub>i</sub> = Hash(I, I<sub>i</sub>)_, where _I={I<sub>1</sub>, I<sub>2</sub>, ... ,I<sub>n</sub>}_ and _i=[1..n]_.
-3. Calculate a _weighted aggregated_ _C = a<sub>1</sub>&ast;I<sub>1</sub>+a<sub>2</sub>&ast;I<sub>2</sub>+ ... +a<sub>n</sub>&ast;I<sub>n</sub>_.
-4. Calculate _e = Hash(R || C || m)_, where _m_ is the signing message.
-5. Calculate a _weighted aggregated_ _x = a<sub>1</sub>&ast;x<sub>1</sub>+ ... +a<sub>n</sub>&ast;x<sub>n</sub>_. Calculate a _weighted aggregated_ _w = a<sub>1</sub>&ast;w<sub>1</sub>+ ... +a<sub>n</sub>&ast;w<sub>n</sub>_.
+3. Calculate the _weighted aggregated_ _x = a<sub>1</sub>&ast;x<sub>1</sub>+ ... +a<sub>n</sub>&ast;x<sub>n</sub>_. Calculate the _weighted aggregated_ _w = a<sub>1</sub>&ast;w<sub>1</sub>+ ... +a<sub>n</sub>&ast;w<sub>n</sub>_.
+4. Calculate the _weighted aggregated_ _C = x&ast;G+w&ast;H_.
+5. Calculate _e = Hash(R || C || m)_, where _m_ is the signing message.
 6. Calculate _u = k<sub>1</sub> + e&ast;x_, and _v = k<sub>2</sub> + e&ast;w_.
 7. Done. The signature is (_R,u,v_), for Pedersen Commitments _{I<sub>1</sub>, I<sub>2</sub>,...,I<sub>n</sub>}_ as signature public keys.
 
 ### Revised Data Structure
 
-For adaption to above fixing, the _Transaction Kernel_ data structure may be revised as:
+For adaption to above fixing, we need either move `inputs` from `struct Transaction` to `TxKernel`, or move the signature `sig` from `TxKernel` to the `struct InputEx`, since each input is mandatory to the signature verification. But the former adaption solution will cause both the traceability problem, between the `TxKernel` and the inputs, and the CoinJoin problem since some inputs could be removed by cut-through. The latter adaption solution does not have the CoinJoin problem, but the traceability problem is still there.
+
+Because obviously Gotts is NOT a privacy-first coin, it should be acceptable to leave the traceability here. We take the latter adaption solution, so the revised `InputEx` and `Transaction` data structure may be defined as:
 ```Rust
-struct TxKernel {
-	features: KernelFeatures,
-	inputs: Vec<Input>,
-	excess_sig: Signature,
+struct InputEx {
+    inputs: Vec<Input>,
+    sig: Signature,
+}
+
+struct Transaction {
+    excess: Commitment,
+    inputs: Vec<InputEx>,
+    outputs: Vec<Output>,
+    kernels: Vec<TxKernel>,
 }
 ```
+The `TxKernel` data structure will be completely removed from `Transaction` and not needed anymore. Normally, the new created transaction from a wallet only contains one `InputEx`, meaning the `inputs` vector only has one element.
 
-And the _Transaction_ data structure may be revised as:
+As the option, with the same solution, it is still feasible for user to avoid the traceability issue, if the wallet user forces to give one signature on every input, meaning the `inputs` vector of `InputEx` has only one element but the `inputs` vector of `Transaction` has multiple elements.
+
+### CoinJoin
+
+For the CoinJoin, the `InputEx` is a whole unit for cut-through. It can be cut-through if and only if all `inputs` of this `InputEx` have the corresponding `Output` in same `Transaction`.
+
+For example, if we have two transactions _T<sub>1</sub>_ and _T<sub>2</sub>:
+
+- _T<sub>1</sub>: I<sub>1</sub> + E<sub>1</sub> = C<sub>1</sub> + O<sub>1</sub>_
+- _T<sub>2</sub>: C<sub>1</sub> + E<sub>2</sub> = C<sub>2</sub> + O<sub>2</sub>_
+
+where _I<sub>i</sub>_ is transaction input, _E<sub>i</sub>_ is public excess, _C<sub>i</sub>_ is the change, _O<sub>i</sub>_ is the payment output.
+
+Then, after the CoinJoin, the merged transaction will be:
+
+- _T<sub>1,2</sub>: I<sub>1</sub> + E<sub>1,2</sub> = C<sub>2</sub> + O<sub>1</sub> + O<sub>2</sub>_
+
+where _E<sub>1,2</sub> = E<sub>1</sub>+E<sub>2</sub>_. In this example, a change output is removed by cut-through, this CoinJoin procedure is correct and has no any problem, since the signature in _I<sub>1</sub>_ is enough to prove the ownership and all the outputs _C<sub>2</sub>_, _O<sub>1</sub>_, _O<sub>2</sub>_ come from _I<sub>1</sub>_ (i.e. spending _I<sub>1</sub>_).
+
+In another example, a payment output is removed by cut-through:
+
+- _T<sub>1</sub>: I<sub>1</sub> + E<sub>1</sub> = C<sub>1</sub> + O<sub>1</sub>_
+- _T<sub>2</sub>: O<sub>1</sub> + E<sub>2</sub> = C<sub>2</sub> + O<sub>2</sub>_
+
+then after the CoinJoin, the merged transaction will be:
+
+- _T<sub>1,2</sub>: I<sub>1</sub> + E<sub>1,2</sub> = C<sub>1</sub> + C<sub>2</sub> + O<sub>2</sub>_
+
+This CoinJoin procedure is also correct and has no any problem, even the signature of _T<sub>2</sub>_ is removed too by this CoinJoin.
+
+### TxKernel
+
+After removing the signature field, the `TxKernel` data structure could be completely removed from `Transaction`. But there is a _Time Locked_ transaction type which is useful for implementation of atomic swap. The _Time Locked_ transaction need the `KernelFeatures` in `TxKernel` which has the data structure as following:
 ```Rust
+	struct HeightLocked {
+		fee: u32,
+		lock_height: u64,
+	}
+```
+
+The `lock_height` here is used to give this transaction a lock height in the future, which means it can only be included into a block some blocks later, when block height reach the `lock_height`.
+
+So, we need keep it but replace it by _KernelFeatures_ since it's the only left part of _TxKernel_ data structure. The final data structures can be summarized here:
+```Rust
+struct Input {
+	features: OutputFeatures,
+	commit: Commitment,
+}
+
+struct InputEx {
+    inputs: Vec<Input>,
+    sig: Signature,
+}
+
 struct Transaction {
 	excess: Commitment,
+    inputs: Vec<InputEx>,
 	outputs: Vec<Output>,
-	kernels: Vec<TxKernel>,
+    features: Vec<TxFeatures>,
+}
+
+enum TxFeatures {
+	Plain {
+		fee: u32,
+	},
+	Coinbase,
+	HeightLocked {
+		fee: u32,
+		lock_height: u64,
+	},
 }
 ```
-
-### Side Effect of this Revising
-
-Because moving the `inputs` from `Transaction` structure into the `TxKernel` structure, an obvious side effect is the consolidated relationship among the `inputs` in same transaction. Even after some CoinJoin, this relationship can not be hidden anymore, since the `TxKernel` can not be aggregated.
-
-This will hurt the core value of the CoinJoin.
-
-For example:
-
-- _T<sub>a</sub> = {..., kernels: {{..., inputs: {I<sub>1</sub>, I<sub>2</sub>},...}}}_
-- _T<sub>b</sub> = {..., kernels: {{..., inputs: {I<sub>3</sub>, I<sub>4</sub>},...}}}_
-
-After a CoinJoin, these 2 transactions can be merged as:
-
-_T<sub>m</sub> = {..., kernels: {{..., inputs: {I<sub>1</sub>, I<sub>2</sub>},...}, {..., inputs: {I<sub>3</sub>, I<sub>4</sub>},...}}}_
-
-(To Be Continued)
-
-TODO: Research a fix solution.
+The original _TxKernel_ data structure is completely removed. 
 
 ### Transaction Size Comparing
 
