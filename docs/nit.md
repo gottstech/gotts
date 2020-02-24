@@ -410,9 +410,9 @@ struct InputEx {
 }
 
 struct Transaction {
-	excess: Commitment,
+    excess: Commitment,
     inputs: Vec<InputEx>,
-	outputs: Vec<Output>,
+    outputs: Vec<Output>,
     kernels: Vec<TxKernel>,
 }
 ```
