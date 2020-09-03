@@ -322,6 +322,13 @@ In Mimblewimble/Grin, this `w` is hidden into the bulletproof and must be positi
 
 For the all remaining parts of Mimblewimble, we keep same, except all the validations need check the explicit amount balance also.
 
+## Prerequisite Researches
+
+  - [Gotts Stable Coins](https://github.com/gottstech/gotts/wiki/Gotts-Stable-Coins)
+  - [ComSig Signature](https://github.com/gottstech/gotts/wiki/ComSig-Signature)
+  - [Stealth Address](https://github.com/gottstech/gotts/wiki/Stealth-Address)
+  - [Mimblewimble Non-Interactive Transaction](https://github.com/gottstech/gotts/wiki/Mimblewimble-Non-Interactive-Transaction)
+
 ## Gotts Interactive Transaction
 
 The interactive transaction scheme has been removed, see the reason summarized [here](https://github.com/gottstech/gotts/wiki/Removing-Interactive-Transaction). The removed interactive transaction scheme can be found [here](https://github.com/gottstech/gotts/blob/v0.0.6/docs/intro.md#gotts-interactive-transaction).
@@ -410,7 +417,6 @@ Because of the much smaller size of the chain validation data, Mimblewimble bloc
 - All unspent outputs.
 - All transaction kernels (Note: to be discussed in [kernel pruning](#transaction-kernel-pruning)).
 - Recent full blocks, for example from two days to one week (i.e. a cut-through horizon size).
-
 
 ### 0-Confirmation Cascading Transaction
 Both Grin and Gotts support 0-confirmation cascading transaction. A user can use one unspent output to create multiple (for example one thousand!) transactions for multiple receivers. For example at the payday, when the cashier need send salaries to a thousand employees, he/she can continuously operate sending, without any blocking to wait the block confirmations.

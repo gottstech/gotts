@@ -2,9 +2,9 @@
 
 ## Old Design
 
-The [old design of Gotts Non-Interactive Transaction](https://github.com/gottstech/gotts/blob/v0.0.6/docs/intro.md#gotts-non-interactive-transaction) has been completely implemented on node version [v0.0.6](https://github.com/gottstech/gotts/releases/tag/v0.0.6) and wallet version [v0.0.6](https://github.com/gottstech/gotts-wallet/releases/tag/v0.0.6).
+The [old design of Gotts Non-Interactive Transaction](https://github.com/gottstech/gotts/blob/v0.0.6/docs/intro.md#gotts-non-interactive-transaction) has been completely implemented on node version [v0.0.6](https://github.com/gottstech/gotts/releases/tag/v0.0.6) and wallet version [v0.0.6](https://github.com/gottstech/gotts-wallet/releases/tag/v0.0.6) (but missing the necessary _ComSig_ signature for each output).
 
-It use the Bitcoin style Public Key Hash to lock the output. To spend a Non-Interactive Output, a Signature with the corresponding revealed Public Key must be provided as the unlocker. This is an intuitive and simple design, since the concept of P2PKH (Pay-To-Public-Key-Hash) is well known in crypto world.
+It use the Bitcoin style _Public-Key-Hash_ to lock the output. To spend a Non-Interactive Output, a Signature with the corresponding revealed Public Key must be provided as the unlocker. This is an intuitive and simple design, since the concept of P2PKH (Pay-To-Public-Key-Hash) is well known in crypto world.
 
 But the cost of combining the Bitcoin-style P2PKH with Mimblewimble is not trivial. The NIT (Non-Interactive Transaction) output need a `OutputLocker` structure which is `65-bytes` bigger than original Mimblewimble native output. And when spending this NIT output, an additional `InputUnlocker` is needed for unlocking it, which is `104-bytes` length. Considering the typical Gotts interactive transaction size is just `244` bytes, neither `OutputLocker` nor `InputUnlocker` is trivial for Gotts transaction. 
 
@@ -109,7 +109,7 @@ Some examples here for the old design, taken from the working wallet version [v0
 ```
 </details>
 
-The transaction size of above non-interactive transaction example (1 Input without the _Unlocker_ and 2 Outputs) is 309 bytes.
+The transaction size of above non-interactive transaction example (1 Input without the _Unlocker_ and 2 Outputs) is `12+(1+1+33)+(1+12+33+8)+(1+32+33+12+33+8)+(1+4+33+64)=322` bytes. (with the missing _ComSig_ signature, that will be 514 bytes.)
 
 
 <details>
@@ -175,13 +175,13 @@ The transaction size of above non-interactive transaction example (1 Input witho
 ```
 </details>
 
-The transaction size of above non-interactive transaction example (1 Input with the _Unlocker_ and 2 Outputs) is 412 bytes.
+The transaction size of above non-interactive transaction example (1 Input with the _Unlocker_ and 2 Outputs) is 426 bytes. (with the missing _ComSig_ signature, that will be 618 bytes.)
 
 Recently, I have been thinking whether it will be a better design to change back to pure Mimblewimble style "locker", i.e. the Pedersen Commitment, to get a more compact Non-Interactive Transaction solution.
 
 ## Mimblewimble-Style "Locker"
 
-If considering the classic PKH (Pulic Key Hash) or Script Hash, i.e. the typical Bitcoin-style "locker", is an efficient way for locking, the Pedersen Commitment could be a better way, which can "lock" both the owner's Public Key and the output value, and it's capable to lock multiple Public Keys.
+If considering the classic PKH (Public Key Hash) or Script Hash, i.e. the typical Bitcoin-style "locker", is an efficient way for locking, the Pedersen Commitment could be a better way, which can "lock" both the owner's Public Key and the output value, and it's capable to lock multiple Public Keys.
 
 ## The Prerequisite Researches
 
@@ -209,303 +209,120 @@ A prerequisite research on the stealth address has been done [here](https://gith
 
 ## New Design of Mimblewimble Non-Interactive Transaction
 
-### Warm-up and Review: Mimblewimble/Grin Interactive Transaction Design
+A prerequisite research has been done [here](https://github.com/gottstech/gotts/wiki/Non-Interactive-Transaction).
 
-Looking back the Mimblewimble/Grin Interactive Transaction design, with 1 input and 2 outputs as example:
-
-_(r<sub>i</sub>&ast;G + v<sub>i</sub>&ast;H) + (excess'+ offset&ast;G) = (r<sub>c</sub>&ast;G + v<sub>c</sub>&ast;H) + (r<sub>r</sub>&ast;G + v<sub>r</sub>&ast;H) + (0+fee&ast;H)_
-
-Where
-
-- _(r<sub>i</sub>&ast;G + v<sub>i</sub>&ast;H)_ is the spending coin, i.e. the input, which is selected by the sender.
-- _(r<sub>c</sub>&ast;G + v<sub>c</sub>&ast;H)_ is the change coin, which is created by the sender.
-- _(r<sub>r</sub>&ast;G + v<sub>r</sub>&ast;H)_ is the sending coin which is created by the receiver.
-- _r<sub>i</sub>_ and _r<sub>c</sub>_ are sender's private keys, _r<sub>r</sub>_ is receiver's private key.
-- _v<sub>i</sub>_ is the input/spending coin amount, _v<sub>r</sub>_ is the sending coin amount for the receiver, _v<sub>c</sub>_ is the change amount.
-- _fee_ is the transaction fee for miner who validate and package this transaction.
-- _offset_ is the so-called "kernel offset", which is a random value selected by the sender. _offset_ is transmitted as part of the transaction data, but only packaged into the block header as the "total offset", which accumulate all transaction _offset_ value since the Genesis block. i.e. _offset_ is not available on the chain data.
-- _excess'_ is the so-called "public excess", which is the public key for transaction kernel signature.
-
-And we have the following relationships:
-
-- _v<sub>i</sub> = v<sub>c</sub> + v<sub>r</sub> + fee_, which is used to calculate the change coin amount _v<sub>c</sub>_. 
-- _excess' = (r<sub>c</sub>-r<sub>i</sub>-offset)&ast;G + r<sub>r</sub>&ast;G_, which is used to calculate the "public excess".
-
-The Mimblewimble/Grin signature theme is the standard usage of Schonorr 2-of-2 aggregated signature: 
-
-1. The sender notify the receiver his/her public key _P<sub>1</sub> = (r<sub>c</sub>-r<sub>i</sub>-offset)&ast;G_ and a nonce _R<sub>1</sub> = k<sub>1</sub>&ast;G_.
-2. The receiver take his/her public key _P<sub>2</sub> = r<sub>r</sub>&ast;G_ and a nonce _R<sub>2</sub> = k<sub>2</sub>&ast;G_, calculate _P = P<sub>1</sub>+P<sub>2</sub>_ and _R = R<sub>1</sub>+R<sub>2</sub>_.
-3. The receiver send back to the sender: _P<sub>2</sub>_, _R<sub>2</sub>_, and the partial signature _s<sub>2</sub> = k<sub>2</sub>+e*r<sub>r</sub>_, where _e = Hash(R || P || m)_.
-4. The sender calculate his/her own partial signature _s<sub>1</sub> = k<sub>1</sub>+e*(r<sub>c</sub>-r<sub>i</sub>-offset)_, then aggregate both partial signatures by _s = s<sub>1</sub>+s<sub>2</sub>_, to get the final aggregated signature: _(R, s)_ and the final public key (i.e. the public excess): _P = P<sub>1</sub>+P<sub>2</sub>_.
-
-Then, we have a "Transaction Kernel" as part of this transaction data, which include the transaction fee info and the signature data. Here is the pseudo-code of a transaction kernel data structure:
-```Rust
-struct TxKernel {
-	fee: u64,
-	excess': Commitment,
-	excess_sig: Signature,
-}
-```
-
-### Non-Interactive Transaction Design for Mimblewimble
-
-Comparing to above Mimblewimble/Grin Interactive Transaction theme, now let's come to the new designed Mimblewimble Non-Interactive Transaction theme.
-
-Still with the example which has 1 input and 2 outputs:
-
-_(x<sub>i</sub>&ast;G + w<sub>i</sub>&ast;H) + Excess = (x<sub>c</sub>&ast;G + w<sub>c</sub>&ast;H) + (A<sub>i</sub>+B<sub>i</sub> + R'.x&ast;H)_
-
-Where
-
-- _(x<sub>i</sub>&ast;G + w<sub>i</sub>&ast;H)_ is the spending coin, i.e. the input, which is selected by the sender.
-- _(x<sub>c</sub>&ast;G + w<sub>c</sub>&ast;H)_ is the change coin, which is created by the sender.
-- _x<sub>i</sub>_ and _x<sub>c</sub>_ are sender's private keys.
-- _(A<sub>i</sub>+B<sub>i</sub> + R'.x*H)_ is the sending coin which is **also** created by the **sender**, where _A<sub>i</sub>_ and _B<sub>i</sub>_ are the elements of a receiver's wallet address, and _R'=r&ast;B<sub>i</sub>_ where _r_ is a random secret selected by the sender, _R'.x_ is the point _R'_ x-coordinator.
-- _Excess_ is the transaction public excess.
-
-And we have the following relationships:
-
-- _v<sub>i</sub> = v<sub>c</sub> + v<sub>r</sub> + fee_, which is used to calculate the change coin amount _v<sub>c</sub>_. 
-- _Excess = (x<sub>c</sub>-x<sub>i</sub>)&ast;G + (A<sub>i</sub>+B<sub>i</sub> + w<sub>e</sub>&ast;H)_, where _w<sub>e</sub> = (w<sub>c</sub> - w<sub>i</sub> + R'.x) mod p_.
-
-The _Excess_ is transmitted as part of the transaction data, but only packaged into the block header as the _Total Excess_, which accumulates all transactions _Excess_ value since the Genesis block. i.e. _Excess_ is not available on the block and chain data.
-
-For the transaction signature public key, we define a _I_ for non-interactive transaction as the total inputs:
-
-_I = SUM(inputs)_
-
-Where, _I = x<sub>i</sub>&ast;G + w<sub>i</sub>&ast;H_ for above example with single input.
-
-Using the _ComSig_ signature scheme, which only need to be executed on the sender side, a 96-bytes signature will be attached into the transaction, and as the additional data, both the _R_ and the _i_ (or an encoded _i'_) will be packed into the transaction.
-
-With this non-interactive transaction scheme, the _Output_ data structure may be defined as:
+With this non-interactive transaction scheme, the _Output_ data structure in Gotts may be defined as:
 ```Rust
 struct Output {
 	features: OutputFeatures,
 	commit: Commitment,
-	v: u64,
+	value: u64,
 	R: PublicKey,
-	i: u32,
+	sig: ComSignature,
+	spath: SecuredPath
 }
 ```
-The size of this _Output_ data structure is `1+33+8+33+4 = 79` bytes.
+The size of this _Output_ data structure is `1+33+8+33+96+12 = 183` bytes.
 
-And the _Transaction Kernel_ data structure may be defined as:
-```Rust
-struct TxKernel {
-	features: KernelFeatures,
-	accumulate_inputs: Commitment,
-	excess_sig: Signature,
-}
-```
-The size of this _Transaction Kernel_ data structure for a plain feature is `1+4+33+96 = 134` bytes.
-
-The _Transaction_ data structure may be defined as:
+And the _Transaction_ data structure may be defined as:
 ```Rust
 struct Transaction {
 	excess: Commitment,
-	inputs: Vec<Input>,
+	inputs: Vec<InputEx>,
 	outputs: Vec<Output>,
-	kernels: Vec<TxKernel>,
-}
-```
-With all these data structures, the size of a typical transaction with 1 Input and 2 Outputs is `33+(1+33)+79*2+134 = 359` bytes, which saves `67` bytes (or `15%`) data comparing to `426` bytes in the old non-interactive transaction scheme, even with the added _Stealth Address_ feature.
-
-In case one transaction contains multiple payments (i.e. multiple outputs), this non-interactive transaction design is even more optimal than the interactive transaction even only on the size point of view. For example, for a transaction with 1 Input and 3 Outputs, the size is `33+(1+33)+79*3+134 = 438` bytes, whereas two old interactive transactions need `(1+33)*2+(1+33+8+12)*4+102*2 = 488` bytes, which contains 2 Inputs, 4 Outputs and 2 transaction kernels.
-
-### Rogue-Key Attack
-
-For single input double outputs, with above non-interactive transaction scheme, the transaction can be expressed as:
-
-_I<sub>1</sub> + excess = C<sub>1</sub> + O<sub>1</sub>_
-
-where
-- _I<sub>1</sub> = x<sub>1</sub>&ast;G+w<sub>1</sub>&ast;H_ is the transaction input
-- _C<sub>1</sub>_ is the change output
-- _O<sub>1</sub>_ is the payment output.
-
-And the owner of the output _I<sub>1</sub>_ must provide the signature to prove his/her ownership, with _I<sub>1</sub>_ as the signature public key. 
-
-For double inputs double outputs, the transaction can be expressed as:
-
-_I<sub>1</sub> + I<sub>2</sub> + excess = C<sub>1</sub> + O<sub>1</sub>_
-
-With above non-interactive transaction scheme, instead of providing two independent signatures for _I<sub>1</sub>_ and _I<sub>2</sub>_, the transaction creator only need provide one single signature for _I = I<sub>1</sub>+I<sub>2</sub>_, since both inputs belongs to same owner.
-
-But obviously, it's easy to give a Rogue-Key attack on this scheme. For example, to steal the money from _I<sub>1</sub>_ which is owned by anyone, the attacker can construct an output _O<sub>attack</sub>_ in advance, where
-
-_O<sub>attack</sub> = x&ast;G+w&ast;H - I<sub>1</sub>_
-
-then, when this _O<sub>attack</sub>_ has been mined into one block, the attacker can create a transaction to steal other people's output _I<sub>1</sub>_:
-
-- _I<sub>1</sub> + I<sub>2</sub> + excess = C<sub>1</sub> + O<sub>1</sub>_
-- _I<sub>2</sub> = O<sub>attack</sub> = x&ast;G+w&ast;H - I<sub>1</sub>_
-
-so that _I = I<sub>1</sub>+I<sub>2</sub> = x&ast;G+w&ast;H_. Then the attacker is able to create a signature only by his/her own private key in _x&ast;G+w&ast;H_.
-
-
-### Fix of Rogue-Key Attack
-
-According to [ComSig](https://github.com/gottstech/gotts/wiki/ComSig-Signature) paper, to avoid this Rogue-Key attack, the signature may be revised as follows. The core idea is to use a _weighted aggregated public key_ for signature, instead of a simple sum of multiple public keys.
-
-For multiple Pedersen commitment outputs _I<sub>i</sub>_ where _i=[1..n]_:
-
-1. Select _n_ random Pedersen commitments _R<sub>i</sub>_ where _i=[1..n]_, calculate _R=R<sub>1</sub>+R<sub>2</sub>+ ... +R<sub>n</sub>_.
-2. Calculate _a<sub>i</sub> = Hash(I, I<sub>i</sub>)_, where _I={I<sub>1</sub>, I<sub>2</sub>,...,I<sub>n</sub>}_. Calculate _C<sub>i</sub>=a<sub>i</sub>&ast;I<sub>i</sub>_.
-3. Calculate _C = C<sub>1</sub>+C<sub>2</sub>+...+C<sub>n</sub>_.
-4. Calculate _e = Hash(R || C || m)_, where _m_ is the signing message.
-5. Calculate _k<sub>1i</sub> + e&ast;a<sub>i</sub>&ast;x<sub>i</sub>_ as _u<sub>i</sub>_, calculate _k<sub>2i</sub> + e*a<sub>i</sub>*w<sub>i</sub>_ as _v<sub>i</sub>_. Where _k<sub>1i</sub>&ast;G + k<sub>2i</sub>&ast;H = R<sub>i</sub>_.
-6. Calculate _u = u<sub>1</sub>+u<sub>2</sub>+...+u<sub>n</sub>_, and _v = v<sub>1</sub>+v<sub>2</sub>+...+v<sub>n</sub>_.
-7. Done. The signature is (_R,u,v_), for Pedersen Commitments _{I<sub>1</sub>, I<sub>2</sub>,...,I<sub>n</sub>}_ as signature public keys.
-
-Then anyone can verify this signature with the open Pedersen Commitments _{I<sub>1</sub>, I<sub>2</sub>,...,I<sub>n</sub>}_, if:
-
-_u&ast;G + v&ast;H = R + e&ast;C_
-
-The _C_ here is called _weighted aggregated public key_ which is the core factor to fix Rogue-Key attack.
-
-### Correctness
-
-_u&ast;G + v&ast;H = (u<sub>1</sub>+u<sub>2</sub>+...+u<sub>n</sub>)&ast;G + (v<sub>1</sub>+v<sub>2</sub>+...+v<sub>n</sub>)&ast;H_
-
-_u<sub>i</sub>&ast;G + v<sub>i</sub>&ast;H = (k<sub>1i</sub>&ast;G + e&ast;a<sub>i</sub>&ast;x<sub>i</sub>&ast;G) + (k<sub>2i</sub>&ast;H + e&ast;a<sub>i</sub>&ast;w<sub>i</sub>&ast;H) = (k<sub>1i</sub>&ast;G + k<sub>2i</sub>&ast;H) + (e&ast;a<sub>i</sub>&ast;x<sub>i</sub>&ast;G + e&ast;a<sub>i</sub>&ast;w<sub>i</sub>&ast;H) = R<sub>i</sub> + e&ast;a<sub>i</sub>&ast;(x<sub>i</sub>&ast;G + w<sub>i</sub>&ast;H) = R<sub>i</sub> + e&ast;a<sub>i</sub>&ast;I<sub>i</sub> = R<sub>i</sub> + e&ast;C<sub>i</sub>_
-
-_=>  u&ast;G + v&ast;H = (R<sub>1</sub>+R<sub>2</sub>+...+R<sub>n</sub>) + e&ast;(C<sub>1</sub>+C<sub>2</sub>+...+C<sub>n</sub>) = R+e&ast;C_
-
-Now, let's go back to the [rogue-key attack example](#Rogue-Key-Attack) above, with this fixing, we have:
-
-1. There are 2 unspent output _I<sub>1</sub>_ and _I<sub>2</sub>_, where _I<sub>2</sub> = I<sub>2</sub>'-I<sub>1</sub>_.
-2. Calculate _a<sub>1</sub> = Hash(I, I<sub>1</sub>)_ and _a<sub>2</sub> = Hash(I, I<sub>2</sub>)_, where _I={I<sub>1</sub>, I<sub>2</sub>}_. Calculate _C<sub>1</sub>=a<sub>1</sub>&ast;I<sub>1</sub>_ and _C<sub>2</sub>=a<sub>2</sub>&ast;I<sub>2</sub>_.
-3. Calculate _C = C<sub>1</sub>+C<sub>2</sub>_.
-4. Calculate _e = Hash(R || C || m)_, where _m_ is the signing message.
-5. Calculate _u<sub>1</sub> = k<sub>11</sub> + e&ast;a<sub>1</sub>&ast;x<sub>1</sub>_ and _u<sub>2</sub> = k<sub>12</sub> + e&ast;a<sub>2</sub>&ast;x<sub>2</sub>_.
-
-But obviously the attacker does not know the private key of _I<sub>2</sub>_, therefore can not calculate that _u<sub>2</sub>_, the Rogue-Key attack fail.
-
-### Signature Optimization for Multiple Inputs Single Signer
-
-The revised signature scheme at [above](#Fix-of-Rogue-Key-Attack) makes use of multiple random _R_, because normally it is forbidden to reuse same _R_ for signature to avoid _De-Randomization attack_ (refer to _ComSig_ [paper](https://github.com/gottstech/gotts/wiki/ComSig-Signature)).
-
-But in case of only one single signer, meaning all those inputs _I<sub>i</sub>_ belongs to same owner, and the signer can make sure the security of those intermediate internal variables _u<sub>i</sub>_ and _v<sub>i</sub>_, which is the normal case since no need to export these intermediate variables, there is an optimized procedure for this signing calculation, making use of a single random _R_ instead of multiple.
-
-For multiple Pedersen commitment outputs _I<sub>i</sub>_ where _i=[1..n]_:
-
-1. Select a single random Pedersen commitments _R = k<sub>1</sub>&ast;G + k<sub>2</sub>&ast;H_.
-2. Calculate _a<sub>i</sub> = Hash(I, I<sub>i</sub>)_, where _I={I<sub>1</sub>, I<sub>2</sub>, ... ,I<sub>n</sub>}_ and _i=[1..n]_.
-3. Calculate the _weighted aggregated_ _x = a<sub>1</sub>&ast;x<sub>1</sub>+ ... +a<sub>n</sub>&ast;x<sub>n</sub>_. Calculate the _weighted aggregated_ _w = a<sub>1</sub>&ast;w<sub>1</sub>+ ... +a<sub>n</sub>&ast;w<sub>n</sub>_.
-4. Calculate the _weighted aggregated_ _C = x&ast;G+w&ast;H_.
-5. Calculate _e = Hash(R || C || m)_, where _m_ is the signing message.
-6. Calculate _u = k<sub>1</sub> + e&ast;x_, and _v = k<sub>2</sub> + e&ast;w_.
-7. Done. The signature is (_R,u,v_), for Pedersen Commitments _{I<sub>1</sub>, I<sub>2</sub>,...,I<sub>n</sub>}_ as signature public keys.
-
-### Revised Data Structure
-
-For adaption to above fixing, we need either move `inputs` from `struct Transaction` to `TxKernel`, or move the signature `sig` from `TxKernel` to the `struct InputEx`, since each input is mandatory to the signature verification. But the former adaption solution will cause both the traceability problem, between the `TxKernel` and the inputs, and the CoinJoin problem since some inputs could be removed by cut-through. The latter adaption solution does not have the CoinJoin problem, but the traceability problem is still there.
-
-Because obviously Gotts is NOT a privacy-first coin, it should be acceptable to leave the traceability here. We take the latter adaption solution, so the revised `InputEx` and `Transaction` data structure may be defined as:
-```Rust
-struct InputEx {
-    inputs: Vec<Input>,
-    sig: Signature,
 }
 
-struct Transaction {
-    excess: Commitment,
-    inputs: Vec<InputEx>,
-    outputs: Vec<Output>,
-    kernels: Vec<TxKernel>,
-}
-```
-The `TxKernel` data structure will be completely removed from `Transaction` and not needed anymore. Normally, the new created transaction from a wallet only contains one `InputEx`, meaning the `inputs` vector only has one element.
-
-As the option, with the same solution, it is still feasible for user to avoid the traceability issue, if the wallet user forces to give one signature on every input, meaning the `inputs` vector of `InputEx` has only one element but the `inputs` vector of `Transaction` has multiple elements.
-
-### CoinJoin
-
-For the CoinJoin, the `InputEx` is a whole unit for cut-through. It can be cut-through if and only if all `inputs` of this `InputEx` have the corresponding `Output` in same `Transaction`.
-
-For example, if we have two transactions _T<sub>1</sub>_ and _T<sub>2</sub>:
-
-- _T<sub>1</sub>: I<sub>1</sub> + E<sub>1</sub> = C<sub>1</sub> + O<sub>1</sub>_
-- _T<sub>2</sub>: C<sub>1</sub> + E<sub>2</sub> = C<sub>2</sub> + O<sub>2</sub>_
-
-where _I<sub>i</sub>_ is transaction input, _E<sub>i</sub>_ is public excess, _C<sub>i</sub>_ is the change, _O<sub>i</sub>_ is the payment output.
-
-Then, after the CoinJoin, the merged transaction will be:
-
-- _T<sub>1,2</sub>: I<sub>1</sub> + E<sub>1,2</sub> = C<sub>2</sub> + O<sub>1</sub> + O<sub>2</sub>_
-
-where _E<sub>1,2</sub> = E<sub>1</sub>+E<sub>2</sub>_. In this example, a change output is removed by cut-through, this CoinJoin procedure is correct and has no any problem, since the signature in _I<sub>1</sub>_ is enough to prove the ownership and all the outputs _C<sub>2</sub>_, _O<sub>1</sub>_, _O<sub>2</sub>_ come from _I<sub>1</sub>_ (i.e. spending _I<sub>1</sub>_).
-
-In another example, a payment output is removed by cut-through:
-
-- _T<sub>1</sub>: I<sub>1</sub> + E<sub>1</sub> = C<sub>1</sub> + O<sub>1</sub>_
-- _T<sub>2</sub>: O<sub>1</sub> + E<sub>2</sub> = C<sub>2</sub> + O<sub>2</sub>_
-
-then after the CoinJoin, the merged transaction will be:
-
-- _T<sub>1,2</sub>: I<sub>1</sub> + E<sub>1,2</sub> = C<sub>1</sub> + C<sub>2</sub> + O<sub>2</sub>_
-
-This CoinJoin procedure is also correct and has no any problem, even the signature of _T<sub>2</sub>_ is removed too by this CoinJoin.
-
-### TxKernel
-
-After removing the signature field, the `TxKernel` data structure could be completely removed from `Transaction`. But there is a _Time Locked_ transaction type which is useful for implementation of atomic swap. The _Time Locked_ transaction need the `KernelFeatures` in `TxKernel` which has the data structure as following:
-```Rust
-	struct HeightLocked {
-		fee: u32,
-		lock_height: u64,
-	}
-```
-
-The `lock_height` here is used to give this transaction a lock height in the future, which means it can only be included into a block some blocks later, when block height reach the `lock_height`.
-
-So, we need keep it but replace it by _KernelFeatures_ since it's the only left part of _TxKernel_ data structure. The final data structures can be summarized here:
-```Rust
 struct Input {
 	features: OutputFeatures,
 	commit: Commitment,
 }
 
 struct InputEx {
-    inputs: Vec<Input>,
-    sig: Signature,
-}
-
-struct Transaction {
-	excess: Commitment,
-    inputs: Vec<InputEx>,
-	outputs: Vec<Output>,
-    features: Vec<TxFeatures>,
-}
-
-enum TxFeatures {
-	Plain {
-		fee: u32,
-	},
-	Coinbase,
-	HeightLocked {
-		fee: u32,
-		lock_height: u64,
-	},
+	inputs: Vec<Input>,
+    pubs: Vec<PublicKey>,
+	sig: Signature,
 }
 ```
-The original _TxKernel_ data structure is completely removed. 
+
+The size of this _InputEx_ data structure is `64+(34+33)*n+4` bytes. In case of single input, this size is 135 bytes.
+
+### TxKernel
+
+In Gotts, the `TxKernel` is same as the original Mimblewimble protocol. 
 
 ### Transaction Size Comparing
 
+The final size of a typical transaction with 1 Input and 2 Outputs in Gotts will be about 644 bytes. This is less than the old non-interactive transaction scheme, even with the added _Stealth Address_ feature, especially the simple structure and the clear security model, the new non-interactive transaction scheme is much better.
+
 | Size (Bytes) | Old Interactive Transaction | Old Non-Interactive Transaction | New Non-Interactive Transaction |
 |:-------------|:-------------|:-------------|:-------------|
-| 1 payment with 1 Input   | 244 | 412  | 327 |
+| 1 payment with 1 Input   | 436 | 618  | 644 |
 
 Notes:
 
 - Suppose the old non-interactive transaction include _InputUnlocker_, meaning the Input is a non-interactive transaction output.
 - Suppose the old interactive transaction doesn't include any _InputUnlocker_, meaning the Input is not a non-interactive transaction output.
-- The new non-interactive transaction has the additional _Stealth Address_ feature.
-- The old interactive transaction scheme has the optimal transaction size, but unfortunately there is a [rogue-key attack flaw](https://github.com/gottstech/gotts/wiki/Removing-Interactive-Transaction#rogue-key-attack), therefore it can not be used directly. 
 
+The old interactive transaction scheme has the optimal transaction size, but since the size is near to the new non-interactive transaction and the increased complexity to support two types of transactions, especially the bad usability of the interactive transaction for end user, therefore [decided to remove](https://github.com/gottstech/gotts/wiki/Removing-Interactive-Transaction#removing-interactive-transaction)).
 
+The detail sizes of the Gotts transaction with 1 Input 2 Outputs:
+
+| Name | Size (bytes) |
+|:-------------|:-------------|
+| excess | 33 |
+|~~~|~~~|
+| InputEx vector size | 4 |
+| Input vector size | 4 |
+| 1 Input | 34 |
+| 1 p*R | 33 |
+| InputEx signature | 64 |
+| Output vector size | 4 |
+| 2 Output | 183*2=366 |
+| 1 TxKernel | 102 |
+|~~~|~~~|
+| Total |  644 |
+
+The detail sizes of the Gotts output:
+
+| Name | Size (bytes) |
+|:-------------|:-------------|
+| feature flag | 1 |
+| commitment | 33 |
+| value | 8 |
+| R | 33 |
+| output ComSig signature | 96 |
+| secured path | 12 |
+|~~~|~~~|
+| Total | 183 |
+ 
+PS. Data Structures:
+```Rust
+struct Transaction {
+	inputs: Vec<InputEx>,
+	outputs: Vec<Output>,
+    kernels: Vec<TxKernel>
+}
+
+struct Input {
+	features: OutputFeatures,
+	commit: Commitment
+}
+
+struct InputEx {
+	inputs: Vec<Input>,
+    pubs: Vec<PublicKey>,
+	sig: Signature
+}
+
+struct Output {
+	features: OutputFeatures,
+	commit: Commitment,
+	value: u64,
+	R: PublicKey,
+	sig: ComSignature,
+	spath: SecuredPath
+}
+```
 
  
 
